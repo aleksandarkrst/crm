@@ -31,6 +31,7 @@ export const ICONS = {
   task: 'M5 5h14v14H5zM9 12l2 2 4-4',
   product: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7',
   project: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
+  home: 'M4 11.5 12 4.5l8 7M6 10v9.5h4.5V15h3v4.5H18V10',
   overview: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6',
   pipeline: 'M4 5h5v14H4zM15 5h5v9h-5z',
   settings: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4ZM19.4 13a7.5 7.5 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7 7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.5 7.5 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.5Z',
@@ -78,6 +79,7 @@ export function useCommands(): Command[] {
     { id: 'new-work-order', group: 'Create', label: 'Work order', hint: 'Service work for a company', key: 'W', icon: 'task', module: 'projects', keywords: 'new create add work order service repair installation maintenance technician', run: () => set({ newWorkOrder: projectId ? { projectId } : companyId ? { companyId } : {} }) },
   ];
   const goTo: Command[] = [
+    { id: 'go-home', group: 'Go to', label: 'Home', hint: 'Every module you can open', icon: 'home', keywords: 'home start my view modules apps', run: go(paths.home) },
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
     { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Opportunities by stage', icon: 'pipeline', keywords: 'deals opportunities board funnel', run: go(paths.pipeline) },
     { id: 'go-today', group: 'Go to', label: 'Today', hint: 'Tasks due and overdue', icon: 'task', keywords: 'tasks agenda', run: go(paths.today) },

@@ -2,12 +2,10 @@ import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
-import type { ApiStartPage } from './lib/api';
 import { POPUP_MESSAGE, rememberSignInProblem } from './lib/auth';
 import { isChunkLoadError, loadChunk } from './lib/chunks';
 import { VISIT_PLANS_ENABLED } from './lib/features';
 import { paths } from './lib/paths';
-import { useStore } from './store/store';
 
 // Screens load on first visit (CD-24), so the first page doesn't wait for all of them.
 const Calendar = lazy(() => loadChunk(() => import('./screens/Calendar')).then((m) => ({ default: m.Calendar })));
@@ -16,6 +14,7 @@ const Company = lazy(() => loadChunk(() => import('./screens/Company')).then((m)
 const Contact = lazy(() => loadChunk(() => import('./screens/Contact')).then((m) => ({ default: m.Contact })));
 const Contacts = lazy(() => loadChunk(() => import('./screens/Contacts')).then((m) => ({ default: m.Contacts })));
 const Team = lazy(() => loadChunk(() => import('./screens/Team')).then((m) => ({ default: m.Team })));
+const Home = lazy(() => loadChunk(() => import('./screens/Home')).then((m) => ({ default: m.Home })));
 const EmployeeCard = lazy(() => loadChunk(() => import('./screens/EmployeeCard')).then((m) => ({ default: m.EmployeeCard })));
 const Dashboard = lazy(() => loadChunk(() => import('./screens/Dashboard')).then((m) => ({ default: m.Dashboard })));
 const Meeting = lazy(() => loadChunk(() => import('./screens/Meeting')).then((m) => ({ default: m.Meeting })));
@@ -42,13 +41,6 @@ const Reports = lazy(() => loadChunk(() => import('./screens/Reports')).then((m)
 const Today = lazy(() => loadChunk(() => import('./screens/Today')).then((m) => ({ default: m.Today })));
 const VisitPlan = lazy(() => loadChunk(() => import('./screens/VisitPlan')).then((m) => ({ default: m.VisitPlan })));
 const VisitPlans = lazy(() => loadChunk(() => import('./screens/VisitPlans')).then((m) => ({ default: m.VisitPlans })));
-
-const START_PAGES: Record<ApiStartPage, string> = { pipeline: paths.pipeline, overview: paths.overview, today: paths.today, contacts: paths.contacts };
-
-function StartPage() {
-  const { s } = useStore();
-  return <Navigate to={START_PAGES[s.profile.startPage] ?? paths.pipeline} replace />;
-}
 
 /**
  * While a screen's code loads, the sidebar stays and the content area stays blank; a small spinner
@@ -146,7 +138,8 @@ function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route element={<LazyScreens />}>
-          <Route index element={<StartPage />} />
+          {/* Home (CD-288): where everyone lands, whatever their start page used to be. */}
+          <Route index element={<Home />} />
           <Route path="overview" element={<Dashboard />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="today" element={<Today />} />

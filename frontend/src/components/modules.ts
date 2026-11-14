@@ -143,6 +143,16 @@ export function switcherModules(role: string): ModuleDef[] {
   return MODULES.filter((m) => !m.settings || role === 'owner' || role === 'admin');
 }
 
+/**
+ * The tiles on Home (CD-288): every module this person can open in this workspace, in the
+ * switcher's order. Turned off, not built yet or not for their role: left out, not locked.
+ * Workspace settings comes last, for owners and admins (CD-523).
+ */
+export function homeModules(role: string, modules?: readonly string[]): ModuleDef[] {
+  const open = MODULES.filter((m) => !lockReason(m, role, modules));
+  return [...open.filter((m) => !m.settings), ...open.filter((m) => m.settings)];
+}
+
 /** The first module this person can open in a workspace with these modules (switching workspaces, CD-279). */
 export function firstOpenModule(role: string, modules?: readonly string[]): ModuleDef | undefined {
   return MODULES.find((m) => !m.settings && !lockReason(m, role, modules));

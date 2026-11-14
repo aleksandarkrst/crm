@@ -12,8 +12,12 @@ import { ConfirmHost } from './ConfirmDialog';
 import { HeaderCenter, HeaderRight } from './HeaderTools';
 import { Icon } from './icons';
 import { Logo } from './Logo';
+import { ICONS } from './commands';
 import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
+
+/** Home (CD-288): on desktop the Pultly mark opens it; on phones, where the mark isn't shown, it is first under "More". */
+const HOME: NavDef = { to: paths.home, label: 'Home', icon: ICONS.home };
 
 const SETTINGS = {
   to: '/settings',
@@ -129,7 +133,7 @@ function Sidebar() {
   return (
     <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: 'var(--forest)', color: '#F5F7F6', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
       <div className="nav-desktop side-top">
-        <Link to="/" className="ws-logo" aria-label="Pultly home" title="Home">
+        <Link to={paths.home} className="ws-logo" aria-label="Pultly home" title="Home">
           <Logo height={26} onDark wordmark={false} />
         </Link>
         <button
@@ -161,7 +165,7 @@ function Sidebar() {
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : 'of your tasks overdue'} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
         ))}
         {fit < items.length && <SideMore items={items.slice(fit)} />}
-        <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />
+        <MoreMenu name={name} items={[HOME, ...items.filter((n) => !n.phone)]} onModules={() => setSwitcher(true)} />
       </nav>
       {/* Workspace settings: owners and admins only; members don't see it (CD-523). */}
       {canEditWorkspace && (
@@ -316,6 +320,8 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
 
 export function Layout() {
   const { s, set } = useStore();
+  // Home has no sidebar (CD-288, as in its design): its tiles are the way into the modules.
+  const home = useLocation().pathname === paths.home;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -329,8 +335,8 @@ export function Layout() {
   }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
-      <Sidebar />
-      <main className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {!home && <Sidebar />}
+      <main className={'app-main' + (home ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <GettingStarted />
         <Outlet />
       </main>

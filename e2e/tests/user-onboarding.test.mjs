@@ -40,6 +40,8 @@ describe('onboarding after sign-up', () => {
     await owner.type('input[aria-label="Email 1"]', colleague);
     await clickButton(owner, 'Send invitation');
     await owner.waitForSelector('[data-testid=new-menu]', { timeout: 15_000 });
+    // The app opens on Home (CD-288); the checklist is on the CRM pages.
+    await owner.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await owner.waitForSelector('[data-testid=getting-started] li[data-step=invite][data-done=true]');
     const team = await api(owner, '/team');
     assert.deepEqual(
