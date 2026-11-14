@@ -2113,9 +2113,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           // An empty name isn't saved, and neither is what was typed before it ("B" while clearing
           // "Brand"): leaving the field empty puts the saved name back (leaveProfileName).
           if (field === 'displayName' && !value) {
-            const pending = saveTimers.current.get('profile:displayName');
-            if (pending) clearTimeout(pending.timer);
-            saveTimers.current.delete('profile:displayName');
+            dropSave('profile:displayName');
             continue;
           }
           const what = PROFILE_WORDS[k as keyof Profile] ?? 'your notification settings';
@@ -2134,7 +2132,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /** On leaving the Full name field: an empty name is refused and the saved one comes back (CD-525). */
       leaveProfileName: () => {
         if (cur().profile.name.trim()) return;
-        set((x) => ({ profile: { ...x.profile, name: session.userName } }));
+        const name = session.userName;
+        set((x) => ({
+          profile: { ...x.profile, name },
+          // patchProfile copied each keystroke into your own team entry ("B" while clearing "Brand").
+          team: x.team.map((m) => (m.status === 'Active' && m.id === session.userId ? { ...m, name } : m)),
+        }));
         flash("Not saved: your name can't be empty. It was reset to the saved value.", 7000);
       },
     };
