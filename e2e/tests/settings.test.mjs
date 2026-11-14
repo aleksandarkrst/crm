@@ -116,6 +116,7 @@ describe('settings and discovery fields', () => {
     await page.waitForSelector('[data-testid=home-modules]');
     assert.equal(new URL(page.url()).pathname, '/');
     assert.equal(await page.$('.app-sidebar'), null, 'Home has no sidebar');
+    assert.match(await page.$eval('[data-testid=home-waiting]', (el) => el.innerText), /Waiting for you[sS]*From all your modules/);
     // A tile opens its module, which has its sidebar again.
     await click(page, '[data-testid=home-modules] [data-module=crm]');
     await page.waitForFunction(() => location.pathname === '/pipeline');

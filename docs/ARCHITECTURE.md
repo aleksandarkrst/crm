@@ -2612,8 +2612,15 @@ description), and one tile per module this person can open (`homeModules(role, m
 `modules.ts`: turned on in Workspace settings, built, allowed for their role; Workspace settings
 last, for owners and admins only, CD-523). A tile is the module's colour (`--mod-<id>` tokens),
 icon, name and description, and opens the module's start page. No module on: an empty state that
-links owners and admins to Settings → Modules and tells members to ask one. No counts, previews
-or widgets yet (the design's "Waiting for you" and widget boxes are later issues). Home itself has
+links owners and admins to Settings → Modules and tells members to ask one. No counts or previews
+on the tiles and no widget boxes. Below them, **Waiting for you** ("From all your modules";
+`useWaiting` in `store/home.ts`, rules in `store/waiting.ts`) lists what needs this person in the
+modules they can open, oldest first: their overdue opportunity tasks (CRM, from the store) and
+project tasks (`GET /tasks?assigneeId=me`), the weeks with days waiting that they can approve
+(`GET /timesheet/approvals` for the Approvals week and the one before; managers, Admins and the
+owner), and the time off requests waiting for their decision (`GET /timeoff/approvals`). Each row:
+the module's icon, what it is, the module and when, and Open or Review to where it is acted on.
+Nothing: "Nothing is waiting for you." Home itself has
 no sidebar (nor the phone bar): its tiles are the way in. Every other page has Home first in its
 sidebar (`HOME` in `Layout.tsx`; on phones under "More"), and ⌘K has "Home".
 

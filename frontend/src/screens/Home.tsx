@@ -4,6 +4,7 @@ import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { homeModules } from '../components/modules';
 import { paths } from '../lib/paths';
+import { useWaiting } from '../store/home';
 import { useStore } from '../store/store';
 
 /** "Good morning" until noon, "Good afternoon" until six, then "Good evening". */
@@ -17,13 +18,14 @@ function greeting(now: Date): string {
  * search that narrows the tiles, and one tile per module this person can open in this workspace
  * (`homeModules`: turned on in Workspace settings and allowed for their role), each opening the
  * module. Nothing to open: an empty state that points to Workspace settings. No counts, previews
- * or widgets yet; the design's "Waiting for you" list and widget boxes come later.
+ * or widget boxes. "Waiting for you" (`useWaiting`) lists what needs this person in those modules.
  */
 export function Home() {
   const { s, session, canEditWorkspace } = useStore();
   const [q, setQ] = useState('');
   const all = homeModules(session.tenant.role, s.workspace.modules);
   const modules = all.filter((m) => !m.settings);
+  const waiting = useWaiting(new Set(modules.map((m) => m.id)));
   const query = q.trim().toLowerCase();
   const shown = all.filter((m) => !query || m.name.toLowerCase().includes(query) || m.description.toLowerCase().includes(query));
   const now = new Date();
@@ -70,6 +72,35 @@ export function Home() {
               ))}
             </nav>
             {shown.length === 0 && <p className="home-none">No module matches that.</p>}
+            <section className="home-waiting" aria-labelledby="home-waiting-title" data-testid="home-waiting">
+              <div className="home-waiting-head">
+                <h3 id="home-waiting-title">Waiting for you</h3>
+                <span>From all your modules</span>
+              </div>
+              <div className="home-waiting-list">
+                {waiting.items.length === 0 ? (
+                  <p className="home-waiting-empty">{waiting.loading ? 'Loading' : 'Nothing is waiting for you.'}</p>
+                ) : (
+                  waiting.items.map((w) => {
+                    const m = all.find((x) => x.id === w.module);
+                    return (
+                      <div key={w.key} className="home-waiting-row" data-module={w.module}>
+                        <span className={`home-mini home-icon-${w.module}`} aria-hidden="true">
+                          {m && <Icon name={m.icon} size={17} />}
+                        </span>
+                        <span className="home-waiting-text">
+                          <span>{w.text}</span>
+                          <span className="home-waiting-meta">{w.meta}</span>
+                        </span>
+                        <Link to={w.to} className="home-waiting-action">
+                          {w.action}
+                        </Link>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
           </>
         )}
       </div>

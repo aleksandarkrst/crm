@@ -429,6 +429,21 @@ html.modal-open { overflow: hidden; }
 .home-name { font-size: 15px; font-weight: 600; }
 .home-line { font-size: 12.5px; line-height: 16px; color: var(--text-2); }
 .home-none { margin: 0; text-align: center; font-size: 13px; color: var(--text-2); }
+.home-waiting { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 720px; margin: 6px auto 0; }
+.home-waiting-head { display: flex; align-items: baseline; gap: 12px; padding: 0 4px; }
+.home-waiting-head h3 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.home-waiting-head span { font-size: 12.5px; color: var(--text-2); }
+.home-waiting-list { border: 1px solid var(--border); border-radius: 20px; background: var(--white); box-shadow: var(--shadow-card); overflow: hidden; }
+.home-waiting-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 16px; border-top: 1px solid var(--divider); font-size: 14px; color: var(--ink); }
+.home-waiting-row:first-child { border-top: 0; }
+/* Its colour comes from .home-icon-<module>, set on the same element. */
+.home-mini { flex: none; width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--white); }
+.home-waiting-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-waiting-meta { font-size: 12.5px; color: var(--text-2); }
+.home-waiting-action { flex: none; display: inline-flex; align-items: center; height: 30px; padding: 0 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.home-waiting-action:hover { background: var(--chip); }
+.home-waiting-action:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-waiting-empty { margin: 0; padding: 18px 16px; font-size: 13px; color: var(--text-2); text-align: center; }
 @media (max-width: 600px) {
   .home-greeting { font-size: 24px; }
   .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; border-radius: 22px; gap: 6px; }
