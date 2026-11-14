@@ -38,8 +38,9 @@ describe('timesheet', () => {
     monday = (await week()).thisWeek;
   });
 
-  step('opens from the Workforce sidebar: this week, not submitted, due Friday 17:00', async () => {
-    await page.goto(BASE_URL + '/org', { waitUntil: 'networkidle0' });
+  step('opens from the Timesheet sidebar: this week, not submitted, due Friday 17:00', async () => {
+    // Timesheet is its own module since CD-521; its sidebar has Timesheet and, for the owner, Approvals.
+    await page.goto(BASE_URL + '/approvals', { waitUntil: 'networkidle0' });
     await click(page, 'nav a[href="/timesheet"]');
     await page.waitForSelector('[data-testid=ts-grid]');
     assert.match(await page.$eval('[data-testid=ts-week-label]', (el) => el.textContent), /^Week \d+ · /);
