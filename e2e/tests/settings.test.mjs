@@ -178,11 +178,10 @@ describe('settings and discovery fields', () => {
     // Not in the sidebar, the account menu, the Pipeline's funnel or the command search.
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
-    // The avatar opens their account (CD-525), whose foot names the workspace without a settings link.
     await click(member, '[data-testid=account-menu]');
-    await member.waitForSelector('[data-testid=account-workspace]');
-    assert.equal(await member.$('[data-testid=account-workspace] a'), null, 'no Workspace settings link');
-    assert.match(await member.$eval('[data-testid=account-workspace]', (el) => el.innerText), /Your role: Member/);
+    const items = await member.$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual(items, ['Profile settings', 'Sign out']);
+    await member.keyboard.press('Escape');
     await member.click('h1');
     await member.keyboard.down('Control');
     await member.keyboard.press('k');

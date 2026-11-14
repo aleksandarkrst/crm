@@ -2468,11 +2468,11 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   it while the menu is open (D deal, P contact, O company, T task, R product). On a deal's screen a
   new task or contact is for that deal.
 - **Notifications**: the bell lists your own open tasks that are overdue or due today (nothing
-  else is made up). The avatar opens your account (`screens/Profile.tsx`, CD-525): Profile,
-  Preferences and Notifications, each its own page (`/profile`, `/profile/preferences`,
-  `/profile/notifications`; the old `/profile#notifications` redirects) in a sidebar like Settings',
-  with Sign out on Profile and the workspace (Workspace settings for owners and admins, the
-  switcher, your role) at the sidebar's foot. The avatar is not in the sidebar; Settings
+  else is made up). The avatar's menu has Profile settings and Sign out. Profile settings
+  (`screens/Profile.tsx`, CD-525) are Profile, Preferences and Notifications, each its own page
+  (`/profile`, `/profile/preferences`, `/profile/notifications`; the old `/profile#notifications`
+  redirects) in a sidebar like Settings', with Sign out on Profile too and, for people in several
+  workspaces, the workspace switcher at the sidebar's foot. The avatar is not in the sidebar; Settings
   is back at its bottom (CD-223; on phones both are under "More").
 - **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
   which opens the New deal dialog with this company or contact, and a menu with Delete for owners

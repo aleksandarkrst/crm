@@ -162,21 +162,24 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('the avatar opens your account; the bell lists your tasks due', async () => {
+  step('the avatar menu opens your account; the bell lists your tasks due', async () => {
     await click(page, '[data-testid=notifications]');
     await page.waitForSelector('[data-testid=notifications-pop]');
     assert.match(await page.$eval('[data-testid=notifications-pop]', (el) => el.innerText), /Nothing overdue or due today|Overdue|Today/);
     await page.keyboard.press('Escape');
-    // The avatar goes straight to the account (CD-525): Profile, Preferences, Notifications, no Security.
+    // The avatar's menu: Profile settings and Sign out (CD-525).
     await click(page, '[data-testid=account-menu]');
+    const items = await page.$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual(items, ['Profile settings', 'Sign out']);
+    await clickButton(page, 'Profile settings');
     await page.waitForFunction(() => location.pathname === '/profile');
+    // Profile, Preferences, Notifications; no Security.
     await page.waitForSelector('[data-testid=account-nav]');
     const pages = await page.$$eval('[data-testid=account-nav] .settings-nav-item', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(pages, ['Profile', 'Preferences', 'Notifications']);
     assert.equal(await page.$eval('[data-testid=account-nav] [aria-current=page]', (el) => el.dataset.section), 'profile');
-    // Signing out is on Profile; the workspace settings are at the foot of the account's sidebar.
-    assert.ok(await page.$$eval('[data-testid=account-content] button', (els) => els.some((el) => el.textContent.trim() === 'Sign out')), 'Sign out on Profile');
-    assert.equal(await page.$eval('[data-testid=account-workspace] a', (el) => el.getAttribute('href')), '/settings/workspace');
+    // Signing out is on Profile too.
+    assert.ok(await page.$eval('[data-testid=account-content] button', (els) => els.some((el) => el.textContent.trim() === 'Sign out')), 'Sign out on Profile');
   });
 
   step('opens the New opportunity dialog from the Contacts screen', async () => {

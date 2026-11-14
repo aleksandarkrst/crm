@@ -132,17 +132,35 @@ function NavButton({ to, label, onDone }: { to: string; label: string; onDone: (
   );
 }
 
-/**
- * Your avatar opens your account (CD-525): Profile, Preferences and Notifications, with signing out
- * on Profile and the workspace (settings, switcher, role) at the foot of its sidebar.
- */
+/** Your avatar: your profile settings (Profile, Preferences, Notifications, CD-525) and signing out. */
 function AccountMenu() {
   const { s, session } = useStore();
-  const navigate = useNavigate();
+  const pop = usePopover();
   const name = s.profile.name || session.userName;
+  const close = () => pop.setOpen(false);
   return (
-    <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Your account · ${name}`} title={name} onClick={() => navigate(paths.profile)}>
-      {initialsOf(name)}
-    </button>
+    <div ref={pop.ref} className="new-menu">
+      <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
+        {initialsOf(name)}
+      </button>
+      {pop.open && (
+        <div className="menu-pop" role="menu" style={{ right: 0, width: 250 }}>
+          <div className="caps-muted menu-label">{name}</div>
+          <NavButton to={paths.profile} label="Profile settings" onDone={close} />
+          <div className="menu-divider" />
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close();
+              session.signOut();
+            }}
+          >
+            <span className="menu-item-title">Sign out</span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

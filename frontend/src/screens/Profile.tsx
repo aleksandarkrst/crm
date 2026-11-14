@@ -1,10 +1,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Avatar, GhostSelect } from '../components/ui';
+import { GhostSelect } from '../components/ui';
 import { Icon, type IconName } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
-import { funnelOptions, initialsOf } from '../store/selectors';
+import { funnelOptions } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Profile as ProfileT } from '../store/types';
 import { NotificationsTab } from './settings/NotificationsTab';
@@ -45,7 +45,7 @@ export function Profile() {
   const { page = 'profile' } = useParams();
   const { hash } = useLocation();
   const navigate = useNavigate();
-  const { s, session, canEditWorkspace } = useStore();
+  const { s, session } = useStore();
   const name = s.profile.name || session.userName;
   // A new page starts at the top, like Settings.
   useEffect(() => {
@@ -55,7 +55,6 @@ export function Profile() {
   if (page === 'profile' && hash === '#notifications') return <Navigate to={paths.account('notifications')} replace />;
   const current = PAGES.find((p) => p.k === page);
   if (!current) return <Navigate to={paths.profile} replace />;
-  const role = session.tenant.role.charAt(0).toUpperCase() + session.tenant.role.slice(1);
 
   return (
     <Screen title="Profile settings">
@@ -73,19 +72,11 @@ export function Profile() {
               </button>
             ))}
           </div>
-          <div className="account-nav-foot" data-testid="account-workspace">
-            <div className="account-nav-ws">
-              <Avatar initials={initialsOf(session.tenant.name)} size={32} font={11} />
-              <span>
-                {/* Members don't see the workspace settings (CD-523). */}
-                {canEditWorkspace ? <Link to={paths.settings()}>Workspace settings</Link> : <b>{session.tenant.name}</b>}
-                <small title={session.tenant.name}>{canEditWorkspace ? `${session.tenant.name} · ${role}` : `Your role: ${role}`}</small>
-              </span>
-            </div>
-            {session.tenants.length > 1 && (
+          {session.tenants.length > 1 && (
+            <div className="account-nav-foot" data-testid="account-workspace">
               <GhostSelect className="form-input" aria-label="Current workspace" value={session.tenant.id} onChange={(e) => session.switchTenant(e.target.value)} options={session.tenants.map((t) => ({ value: t.id, label: t.name }))} chevron />
-            )}
-          </div>
+            </div>
+          )}
         </nav>
         <div className="settings-content account-content" data-testid="account-content" data-page={current.k}>
           <div className="account-head">
