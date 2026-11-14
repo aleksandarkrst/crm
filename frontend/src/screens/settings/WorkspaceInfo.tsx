@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../../components/icons';
 import { useStore } from '../../store/store';
 import { Row } from './parts';
 
@@ -79,16 +80,24 @@ export function LogoRow() {
   };
   return (
     <Row label="Logo" hint="At the top of the meeting minutes PDF sent to customers. PNG or JPG, up to 1 MB." error={error || (logo.failed ? "The logo can't be shown. Reload the page, or upload it again." : '')} testId="workspace-info">
-      <span className="ws-avatar" data-testid="workspace-logo">
-        {logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>}
-      </span>
+      {canEditWorkspace ? (
+        // The logo itself is the button (CD-524 review): a pen shows on hover, a click picks the image.
+        <button type="button" className="ws-avatar ws-avatar-btn" data-testid="workspace-logo-pick" aria-label={has ? 'Change the logo' : 'Add a logo'} title={has ? 'Change the logo' : 'Add a logo'} disabled={busy} onClick={() => input.current?.click()}>
+          {logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>}
+          <span className="ws-avatar-edit" aria-hidden="true">
+            <Icon name="pencil" size={18} />
+          </span>
+        </button>
+      ) : (
+        <span className="ws-avatar" data-testid="workspace-logo">
+          {logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>}
+        </span>
+      )}
       {canEditWorkspace && (
         <>
           <input ref={input} type="file" accept="image/png,image/jpeg" hidden data-testid="workspace-logo-input" onChange={(e) => pick(e.target.files?.[0])} />
-          <button type="button" className="btn-plain" data-testid="workspace-logo-pick" disabled={busy} onClick={() => input.current?.click()}>
-            {busy ? 'Saving' : has ? 'Change logo' : 'Upload logo'}
-          </button>
-          {has && (
+          {busy && <span className="ws-unit">Saving…</span>}
+          {has && !busy && (
             <button type="button" className="btn-plain" data-testid="workspace-logo-remove" disabled={busy} onClick={() => void run(removeLogo)}>
               Remove
             </button>

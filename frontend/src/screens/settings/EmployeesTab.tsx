@@ -214,10 +214,10 @@ export function EmployeeRecordTab() {
 }
 
 /**
- * Settings → Employees → Working time (CD-153, CD-215; design G-Settings "worktime"): the standard
+ * Settings → General → Working time (CD-153, CD-215; design G-Settings "worktime", in General since the CD-524 review): the standard
  * working day, and the weekly hours new employees and imports start with.
  */
-export function WorkingTimeTab() {
+export function WorkingTimeBlocks() {
   const { s, setWorkspace } = useStore();
   const w = s.workspace;
   const [hours, setHours] = useState(String(w.employeeDefaultWeeklyHours));
@@ -230,7 +230,7 @@ export function WorkingTimeTab() {
   const valid = /^\d{1,2}$/.test(hours) && Number(hours) >= 1 && Number(hours) <= 60;
   return (
     <>
-      <Block title="Standard working day" desc="The day every employee is expected to work. Drives expected hours in the Timesheet and the hours of time off.">
+      <Block title="Working day" desc="The day every employee is expected to work. Drives expected hours in the Timesheet and the hours of time off.">
         <WorkingDayRows />
       </Block>
       <Note>Approved days keep the hours they had when they were approved.</Note>

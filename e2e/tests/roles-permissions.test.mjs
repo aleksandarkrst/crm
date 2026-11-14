@@ -75,10 +75,11 @@ describe('roles and permissions', () => {
     ids.hana = access.employeeId;
   });
 
-  step('Settings → Employees (Employee record, Working time) saves its settings; members have no such tab', async () => {
-    await olga.goto(`${BASE_URL}/settings/working-time`, { waitUntil: 'networkidle0' });
+  step('Settings → General and Employee record save their settings; members have no such tab', async () => {
+    await olga.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=employee-default-hours]');
     await setValue(olga, '[data-testid=employee-default-hours]', '38');
+    assert.ok(await eventually(async () => (await api(olga, '/workspace')).employeeDefaultWeeklyHours === 38), 'weekly hours saved before leaving the page');
     // The record's switches are on Employee record since CD-524.
     await olga.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await click(olga, '[data-setting=number-required] [role=switch]');
@@ -91,7 +92,7 @@ describe('roles and permissions', () => {
     });
     assert.ok(saved, `saved: ${JSON.stringify(await api(olga, '/workspace'))}`);
     // Out of range is not saved.
-    await olga.goto(`${BASE_URL}/settings/working-time`, { waitUntil: 'networkidle0' });
+    await olga.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=employee-default-hours]');
     await setValue(olga, '[data-testid=employee-default-hours]', '0');
     assert.ok((await text(olga)).includes('Between 1 and 60 hours.'));

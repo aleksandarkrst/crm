@@ -15,10 +15,10 @@ import type { BonusRule, CustomFieldDef, Stage, Workspace } from '../store/types
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
-import { EmployeeRecordTab, OrgLevelsTab, WorkingTimeTab } from './settings/EmployeesTab';
+import { EmployeeRecordTab, OrgLevelsTab, WorkingTimeBlocks } from './settings/EmployeesTab';
 import { CompanyCard } from './settings/CompanyCard';
 import { LeaveTab, TimeOffTab } from './settings/TimeOffSettings';
-import { ApprovalsTab, HolidaysTab, TimeEntryTab } from './settings/WorkforceSettings';
+import { ApprovalsTab, HolidaysTab, TimeEntryBlocks } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
 import { LogoRow, NameRow } from './settings/WorkspaceInfo';
@@ -87,19 +87,17 @@ type TabDef = {
   label: string;
   icon: IconName;
   description: string;
-  /** Every change saves as it is made: the head says so (the design's "saved" chip). */
-  autosave?: boolean;
 };
 
 /**
  * The sections of Settings (CD-280), grouped by module in the left nav, each on its own route
- * (`/settings/<k>`). Since CD-524 they follow the design G-Settings: Company details, Working time,
- * Organization levels, Time entry and Leave and absence are sections of their own (their settings
- * were cards in General, Employees, Approvals and Policies), and a few sections take the design's
- * names. The design's Business trips, contract types and workspace deletion are not in the app.
+ * (`/settings/<k>`). Since CD-524 they follow the design G-Settings: Company details, Organization
+ * levels and Leave and absence are sections of their own (their settings were cards in General,
+ * Employees and Policies); the working day and time entry are in General; a few sections take the
+ * design's names. The design's Business trips, contract types and workspace deletion are not in the app.
  */
 const TABS: readonly TabDef[] = [
-  { k: 'workspace', group: 'Workspace', label: 'General', icon: 'preferences', description: 'Name, logo, currency, time zone and fiscal year of the workspace.', autosave: true },
+  { k: 'workspace', group: 'Workspace', label: 'General', icon: 'preferences', description: 'Name, logo, currency, time zone and fiscal year of the workspace, the working day and how people log hours.' },
   { k: 'company', group: 'Workspace', label: 'Company details', icon: 'building', description: 'Printed on generated documents such as vacation decisions. Empty fields print as blanks.' },
   {
     k: 'modules',
@@ -107,13 +105,12 @@ const TABS: readonly TabDef[] = [
     label: 'Modules',
     icon: 'modules',
     description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher and its settings are hidden; its data is kept.',
-    autosave: true,
   },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', icon: 'lock', description: 'What owners, admins and members can do.' },
-  { k: 'funnel', group: 'CRM', label: 'Funnels', icon: 'funnel', description: 'The stages opportunities move through, what happens in each and what must be done before they move on.', autosave: true },
+  { k: 'funnel', group: 'CRM', label: 'Funnels', icon: 'funnel', description: 'The stages opportunities move through, what happens in each and what must be done before they move on.' },
   { k: 'templates', group: 'CRM', label: 'Document templates', icon: 'template', description: 'Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document.' },
-  { k: 'fields', group: 'CRM', label: 'Custom fields', icon: 'fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.', autosave: true },
-  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', icon: 'bonus', description: 'How salespeople earn bonuses on won opportunities.', autosave: true },
+  { k: 'fields', group: 'CRM', label: 'Custom fields', icon: 'fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
+  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', icon: 'bonus', description: 'How salespeople earn bonuses on won opportunities.' },
   // The Names block explains the names; the subtitle says what the page holds (CD-489: not the same sentence twice).
   { k: 'project-hierarchy', group: 'Projects', label: 'Project hierarchy', icon: 'hierarchy', description: 'What projects and tasks are called in this workspace, and what happens when someone logs more hours than their limit.' },
   {
@@ -124,13 +121,11 @@ const TABS: readonly TabDef[] = [
     description:
       "A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.",
   },
-  { k: 'technicians', group: 'Projects', label: 'Technicians', icon: 'wrench', description: 'What each person can be given: project tasks, work orders or both.', autosave: true },
+  { k: 'technicians', group: 'Projects', label: 'Technicians', icon: 'wrench', description: 'What each person can be given: project tasks, work orders or both.' },
   // Workforce's settings, grouped by the modules it was split into (CD-521). They stay here, not in the modules.
-  { k: 'employees', group: 'Employees', label: 'Employee record', icon: 'employees', description: 'What is kept for every employee and what employees may change themselves.', autosave: true },
-  { k: 'working-time', group: 'Employees', label: 'Working time', icon: 'clock', description: 'The standard working day. Timesheets, time off and capacity count from it.', autosave: true },
+  { k: 'employees', group: 'Employees', label: 'Employee record', icon: 'employees', description: 'What is kept for every employee and what employees may change themselves.' },
   { k: 'org-levels', group: 'Employees', label: 'Organization levels', icon: 'hierarchy', description: 'The names of your levels, from the top down. The org structure and its units use them.' },
-  { k: 'time-entry', group: 'Timesheet', label: 'Time entry', icon: 'timeEntry', description: 'How people log hours.', autosave: true },
-  { k: 'approvals', group: 'Timesheet', label: 'Submission and approval', icon: 'check', description: 'When timesheets are due, how managers approve them and who gets reminded.', autosave: true },
+  { k: 'approvals', group: 'Timesheet', label: 'Submission and approval', icon: 'check', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
   { k: 'timeoff', group: 'Time off', label: 'Vacation', icon: 'sun', description: 'Vacation policies and the decision sent when vacation is approved.' },
   { k: 'leave', group: 'Time off', label: 'Leave and absence', icon: 'leave', description: 'Paid leave, sick leave and other absence.' },
   { k: 'holidays', group: 'Time off', label: 'Holidays', icon: 'calendar', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
@@ -219,19 +214,13 @@ export function Settings() {
               <h2 className="settings-title">{labelOf(section)}</h2>
               <span className="settings-description">{section.description}</span>
             </div>
-            <div className="ws-head-actions">
-              {section.autosave && (
-                <span className="ws-autosave" title="Every change saves as you make it">
-                  <Icon name="check" size={12} />
-                  Changes save automatically
-                </span>
-              )}
-              {action && (
+            {action && (
+              <div className="ws-head-actions">
                 <button type="button" className="btn btn-primary" data-testid={'testId' in action ? action.testId : undefined} onClick={action.onClick}>
                   {action.label}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </header>
 
           {current === 'workspace' && <GeneralTab />}
@@ -239,9 +228,7 @@ export function Settings() {
           {current === 'modules' && <ModulesTab />}
           {current === 'roles' && <RolesTab />}
           {current === 'employees' && <EmployeeRecordTab />}
-          {current === 'working-time' && <WorkingTimeTab />}
           {current === 'org-levels' && <OrgLevelsTab />}
-          {current === 'time-entry' && <TimeEntryTab />}
           {current === 'approvals' && <ApprovalsTab />}
           {current === 'holidays' && <HolidaysTab />}
           {current === 'timeoff' && <TimeOffTab />}
@@ -267,12 +254,14 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 /**
  * Settings → General (design G-Settings "general"): the workspace's name, logo, currency, time zone,
- * fiscal year and customer email language, saved as they change, and Getting started. The country
- * is in Company details; creating projects from won opportunities is in Project hierarchy.
+ * fiscal year and customer email language, the standard working day and weekly hours, time entry
+ * (with their modules on), saved as they change, and Getting started. The country is in Company
+ * details; creating projects from won opportunities is in Project hierarchy.
  */
 function GeneralTab() {
   const { s, setWorkspace } = useStore();
   const w = s.workspace;
+  const modules = enabledModules(w.modules);
   return (
     <>
       <Block title="Workspace">
@@ -299,6 +288,9 @@ function GeneralTab() {
           </Row>
         </Rows>
       </Block>
+      {/* The working day and time entry moved here from their own sections (CD-524 review); each still only with its module on (CD-488). */}
+      {modules.includes('employees') && <WorkingTimeBlocks />}
+      {modules.includes('timesheet') && <TimeEntryBlocks />}
       <GettingStartedBlock />
     </>
   );

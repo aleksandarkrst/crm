@@ -36,8 +36,8 @@ describe('settings page', () => {
       ['Workspace', ['General', 'Company details', 'Modules', 'Roles & permissions']],
       ['CRM', ['Funnels', 'Document templates', 'Custom fields', 'Sales bonuses']],
       ['Projects', ['Project hierarchy', 'Project types', 'Technicians']],
-      ['Employees', ['Employee record', 'Working time', 'Organization levels']],
-      ['Timesheet', ['Time entry', 'Submission and approval']],
+      ['Employees', ['Employee record', 'Organization levels']],
+      ['Timesheet', ['Submission and approval']],
       ['Time off', ['Vacation', 'Leave and absence', 'Holidays']],
     ]);
     assert.deepEqual(await active(), ['General']);

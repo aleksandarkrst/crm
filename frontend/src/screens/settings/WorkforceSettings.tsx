@@ -38,11 +38,11 @@ function useTimesheetSettings() {
 }
 
 /**
- * Settings → Timesheet → Time entry (CD-153, CD-283; design G-Settings "tsentry"): the time format,
+ * Settings → General → Time entry (CD-153, CD-283; design G-Settings "tsentry", in General since the CD-524 review): the time format,
  * the most hours a day and whether hours can go on a project without a task. Typing either format
  * always works; the setting is how hours are shown.
  */
-export function TimeEntryTab() {
+export function TimeEntryBlocks() {
   const { t, save } = useTimesheetSettings();
   const [max, setMax] = useState(String(t.maxDayHours));
   const [seen, setSeen] = useState(t.maxDayHours);
@@ -54,7 +54,7 @@ export function TimeEntryTab() {
   const valid = /^\d{1,2}$/.test(max) && n >= 1 && n <= 24;
   return (
     <>
-      <Block title="Hours">
+      <Block title="Time entry">
         <Rows>
           <Row label="Time format" hint="How hours are shown in the Timesheet, Approvals and reports. Typing either format works.">
             <Segmented label="Time format" value={t.timeFormat} options={TIME_FORMATS} onChange={(v) => save({ timeFormat: v })} testId="time-format" />
@@ -177,8 +177,9 @@ export function WorkingDayRows() {
           {WEEKDAYS.map((label, i) => {
             const on = t.workingDays.includes(i + 1);
             return (
-              <button key={label} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => toggleDay(i + 1)}>
-                {label}
+              // One letter per day (CD-524 review); the full name is the label and the tooltip.
+              <button key={label} type="button" className={on ? 'on' : ''} aria-pressed={on} aria-label={WEEKDAY_NAMES[i]} title={WEEKDAY_NAMES[i]} data-day={label} onClick={() => toggleDay(i + 1)}>
+                {label[0]}
               </button>
             );
           })}

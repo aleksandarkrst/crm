@@ -1223,19 +1223,21 @@ section on the right (title, one-line description, the section's action button).
 its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Company
 details, Modules, Roles & permissions), **CRM** (Funnels, Document templates, Custom fields, Sales
 bonuses), **Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employee
-record, Working time, Organization levels), **Timesheet** (Time entry, Submission and approval) and
+record, Organization levels), **Timesheet** (Submission and approval) and
 **Time off** (Vacation, Leave and absence, Holidays; CD-153 / CD-163 / CD-318; one Workforce group
 until CD-521). Since CD-524 the page follows the design G-Settings: the nav has the workspace at its
 head and an icon per section, and says when modules are off; a section is a column of blocks (a
 heading over a card of rows, a table or a list) built from `screens/settings/parts.tsx`, where a
-row is a setting with its label and hint on the left and its control on the right; sections that
-save as you change them say so in their head. CD-524 split sections the design shows on their own:
-Company details (with the country) from General; Employee record, Working time (the standard day,
-default weekly hours) and Organization levels from Employees; Time entry (time format, max hours,
-time on a project without a task) from Approvals; Leave and absence (paid leave and other absence
+row is a setting with its label and hint on the left and its control on the right. A workspace
+setting that saves as you change it says "Saved" in a toast. The logo is a button: a pen shows on
+hover and a click picks the image. CD-524 split sections the design shows on their own:
+Company details (with the country) from General; Employee record and Organization levels from
+Employees. General holds the standard working day (one letter per weekday) and default weekly
+hours (with Employees on) and time entry: time format, max hours, time on a project without a task
+(with Timesheet on); Leave and absence (paid leave and other absence
 reasons, sick leave types) from Policies. "Create a project when an opportunity is won" moved to
 Project hierarchy. The routes kept their keys (`workspace`, `employees`, `approvals`, `timeoff`); the
-new ones are `company`, `working-time`, `org-levels`, `time-entry` and `leave`. The design's Business
+new ones are `company`, `org-levels` and `leave`. The design's Business
 trips, contract types, lost reasons and workspace deletion are not in the app and were not built.
 Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
 `/settings/team` redirects there, `?invite=1` included). The design also names Workforce → Cost
