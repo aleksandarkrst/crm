@@ -133,15 +133,16 @@ export function Settings() {
   }, [tab]);
   // Members moved to Employees → Team (CD-521): old links and bookmarks land there, `?invite=1` included.
   if (tab === 'team') return <Navigate to={paths.team(params.get('invite') === '1')} replace />;
-  // Notifications are your own, not the workspace's (CD-489): they are on Personal preferences for
-  // everyone. Old links (emails sent before, bookmarks) land there.
+  // Notifications are your own, not the workspace's (CD-489): they are a page of your account
+  // (Profile settings → Notifications) for everyone. Old links (emails sent before, bookmarks) land there.
   if (tab === 'notifications') return <Navigate to={paths.myNotifications} replace />;
-  // Members don't see the workspace settings at all (CD-523): any settings URL goes home.
+  // Members don't see the workspace settings at all (CD-523): any settings URL goes home. From here
+  // on the viewer is an owner or admin.
   if (!canEditWorkspace) return <Navigate to="/" replace />;
-  // Settings → Employees (CD-215) and the sales bonus rules (CD-17) are for owners and admins.
+  // The sales bonus rules (CD-17) need their permission; a module turned off hides its group (CD-488).
   const tabs = TABS.filter((t) => {
     const mod = GROUP_MODULE[t.group];
-    return (t.k !== 'bonuses' || canSeeBonuses) && (!['employees', 'approvals', 'holidays', 'timeoff'].includes(t.k) || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace) && (mod === null || modules.includes(mod));
+    return (t.k !== 'bonuses' || canSeeBonuses) && (mod === null || modules.includes(mod));
   });
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
@@ -234,34 +235,32 @@ const CUSTOMER_EMAIL_LANGUAGES = [
 ];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
 
-/** Saved per workspace. Owners and admins edit; members see the values read-only. */
+/** Saved per workspace. Only owners and admins reach Settings (CD-523), so it is always editable here. */
 function WorkspaceTab() {
-  const { s, setWorkspace, canEditWorkspace } = useStore();
+  const { s, setWorkspace } = useStore();
   const w = s.workspace;
-  const ro = !canEditWorkspace;
   return (
     <div className="card card-pad workspace-fields" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 18 }}>
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
       <FieldRow label="Currency">
-        <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
+        <GhostSelect value={w.currency} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>
       <FieldRow label="Time zone">
-        <TimeZonePicker value={w.timezone} disabled={ro} onChange={(timezone) => setWorkspace({ timezone })} />
+        <TimeZonePicker value={w.timezone} onChange={(timezone) => setWorkspace({ timezone })} />
       </FieldRow>
       <FieldRow label="Country">
-        <GhostSelect aria-label="Country" value={w.country ?? ''} disabled={ro} onChange={(e) => setWorkspace({ country: e.target.value || null })} options={COUNTRY_OPTIONS} data-testid="workspace-country" />
+        <GhostSelect aria-label="Country" value={w.country ?? ''} onChange={(e) => setWorkspace({ country: e.target.value || null })} options={COUNTRY_OPTIONS} data-testid="workspace-country" />
       </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Serbia turns on the vacation decision document (rešenje) sent when vacation is approved.</span>
       <FieldRow label="Fiscal year starts">
-        <GhostSelect value={String(w.fiscalMonth)} disabled={ro} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
+        <GhostSelect value={String(w.fiscalMonth)} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
       </FieldRow>
       <FieldRow label="Customer email language">
         <GhostSelect
           aria-label="Customer email language"
           value={w.customerEmailLanguage}
-          disabled={ro}
           onChange={(e) => setWorkspace({ customerEmailLanguage: e.target.value as Workspace['customerEmailLanguage'] })}
           options={CUSTOMER_EMAIL_LANGUAGES}
         />
@@ -272,7 +271,7 @@ function WorkspaceTab() {
         <>
           <FieldRow label="Projects">
             <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-              <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
+              <Switch on={w.autoCreateProjects} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
               <span style={{ fontSize: 13 }}>Create a project when an opportunity is won</span>
             </span>
           </FieldRow>
@@ -280,7 +279,7 @@ function WorkspaceTab() {
         </>
       )}
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
-        {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
+        Changes are saved as you make them.
       </span>
     </div>
   );
@@ -288,13 +287,12 @@ function WorkspaceTab() {
 
 /**
  * Settings → Workspace → Modules (CD-318, moved out of General): one row per module with its
- * description and a switch. Owners and admins change them; members see them read-only. A module
+ * description and a switch. Only owners and admins reach Settings (CD-523). A module
  * that is off shows as "Not in this workspace" in the module switcher; its data is kept.
  */
 function ModulesTab() {
-  const { s, setWorkspace, canEditWorkspace } = useStore();
+  const { s, setWorkspace } = useStore();
   const w = s.workspace;
-  const ro = !canEditWorkspace;
   return (
     <div className="card" data-testid="workspace-modules" style={{ padding: '4px 18px' }}>
       {WORKSPACE_MODULES.map((id) => {
@@ -314,12 +312,12 @@ function ModulesTab() {
                 {!built && ' · Coming soon'}
               </span>
             </span>
-            <Switch on={on} disabled={ro} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
+            <Switch on={on} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
           </div>
         );
       })}
       <span style={{ display: 'block', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, padding: '12px 0 10px' }}>
-        {ro ? 'Only owners and admins can turn modules on or off.' : 'Changes are saved as you make them.'}
+        Changes are saved as you make them.
       </span>
     </div>
   );

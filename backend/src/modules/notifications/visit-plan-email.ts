@@ -36,7 +36,7 @@ export function visitPlanEmail({ to, salespersonName, actorName, workspaceName, 
       ? `${actorName} made a visit plan for you for ${plan.periodLabel} in ${workspaceName}: ${visits(total)} at ${plan.lines.length === 1 ? '1 customer' : `${plan.lines.length} customers`}.`
       : `${actorName} changed your visit plan for ${plan.periodLabel} in ${workspaceName}. It now has ${visits(total)} at ${plan.lines.length === 1 ? '1 customer' : `${plan.lines.length} customers`}.`;
   const rows = plan.lines.map((l) => `- ${l.companyName}: ${visits(l.plannedVisits)}`);
-  const footer = `You get this email because "Visit plans" is on in Personal preferences → Notifications for ${workspaceName}.`;
+  const footer = `You get this email because "Visit plans" is on in Profile settings → Notifications for ${workspaceName}.`;
   const text = [greeting, '', intro, '', ...rows, ...(plan.note ? ['', `Note: ${plan.note}`] : []), '', `Open the plan: ${link}`, '', footer].join('\n');
   const table = [
     '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 12px">',

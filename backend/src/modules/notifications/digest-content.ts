@@ -220,7 +220,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
 
   const greeting = memberName ? `Good morning, ${memberName.split(' ')[0]}.` : 'Good morning.';
   const intro = `Here is what needs you in ${workspaceName} on ${dayLabel(digest.date)}.`;
-  const footer = `You get this email because the daily digest is on for you in ${workspaceName}. Turn it off in Personal preferences → Notifications (${base}/profile#notifications).`;
+  const footer = `You get this email because the daily digest is on for you in ${workspaceName}. Turn it off in Profile settings → Notifications (${base}/profile/notifications).`;
 
   const text: string[] = [greeting, '', intro];
   for (const s of sections) {
@@ -287,7 +287,7 @@ export function approvalRequestedEmail({ to, recipientName, actorName, workspace
   const facts = [deal.company ? `Company: ${deal.company}` : null, `Funnel: ${funnelName}`, `Stage: ${deal.stage}`].filter((f): f is string => !!f);
   const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
   const intro = `${actorName} requested your approval of the proposal for ${deal.title} in ${workspaceName}. It can't be sent until it is approved.`;
-  const footer = `You get this email because you approve proposals in the ${funnelName} funnel and "Proposal approvals" is on in Personal preferences → Notifications for ${workspaceName}.`;
+  const footer = `You get this email because you approve proposals in the ${funnelName} funnel and "Proposal approvals" is on in Profile settings → Notifications for ${workspaceName}.`;
   const text = [greeting, '', intro, '', ...facts, '', `Review and approve: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [
@@ -340,7 +340,7 @@ export function dealAssignedEmail({ to, assigneeName, actorName, workspaceName, 
   ].filter((f): f is string => !!f);
   const greeting = assigneeName ? `Hi ${assigneeName.split(' ')[0]},` : 'Hi,';
   const intro = `${actorName} made you the owner of ${deal.title} in ${workspaceName}.`;
-  const footer = `You get this email because "Opportunity assigned to you" is on in Personal preferences → Notifications for ${workspaceName}.`;
+  const footer = `You get this email because "Opportunity assigned to you" is on in Profile settings → Notifications for ${workspaceName}.`;
   const text = [greeting, '', intro, '', ...facts, '', `Open the opportunity: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [

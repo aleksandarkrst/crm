@@ -66,7 +66,7 @@ export function taskAssignedEmail({ to, recipientName, actorName, workspaceName,
   const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
   const intro = `${actorName} assigned you to T-${task.number} ${task.name} on the ${inSentence(terms.project)} ${task.project} for ${task.company}.`;
   const due = task.dueDate ? `Due ${dueLabel(task.dueDate)}.` : 'No due date yet.';
-  const footer = `You get this email because "Task assignments" is on in Personal preferences → Notifications for ${workspaceName}.`;
+  const footer = `You get this email because "Task assignments" is on in Profile settings → Notifications for ${workspaceName}.`;
   const text = [greeting, '', intro, due, '', `Open the ${word}: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)} ${escapeHtml(due)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),
@@ -109,7 +109,7 @@ export function limitAlertEmail(input: LimitAlertEmailInput): MailMessage {
         ? `Ask the ${inSentence(terms.project)} lead to raise your limit if the work needs more time.`
         : `Raise the limit on the ${word} if the work needs more time.`
       : `${Math.round((logged / limit) * 100)}% of the limit is used.`;
-  const footer = `You get this email because "Hour limit warnings" is on in Personal preferences → Notifications for ${input.workspaceName}.`;
+  const footer = `You get this email because "Hour limit warnings" is on in Profile settings → Notifications for ${input.workspaceName}.`;
   const text = [greeting, '', intro, next, '', `Open the ${word}: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)} ${escapeHtml(next)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),

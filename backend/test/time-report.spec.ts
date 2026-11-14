@@ -59,7 +59,7 @@ describe('hour limit alerts (CD-149, spec 10.3)', () => {
     const over = limitAlertEmail({ ...base, recipientName: 'Marko', self: false, level: 100, loggedMinutes: h(11.5), limitMinutes: h(10) });
     expect(over.subject).toBe('Hour limit reached: T-142 Hydraulic leak');
     expect(over.text).toContain('Ana Petrović has logged 11.5 h, 1.5 h over their 10 h limit, on T-142');
-    expect(over.text).toContain('"Hour limit warnings" is on in Personal preferences → Notifications for Kovin');
+    expect(over.text).toContain('"Hour limit warnings" is on in Profile settings → Notifications for Kovin');
   });
 });
 

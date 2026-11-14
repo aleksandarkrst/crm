@@ -299,6 +299,21 @@ describe('editing your own card (spec 4.5)', () => {
     expect((await patch(wsAdmin, id.wsAdmin, { managerId: id.owner })).status).toBe(200);
   });
 
+  it("an Admin doesn't change their own work email: it is their sign-in email (CD-525)", async () => {
+    for (const [s, who] of [[owner, id.owner], [wsAdmin, id.wsAdmin]] as const) {
+      const r = await patch(s, who, { workEmail: 'changed-own@example.test' });
+      expect(r.status).toBe(403);
+      expect(r.body.message).toBe('Your work email is the email you sign in with, so it is not changed on your card');
+      const c = await ok('GET', `/people/employees/${who}`, as(s));
+      expect(c.permissions.editableFields).not.toContain('workEmail');
+      expect(c.permissions.editableFields).toContain('jobTitle');
+    }
+    // Someone else's work email stays an Admin's to change (set back afterwards).
+    const before = (await ok('GET', `/people/employees/${id.wsAdmin}`, as(owner))).workEmail;
+    expect((await patch(owner, id.wsAdmin, { workEmail: 'changed-other@example.test' })).status).toBe(200);
+    expect((await patch(owner, id.wsAdmin, { workEmail: before })).status).toBe(200);
+  });
+
   it('the bank account only while the workspace allows it; Admins always', async () => {
     await ok('PATCH', '/workspace', { ...as(owner), body: { employeeSelfEditBank: false } }, 200);
     try {

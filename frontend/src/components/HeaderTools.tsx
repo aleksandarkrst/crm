@@ -132,9 +132,9 @@ function NavButton({ to, label, onDone }: { to: string; label: string; onDone: (
   );
 }
 
-/** Your avatar: personal preferences, workspace settings (Team is a tab there, CD-223), and signing out. */
+/** Your avatar: your profile settings (Profile, Preferences, Notifications, CD-525) and signing out. */
 function AccountMenu() {
-  const { s, session, canEditWorkspace } = useStore();
+  const { s, session } = useStore();
   const pop = usePopover();
   const name = s.profile.name || session.userName;
   const close = () => pop.setOpen(false);
@@ -145,17 +145,9 @@ function AccountMenu() {
       </button>
       {pop.open && (
         <div className="menu-pop" role="menu" style={{ right: 0, width: 250 }}>
-          <div className="caps-muted menu-label">My account</div>
-          <NavButton to={paths.profile} label="Personal preferences" onDone={close} />
+          <div className="caps-muted menu-label">{name}</div>
+          <NavButton to={paths.profile} label="Profile settings" onDone={close} />
           <div className="menu-divider" />
-          {/* Members don't see the workspace settings (CD-523). */}
-          {canEditWorkspace && (
-            <>
-              <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
-              <NavButton to={paths.settings()} label="Workspace settings" onDone={close} />
-              <div className="menu-divider" />
-            </>
-          )}
           <button
             type="button"
             role="menuitem"

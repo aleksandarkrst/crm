@@ -284,7 +284,7 @@ the Overview audience filter).
   `POST …/proposal/sent`), each locking the deal row and answering with the approval as it now
   stands. Requesting needs the funnel's rule, an open deal and a ready document typed Proposal; it
   queues `crm.approval-requested`, which emails the approver if `memberships.notify_proposal_approvals`
-  is on (Notifications (Personal preferences), "Proposal approvals"). The approver, owners and admins approve
+  is on (Profile settings → Notifications, "Proposal approvals"). The approver, owners and admins approve
   (from Pending) or revoke (Pending or Approved, back to Not requested); anyone else gets 403.
   "Send proposal" (`…/proposal/sent`) is a 409 until approved when the funnel asks for it; it only
   marks the proposal as sent and emails nothing yet.
@@ -796,10 +796,10 @@ Production values are listed in `docs/DEPLOYMENT.md` and the root `.env.example`
 
 ### Notification settings
 
-**Personal preferences → Notifications** (the Notifications card on `/profile#notifications`) shows
+**Profile settings → Notifications** (`/profile/notifications`, CD-525) shows
 your own settings for the current workspace, for every role: they are yours, not the workspace's,
 so since CD-489 they are not in Settings, and `/settings/notifications` redirects there (older
-emails link to it). Email footers say "Personal preferences → Notifications". They are columns
+emails link to it). Email footers say "Profile settings → Notifications". They are columns
 on your membership, read and saved through `GET/PATCH /api/profile` like the rest of the profile
 (so they are per user and per workspace, and nobody else can change them):
 
@@ -1513,7 +1513,7 @@ no time until it is reopened (the lock on time entries).
     The board's cards and the list show the team as stacked avatars (`team` on each project).
   - **"+" and Ctrl/⌘K:** "Task" (K; "Project task" outside Projects, for the open project on its
     page), Go to → Tasks, and a Tasks results group ("T-12 · name", by number, name or project).
-  - **Notifications (Personal preferences):** "Task assignments".
+  - **Profile settings → Notifications:** "Task assignments".
 - **Several people, hour limits** (CD-147, `drizzle/0063`, `0064`):
   - `task_assignments.hour_limit`: per person, 0.25 to 9,999 h in quarter hours, null for none.
     Only the lead, owners and admins set it (when assigning, `hourLimits`, or `PATCH
@@ -1644,7 +1644,7 @@ the report, and `test/performance/time-report.spec.ts` the performance target (n
   `drizzle/0085`); only the alert state is stored.
 - **Settings** (`drizzle/0085`): `tenants.hour_limit_mode` `warn` (default) or `block`, in `PATCH
   /api/workspace` (`hourLimitMode`); `memberships.notify_hour_limits` ("Hour limit warnings" in
-  Notifications (Personal preferences), on by default), in `PATCH /api/profile` (`notifyHourLimits`).
+  Profile settings → Notifications, on by default), in `PATCH /api/profile` (`notifyHourLimits`).
 - **Block mode** (`hour-limits.ts`, `hourLimitBlock`): the Timesheet (cells, entries, Copy last
   week) refuses an entry that takes someone past their own limit on a task with 400 "You have 1.5 h
   left on T-142 (limit 8 h). Ask <lead> to raise your limit." Lowering hours is always allowed, so
@@ -2087,7 +2087,7 @@ pure model (`test/timeoff-balance.spec.ts`), `BalancesService` reads the facts a
   Available to request, Used, Scheduled, then Entitlement, Carried over, Adjustments, Total and
   Expired, the two-week part and the policy's carry-over rule; Admins **Adjust balance** (a modal:
   pool year, type, days, reason). The employee card's Time off section shows the current year's
-  card in compact form with a link to Time off. Notifications (Personal preferences): "Time off balance".
+  card in compact form with a link to Time off. Profile settings → Notifications: "Time off balance".
 - **Tests**: `test/integration/timeoff-balances.spec.ts` (visibility per role, the figures and
   history, adjustments and their refusals, the email and its toggle, the table, filters, CSV and
   bulk actions, the job's expiry record and May reminder, isolation);
@@ -2329,7 +2329,7 @@ information".
   `GET/POST/PATCH/DELETE sick-leave-types` (Admins change).
 - **Screens**: My time off and the employee card get a Sick leave section with "Report sick
   leave"; Time off gets a **Sick leave** tab for managers and Admins (filters, CSV, Confirm, Edit,
-  Set end date, Cancel); Settings → Time off gets Sick leave types; Notifications (Personal preferences) gets
+  Set end date, Cancel); Settings → Time off gets Sick leave types; Profile settings → Notifications gets
   "Sick leave notices"; the request list says how many days sick leave interrupted.
 - **Not yet**: timesheet lines for sick leave (CD-170), the business trip conflict flag
   (milestone 17), the Payroll view (no Payroll role since CD-225).
@@ -2473,8 +2473,11 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   it while the menu is open (D deal, P contact, O company, T task, R product). On a deal's screen a
   new task or contact is for that deal.
 - **Notifications**: the bell lists your own open tasks that are overdue or due today (nothing
-  else is made up); the account menu has Personal preferences, Workspace settings and Sign
-  out (Team is a tab of the workspace settings, CD-223). The avatar is not in the sidebar; Settings
+  else is made up). The avatar's menu has Profile settings and Sign out. Profile settings
+  (`screens/Profile.tsx`, CD-525) are Profile, Preferences and Notifications, each its own page
+  (`/profile`, `/profile/preferences`, `/profile/notifications`; the old `/profile#notifications`
+  redirects) in a sidebar like Settings', with, for people in several
+  workspaces, the workspace switcher at the sidebar's foot. The avatar is not in the sidebar; Settings
   is back at its bottom (CD-223; on phones both are under "More").
 - **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
   which opens the New deal dialog with this company or contact, and a menu with Delete for owners
@@ -3205,7 +3208,7 @@ Every endpoint of milestone 13 and later Workforce modules checks access through
 - `access.reportIdsOf(tx, managerId, direct?)`: anyone's subtree. `access.employeeForUser(tenantId,
   userId)`: a member's record.
 - Which card fields a caller may change: `editableFields(access, employeeId, selfEditBank)`
-  (`field-rules.ts`). Admin: all, own card included. Everyone else: on their own card only work
+  (`field-rules.ts`). Admin: all, own card included, except their own work email once set (the sign-in email, CD-525). Everyone else: on their own card only work
   phone, personal details and (setting on) bank. Only an Admin sets a manager or unit.
 - `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds, directReportUserIds, reportUserIds }` (the user ids: reports with an account, for CRM data kept per member).
 

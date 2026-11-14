@@ -108,8 +108,11 @@ describe('who may change which field (spec 4.5, 9.3)', () => {
     for (const f of ['managerId', 'unitId', 'jobTitle', 'employmentStartDate']) expect(editableFields(caller(), 'me', true)).not.toContain(f);
   });
 
-  it('an Admin edits everything, their own card included', () => {
-    expect(editableFields(caller({ workspaceRole: 'owner' }), 'me', false).sort()).toEqual([...EDITABLE_FIELDS].sort());
+  it('an Admin edits everything, their own card included, except their own work email (CD-525)', () => {
+    expect(editableFields(caller({ workspaceRole: 'owner' }), 'x', false).sort()).toEqual([...EDITABLE_FIELDS].sort());
+    expect(editableFields(caller({ workspaceRole: 'owner' }), 'me', false).sort()).toEqual(EDITABLE_FIELDS.filter((f) => f !== 'workEmail').sort());
+    // While their work email is empty they fill it in, so a workspace's only Admin isn't stuck.
+    expect(editableFields(caller({ workspaceRole: 'owner' }), 'me', false, false)).toContain('workEmail');
   });
 });
 

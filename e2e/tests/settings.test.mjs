@@ -8,7 +8,7 @@ const valueByLabel = (page, label, tag = 'input') =>
   page.evaluate(
     (label, tag) => {
       const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
-      return span?.parentElement?.querySelector(tag)?.value ?? null;
+      return (span?.closest('.account-row') ?? span?.parentElement)?.querySelector(tag)?.value ?? null;
     },
     label,
     tag,
@@ -56,7 +56,8 @@ describe('settings and discovery fields', () => {
 
   step('has no Integrations or Billing tab, and their old links go back to Settings (CD-207)', async () => {
     const tabs = await page.$$eval('button', (els) => els.map((b) => b.textContent.trim()));
-    assert.ok(tabs.includes('Notifications'), 'the tab bar is there');
+    assert.ok(tabs.includes('Roles & permissions'), 'the tab bar is there');
+    assert.ok(!tabs.includes('Notifications'), 'Notifications is in Profile settings, not here (CD-489)');
     assert.ok(!tabs.includes('Integrations') && !tabs.includes('Billing'), 'no placeholder tabs');
     for (const tab of ['integrations', 'billing']) {
       await page.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
@@ -87,10 +88,17 @@ describe('settings and discovery fields', () => {
     const funnels = await api(page, '/crm/funnels');
     const ent = funnels.find((f) => f.key === 'ent');
     assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
+    // A save says so in a toast (CD-525).
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Your name saved'));
     assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
     assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
+    // Preferences and Notifications are pages of the account (CD-525).
+    await click(page, '[data-testid=account-nav] [data-section=preferences]');
+    await page.waitForFunction(() => location.pathname === '/profile/preferences');
     assert.ok(await setByLabel(page, 'Default funnel', ent.id, 'select'));
-    await page.click('.switch');
+    await click(page, '[data-testid=account-nav] [data-section=notifications]');
+    await page.waitForSelector('[data-notification=digest] .switch');
+    await page.click('[data-notification=digest] .switch');
     const saved = await eventually(async () => {
       const p = await api(page, '/profile');
       return (
@@ -107,12 +115,17 @@ describe('settings and discovery fields', () => {
 
   step('shows the saved profile after a reload', async () => {
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Daily digest email'));
+    await page.waitForSelector('[data-notification=digest] .switch');
+    assert.equal(await page.$eval('[data-notification=digest] .switch', (el) => el.classList.contains('on')), false);
+    assert.match(await page.$eval('[data-testid=notifications-card] + .account-foot', (el) => el.textContent), /^Emails go to \S+@\S+\./);
+    await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=account-content]');
     assert.equal(await valueByLabel(page, 'Full name'), 'Olga Renamed');
     assert.equal(await valueByLabel(page, 'Job title'), 'Head of sales');
     assert.equal(await valueByLabel(page, 'Phone'), '+381 60 123 456');
+    await page.goto(`${BASE_URL}/profile/preferences`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=account-content]');
     assert.ok(!(await page.evaluate(() => document.body.innerText)).includes('Start page'), 'no Start page: everyone starts on Home (CD-288)');
-    assert.equal(await page.$eval('.switch', (el) => el.classList.contains('on')), false);
   });
 
   step('opens Home, even with a start page saved before CD-288', async () => {
@@ -175,7 +188,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
     await click(member, '[data-testid=account-menu]');
     const items = await member.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
-    assert.deepEqual(items, ['Personal preferences', 'Sign out']);
+    assert.deepEqual(items, ['Profile settings', 'Sign out']);
     await member.keyboard.press('Escape');
     await member.click('h1');
     await member.keyboard.down('Control');
@@ -186,10 +199,14 @@ describe('settings and discovery fields', () => {
     const titles = await member.$$eval('[data-testid=search-results] [role=option] .search-item-title', (els) => els.map((el) => el.textContent));
     assert.ok(!titles.includes('Workspace settings') && !titles.includes('Funnel builder'), JSON.stringify(titles));
     await member.keyboard.press('Escape');
-    // Their own notification settings are on Personal preferences, where the digest's link takes them.
+    // Their own notification settings are in their account, where the digest's link takes them,
+    // and the old `/profile#notifications` link still lands there (CD-525).
     await member.goto(`${BASE_URL}/settings/notifications`, { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => location.pathname === '/profile' && location.hash === '#notifications');
-    await member.waitForSelector('#notifications [data-notification=digest] [role=switch]');
+    await member.waitForFunction(() => location.pathname === '/profile/notifications');
+    await member.waitForSelector('[data-notification=digest] [role=switch]');
+    await member.goto(`${BASE_URL}/profile#notifications`, { waitUntil: 'networkidle0' });
+    await member.waitForFunction(() => location.pathname === '/profile/notifications');
+    await member.waitForSelector('[data-notification=digest] [role=switch]');
     // A member's own profile starts with the defaults, independent of the owner's.
     const p = await api(member, '/profile');
     assert.equal(p.startPage, 'pipeline');

@@ -213,7 +213,7 @@ describe('digestEmail', () => {
     expect(mail.text).toContain('Overdue tasks (1)\n- Call <Ana> (was due 22 Sept) · Deal a · Acme\n  https://app.example.com/deals/deal-a');
     expect(mail.text).toContain('Due today (1)\n- Task b · Deal b\n');
     expect(mail.text).toContain('Opportunities with no next step (1)\n- Renewal · Globex · Proposal\n  https://app.example.com/deals/d1');
-    expect(mail.text).toContain('https://app.example.com/profile#notifications');
+    expect(mail.text).toContain('https://app.example.com/profile/notifications');
     expect(mail.html).toContain('Call &lt;Ana&gt;');
     expect(mail.html).toContain('href="https://app.example.com/deals/d1"');
     expect(mail.html).toContain('src="https://app.example.com/email-logo.png"');

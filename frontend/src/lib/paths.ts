@@ -41,9 +41,11 @@ export const paths = {
   settings: (tab = 'workspace') => '/settings/' + tab,
   /** Employees → Team (CD-521; Settings → Members before): `invite` opens the Invite dialog. */
   team: (invite = false) => '/team' + (invite ? '?invite=1' : ''),
+  /** Your account (CD-525): Profile, with Preferences and Notifications as its other pages. */
   profile: '/profile',
-  /** Your notification settings: a card on Personal preferences (CD-523; for everyone since CD-489, they are yours, not the workspace's). */
-  myNotifications: '/profile#notifications',
+  account: (page?: 'preferences' | 'notifications') => '/profile' + (page ? '/' + page : ''),
+  /** Your notification settings in your account (CD-523, CD-525), for every role (CD-489: they are yours, not the workspace's). */
+  myNotifications: '/profile/notifications',
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),

@@ -89,6 +89,8 @@ describe('emails: invitations and notification settings', () => {
 
   step('the Notifications tab lists only the emails we send, all on by default', async () => {
     await page.goto(BASE_URL + '/settings/notifications', { waitUntil: 'networkidle0' });
+    // The old Settings URL lands on your account's Notifications page, for owners too (CD-489).
+    await page.waitForFunction(() => location.pathname === '/profile/notifications');
     await page.waitForSelector('[data-notification="digest"] .switch');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), true, id);
     const body = await text(page);
@@ -110,9 +112,9 @@ describe('emails: invitations and notification settings', () => {
     for (const id of SETTINGS) assert.equal(await isOn(page, id), false, id);
   });
 
-  step('the profile shows the same daily digest setting', async () => {
-    await page.goto(BASE_URL + '/profile', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Daily digest email'));
-    assert.equal(await page.$eval('.switch', (el) => el.classList.contains('on')), false);
+  step('your account shows the same settings (CD-525)', async () => {
+    await page.goto(BASE_URL + '/profile/notifications', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-notification="digest"] .switch');
+    for (const id of SETTINGS) assert.equal(await isOn(page, id), false, id);
   });
 });

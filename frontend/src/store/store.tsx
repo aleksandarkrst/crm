@@ -7,7 +7,7 @@ import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
-import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
+import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, rememberProfile, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, initialState, SYSTEM_CHANNEL } from './seed';
 import {
   advanceBlockers,
@@ -241,6 +241,17 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   sickLeaveNotices: 'notifySickLeave',
   hourLimits: 'notifyHourLimits',
   proposalApprovals: 'notifyProposalApprovals',
+};
+
+/** What a profile save is called in its toast ("Your name saved") and its error; the rest are notification switches. */
+const PROFILE_WORDS: Partial<Record<keyof Profile, string>> = {
+  name: 'your name',
+  title: 'your job title',
+  phone: 'your phone',
+  language: 'your language',
+  dateFormat: 'your date format',
+  startPage: 'your start page',
+  defaultFunnelId: 'your default funnel',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -2100,10 +2111,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           if (!field) continue;
           const value = field === 'defaultFunnelId' ? v || null : typeof v === 'string' ? v.trim() : v;
           if (field === 'displayName' && !value) continue;
-          saveLater('profile:' + field, async () => {
-            const p = await crmApi.updateProfile({ [field]: value });
-            if (field === 'displayName' && p.displayName) session.renameUser(p.displayName);
-          });
+          const what = PROFILE_WORDS[k as keyof Profile] ?? 'your notification settings';
+          saveLater(
+            'profile:' + field,
+            async () => {
+              const p = await crmApi.updateProfile({ [field]: value });
+              rememberProfile(p);
+              if (field === 'displayName' && p.displayName) session.renameUser(p.displayName);
+            },
+            what,
+            () => flash(what.charAt(0).toUpperCase() + what.slice(1) + ' saved'),
+          );
         }
       },
     };

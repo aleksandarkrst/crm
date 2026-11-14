@@ -364,7 +364,7 @@ export interface Profile {
   startPage: ApiStartPage;
   /** Backend funnel id; '' for none. Applies to this workspace only. */
   defaultFunnelId: string;
-  /** Notification settings (Personal preferences → Notifications, CD-16, CD-489). Apply to this workspace only. */
+  /** Notification settings (Profile settings → Notifications, CD-16, CD-489). Apply to this workspace only. */
   digest: boolean;
   dealAssigned: boolean;
   meetingInvites: boolean;

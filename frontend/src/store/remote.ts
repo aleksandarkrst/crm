@@ -238,6 +238,14 @@ type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
 let lastRaw: Raw | null = null;
 
 /**
+ * Keeps the last load's profile as saved: no live hint re-reads your own profile, so a refresh
+ * would otherwise put back the profile as it was when the workspace loaded.
+ */
+export function rememberProfile(profile: ApiProfile) {
+  if (lastRaw) lastRaw = { ...lastRaw, profile };
+}
+
+/**
  * The lists a live update can re-read row by row (CD-98): `fetch` gets the rows named by a change
  * hint (by id, or for lines and to-dos by deal), `key` says which hinted id a row belongs to, and
  * `order` sorts the merged list the way the API does where screens show it in list order.
