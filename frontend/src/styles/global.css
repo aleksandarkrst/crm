@@ -1397,6 +1397,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .ws-mark.on { background: var(--brand-soft); color: var(--brand); }
 /* Chips: standard fields and to-dos. */
 .ws-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ws-chips-end { justify-content: flex-end; max-width: 420px; }
 .ws-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--chip); font-size: 12.5px; color: var(--text-2); }
 .ws-chip input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); min-width: 0; }
 .ws-chip .ws-x { width: 22px; height: 22px; margin-right: -6px; }
@@ -1449,6 +1450,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   .ws-row.with-switch .ws-row-control { flex: 0 0 auto; }
   .ws-row-control > .form-input, .ws-row-control > .select-wrap, .ws-row-control .tz-trigger, .ws-row-control > .form-input.wide, .ws-row-control > .form-input.short { width: 100%; }
   .ws-stage-opps { display: none; }
+  .ws-chips-end { justify-content: flex-start; }
 }
 
 /* ---------------------------------------------------------------- your account (CD-525, design G-Profile) */

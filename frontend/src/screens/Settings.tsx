@@ -840,7 +840,7 @@ function FieldsTab() {
           >
             <Rows testId={'fields-' + ent.k}>
               <Row label="Standard fields" hint="Always there, can't be removed">
-                <span className="ws-chips" style={{ justifyContent: 'flex-end', maxWidth: 420 }}>
+                <span className="ws-chips ws-chips-end">
                   {STANDARD_FIELDS[ent.k].map((f) => (
                     <span key={f} className="ws-chip">
                       {f}
