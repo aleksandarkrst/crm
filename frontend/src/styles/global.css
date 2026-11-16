@@ -65,31 +65,6 @@
   /* Lifts a coloured app icon off its tile (design "Home, all modules"). */
   --shadow-icon: 0 6px 16px rgba(13, 36, 28, 0.12);
 
-  /*
-   * The redesign's glass look (CD-524 spec, section 4), used by Home (CD-288). Same names and values
-   * as the Workspace settings rebuild (CD-524), so the two pages are one product.
-   */
-  --gs-ink: #1D1D1F;
-  --gs-text-2: #6E6E73;
-  --gs-muted: #8E8E93;
-  --gs-divider: rgba(60, 60, 67, 0.08);
-  --gs-chip: rgba(120, 120, 128, 0.12);
-  --gs-chip-2: rgba(120, 120, 128, 0.22);
-  --gs-bg: #EEF2F0;
-  --gs-glass: rgba(255, 255, 255, 0.58);
-  --gs-glass-strong: rgba(255, 255, 255, 0.92);
-  --gs-glass-line: rgba(255, 255, 255, 0.75);
-  --gs-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(13, 36, 28, 0.07);
-  --gs-pop-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 16px 40px rgba(13, 36, 28, 0.16);
-  --gs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --gs-blob-2: #A9D8C3;
-  --gs-blob-3: #B9CFF5;
-  --gs-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter, 'Segoe UI', system-ui, sans-serif;
-  --gs-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', system-ui, sans-serif;
-  /* A module tile under the pointer on Home (CD-288 spec: white .7 with a soft shadow). */
-  --gs-tile-hover: rgba(255, 255, 255, 0.7);
-  --gs-tile-hover-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(13, 36, 28, 0.08);
-
   /* Onest for the interface, Unbounded for brand voice: titles and big figures. */
   --font: 'Onest', system-ui, sans-serif;
   --font-display: 'Unbounded', 'Onest', system-ui, sans-serif;
@@ -1297,137 +1272,324 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 }
 
 /* ---------------------------------------------------------------- workspace settings (CD-524, design G-Settings) */
-/* The nav: a head (the workspace), an icon per section, and a line when modules are off. */
-.ws-nav .settings-nav-item { display: flex; align-items: center; gap: 9px; }
-.ws-nav .settings-nav-item svg { flex: 0 0 auto; color: var(--brand); }
-.ws-nav-head { display: flex; flex-direction: column; gap: 1px; padding: 0 10px; min-width: 0; }
-.ws-nav-head b { font-size: 14px; font-weight: 600; color: var(--ink); }
-.ws-nav-head span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-nav-hidden { font-size: 12px; line-height: 1.45; color: var(--text-2); padding: 0 10px; margin: 0; }
-.ws-content { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 28px; }
-.ws-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
-.ws-head-text { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.ws-head .settings-title { font-size: 20px; }
-.ws-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.ws-stack { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
-/* A block: a heading (with its own buttons) over a card of rows, a table or a list. */
-.ws-block { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.ws-block-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 2px; }
-.ws-block-text { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ws-block-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--ink); }
-.ws-block-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-.ws-block-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.ws-rows { display: flex; flex-direction: column; }
-.ws-rows.danger { border-color: var(--danger-soft); }
-/* A setting: what it is (and a hint, or what is wrong) on the left, its control on the right. */
-.ws-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-height: 60px; box-sizing: border-box; padding: 12px 18px; border-top: 1px solid var(--divider); }
-.ws-row:first-child { border-top: 0; }
-.ws-row-icon { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--white); background: var(--mod-other); }
-.ws-row-text { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ws-row-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.ws-row-hint { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-.ws-row-error { font-size: 12.5px; color: var(--danger); font-weight: 500; line-height: 1.45; }
-.ws-row-control { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.ws-row-control > .form-input, .ws-row-control > .select-wrap { width: 260px; max-width: 100%; }
-.ws-row-control > .form-input.narrow { width: 90px; }
-.ws-row-control > .form-input.short { width: 160px; }
-.ws-row-control > .form-input.wide { width: 320px; }
-.ws-row-control .tz-trigger { width: 280px; max-width: 100%; border: 1px solid var(--border); border-radius: 7px; background: var(--white); padding: 9px 10px; }
-.ws-choices .choice.ws-choice-new { border-style: dashed; border-color: var(--dashed); background: transparent; justify-content: center; color: var(--brand); font-weight: 600; font-size: 13.5px; }
-.ws-row .ws-avatar { width: 48px; height: 48px; font-size: 15px; }
-/* The logo is its own button: hovering shows a pen over it, a click picks the image (CD-524 review). */
-.ws-avatar-btn { cursor: pointer; }
-.ws-avatar-btn:disabled { cursor: progress; }
-.ws-avatar-btn:hover .ws-avatar-edit, .ws-avatar-btn:focus-visible .ws-avatar-edit { opacity: 1; }
-.ws-unit { font-size: 13px; color: var(--text-2); white-space: nowrap; }
-.ws-note { margin: -16px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
-/* A segmented control: one of a few options, side by side. */
-.ws-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--segment); max-width: 100%; flex-wrap: wrap; }
-.ws-seg button { height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; white-space: nowrap; }
-.ws-seg button.on { background: var(--white); color: var(--ink); box-shadow: var(--shadow-card); }
-.ws-seg button:disabled { cursor: default; }
-/* Funnels and project types: a card per choice. */
-.ws-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.ws-choices .choice { border-radius: 12px; padding: 14px 16px; }
-/* A table in a card. */
-.ws-table { overflow-x: auto; }
-.ws-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.ws-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--text-2); padding: 12px 10px 10px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
-.ws-table td { padding: 9px 10px; border-top: 1px solid var(--divider-2); vertical-align: middle; }
-.ws-table tbody tr:first-child td { border-top: 0; }
-.ws-table th:first-child, .ws-table td:first-child { padding-left: 18px; }
-.ws-table th:last-child, .ws-table td:last-child { padding-right: 18px; }
-.ws-table .num { text-align: right; white-space: nowrap; }
-.ws-table .center { text-align: center; }
-.ws-table .actions { text-align: right; white-space: nowrap; }
-.ws-table .actions > * + * { margin-left: 6px; }
-.ws-table-empty { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--muted-2); border-top: 1px solid var(--divider-2); }
-/* A grid list in a card (holidays, policies, reasons): its rows keep their own responsive grid. */
-.ws-list { padding: 2px 18px 6px; font-size: 13.5px; }
-.ws-list > :first-child { border-top: 0; }
-.ws-list .th { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-2); }
-.ws-list-empty { padding: 12px 0; font-size: 13px; color: var(--muted-2); border-top: 1px solid var(--divider); }
-.ws-cell { display: flex; flex-direction: column; gap: 1px; line-height: 18px; min-width: 0; }
-.ws-cell b { font-weight: 600; }
-.ws-cell .ws-row-hint { font-size: 12px; }
-.ws-mark { display: inline-flex; width: 22px; height: 22px; border-radius: 999px; align-items: center; justify-content: center; background: var(--chip); color: transparent; }
-.ws-mark.on { background: var(--brand-soft); color: var(--brand); }
-/* Chips: standard fields and to-dos. */
-.ws-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.ws-chips-end { justify-content: flex-end; max-width: 420px; }
-.ws-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--chip); font-size: 12.5px; color: var(--text-2); }
-.ws-chip input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); min-width: 0; }
-.ws-chip .ws-x { width: 22px; height: 22px; margin-right: -6px; }
-.ws-x { width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--muted-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex: 0 0 auto; font: inherit; }
-.ws-x:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
-.ws-x.plain:hover:not(:disabled) { background: var(--chip); color: var(--ink); }
-.ws-x:disabled { opacity: 0.3; cursor: default; }
-/* Numbered stages joined by arrows: a project type's stages, the organization's levels. */
-.ws-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px; }
-.ws-preview-stage { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 5px; border-radius: 999px; background: var(--white); border: 1px solid var(--border); font-size: 13px; font-weight: 500; }
-.ws-preview-n { width: 22px; height: 22px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.ws-preview-arrow { color: var(--muted); display: flex; }
-/* Stages of a funnel or project type: a list; a funnel's open stage shows its editor under it. */
-.ws-stages { padding: 6px 0; }
-.ws-stage { margin: 0 8px; border-radius: 12px; }
-.ws-stage.on { box-shadow: inset 0 0 0 1.5px var(--brand); background: var(--brand-tint); }
-.ws-stage-head { display: flex; align-items: center; gap: 4px; padding-right: 6px; }
-.ws-stage-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
-.ws-stage-n { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.ws-stage.won .ws-stage-n { background: var(--brand); color: var(--white); }
-.ws-stage-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ws-stage-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.ws-stage-opps { flex: 0 0 auto; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
-.ws-stage-chev { display: inline-flex; transition: transform 0.2s ease; }
-.ws-stage.on .ws-stage-chev { transform: rotate(180deg); }
-.ws-stage-actions { display: flex; flex: 0 0 auto; }
-.ws-stage-link { display: block; width: 2px; height: 8px; margin: 0 0 0 33px; background: var(--brand-soft-2); border-radius: 2px; }
-.ws-stage-editor { margin: 0 0 4px; padding: 2px 0 6px; border-top: 1px solid var(--divider); background: var(--white); border-radius: 0 0 12px 12px; }
-.ws-stage-editor .ws-row { min-height: 52px; padding: 10px 16px; }
-.ws-stage-sec { padding: 14px 16px 2px; font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
-.ws-stage-sub { display: block; padding: 2px 16px 0; }
-.ws-stage-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding: 12px 16px 4px; border-top: 1px solid var(--divider); }
-.ws-stages-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px 8px; margin-top: 4px; border-top: 1px solid var(--divider); }
-/* Working days: a toggle per weekday. */
-.ws-days { display: flex; gap: 4px; flex-wrap: wrap; }
-.ws-days button { width: 32px; height: 32px; border: 0; border-radius: 999px; background: var(--segment); font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-2); cursor: pointer; }
-.ws-days button.on { background: var(--brand); color: var(--white); }
-.btn-danger-quiet { border: 1px solid var(--danger-soft); background: var(--white); color: var(--danger); cursor: pointer; font-size: 13px; font-weight: 500; padding: 8px 13px; border-radius: 8px; white-space: nowrap; }
-.btn-danger-quiet:hover:not(:disabled) { background: var(--danger-soft); }
-.btn-danger-quiet:disabled { color: var(--muted); border-color: var(--divider); cursor: not-allowed; }
-@media (max-width: 800px) {
-  .ws-nav { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
-  .ws-nav .settings-nav-group { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
-  .ws-nav .settings-nav-label { flex: 1 1 100%; }
+/*
+ * Workspace settings is its own area in the design's glass style (CD-524 spec, sections 3 and 4).
+ * Everything is scoped under `.gs` with its own tokens, so the rest of the app keeps its look.
+ */
+.gs, .gs-tokens, .toast-glass {
+  --gs-check: #7FD8A8; --gs-toast-error: rgba(215, 0, 21, 0.92); --gs-toast-error-shadow: 0 10px 30px rgba(215, 0, 21, 0.28);
+  --gs-danger-tint: rgba(215, 0, 21, 0.08); --gs-dash: rgba(0, 0, 0, 0.18); --gs-drop: rgba(255, 255, 255, 0.6); --gs-drop-hover: rgba(255, 255, 255, 0.9);
+  --gs-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --gs-green: #14503C; --gs-green-500: #2F7A5E; --gs-green-dark: #0D241C; --gs-green-soft: #E7F2EE;
+  --gs-ink: #1D1D1F; --gs-text-2: #6E6E73; --gs-muted: #8E8E93; --gs-faint: #AEAEB2; --gs-ink-3: #3A3A3C;
+  --gs-border: rgba(60, 60, 67, 0.16); --gs-outline: rgba(60, 60, 67, 0.14); --gs-divider: rgba(60, 60, 67, 0.08); --gs-divider-2: rgba(60, 60, 67, 0.06);
+  --gs-chip: rgba(120, 120, 128, 0.12); --gs-chip-2: rgba(120, 120, 128, 0.22); --gs-bg: #EEF2F0;
+  --gs-danger: #D70015; --gs-danger-dark: #B0001A; --gs-danger-soft: #FDE7EA; --gs-danger-field: #FFF7F8;
+  --gs-amber-bg: #FDF1DE; --gs-amber: #9A5B00; --gs-blue-bg: #E5EEFD; --gs-blue: #1550B8; --gs-violet-bg: #EFE9FC; --gs-violet: #5B3CC4;
+  --gs-glass: rgba(255, 255, 255, 0.58); --gs-glass-strong: rgba(255, 255, 255, 0.92); --gs-glass-line: rgba(255, 255, 255, 0.75);
+  --gs-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(13, 36, 28, 0.07);
+  --gs-pop-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 16px 40px rgba(13, 36, 28, 0.16);
+  --gs-field: rgba(255, 255, 255, 0.85); --gs-scrim: rgba(13, 36, 28, 0.18); --gs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --gs-blob-1: #C9B8F5; --gs-blob-2: #A9D8C3; --gs-blob-3: #B9CFF5;
+  --gs-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter, 'Segoe UI', system-ui, sans-serif;
+  --gs-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', system-ui, sans-serif;
+  /* A module tile under the pointer on Home (CD-288 spec: white .7 with a soft shadow). */
+  --gs-tile-hover: rgba(255, 255, 255, 0.7);
+  --gs-tile-hover-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(13, 36, 28, 0.08);
+}
+.gs {
+  position: relative; display: flex; align-items: flex-start; min-height: 100vh; overflow: clip; background: var(--gs-bg); color: var(--gs-ink); font-family: var(--gs-font); -webkit-font-smoothing: antialiased;
+}
+.gs a { color: var(--gs-green); text-decoration: none; }
+.gs a:hover { color: var(--gs-green-dark); }
+.gs :focus-visible { outline: 2px solid var(--gs-green); outline-offset: 2px; }
+.gs-blob { position: absolute; border-radius: 999px; filter: blur(70px); pointer-events: none; }
+.gs-glass { background: var(--gs-glass); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: 1px solid var(--gs-glass-line); box-shadow: var(--gs-glass-shadow); }
+/* The sidebar: back to the modules, the six pages (an Off pill when the module is off), your account. */
+/* The sidebar stays put; only the page scrolls. */
+.gs-side { position: fixed; top: 12px; left: 12px; bottom: 12px; z-index: 30; width: 248px; overflow-y: auto; box-sizing: border-box; border-radius: 22px; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+.gs-side-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.gs-side-ws { min-width: 0; margin: -4px 8px 0 0; font-weight: 600; font-size: 14.5px; color: var(--gs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-home { position: relative; flex: none; width: 32px; height: 32px; margin: 6px 8px 10px; border-radius: 9px; background: var(--gs-green-dark); display: flex; align-items: center; justify-content: center; color: var(--white); transition: background 0.2s ease, transform 0.1s ease-out; }
+.gs .gs-home, .gs .gs-home:hover { color: var(--white); }
+.gs-home:hover, .gs-home:focus-visible { background: var(--gs-green); }
+.gs-home > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transition: opacity 0.18s ease, transform 0.22s var(--gs-ease); }
+.gs-home .back { opacity: 0; transform: translateX(5px); }
+.gs-home:hover .mark, .gs-home:focus-visible .mark { opacity: 0; transform: scale(0.7); }
+.gs-home:hover .back, .gs-home:focus-visible .back { opacity: 1; transform: none; }
+.gs-nav { display: flex; flex-direction: column; gap: 2px; }
+.gs-nav-row { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; height: 34px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13.5px; color: var(--gs-ink); text-align: left; cursor: pointer; transition: background 0.15s ease; }
+.gs-nav-row:hover { background: rgba(255, 255, 255, 0.6); }
+.gs-nav-row.on { background: rgba(255, 255, 255, 0.85); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); color: var(--gs-green); font-weight: 600; }
+.gs-nav-row .ic { display: flex; width: 20px; justify-content: center; color: var(--gs-green); }
+.gs-nav-row .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-off-pill { flex: none; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(120, 120, 128, 0.14); color: var(--gs-text-2); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
+.gs-face { flex: none; width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; background: var(--gs-ink); color: var(--white); }
+.gs-face.soft { background: var(--gs-green-soft); color: var(--gs-green); }
+/* The main column: the glass top bar with the title, then the page. */
+.gs-main { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; margin-left: 272px; box-sizing: border-box; padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 18px; }
+.gs-topbar { position: sticky; top: 12px; z-index: 20; display: grid; grid-template-columns: 1fr minmax(0, 420px) 1fr; align-items: center; gap: 10px; margin: -14px -14px 0; padding: 8px 10px 8px 18px; border-radius: 999px; }
+.gs-topbar h1 { margin: 0; justify-self: start; font-family: var(--gs-font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+.gs-topbar .header-center { min-width: 0; }
+.gs-topbar .header-right { justify-self: end; }
+.gs-page { width: 100%; max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; padding: 2px 0 40px; }
+/* A section: its header (19 px title, one line, a primary button), then blocks; sections are divided by a line. */
+.gs-section { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.gs-section + .gs-section { padding-top: 26px; border-top: 1px solid var(--gs-outline); }
+.gs-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 4px; }
+.gs-section-head .text { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gs-section-head h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.gs-sub { font-size: 12.5px; line-height: 18px; color: var(--gs-text-2); }
+.gs-block { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.gs-block-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 4px; }
+.gs-block-head .text { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gs-block-head h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.gs-block-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gs-card { border-radius: 18px; min-width: 0; }
+.gs-card.danger { background: rgba(255, 245, 246, 0.62); box-shadow: inset 0 0 0 1px rgba(215, 0, 21, 0.22), 0 12px 40px rgba(13, 36, 28, 0.05); }
+.gs-note { margin: -14px 4px 0; font-size: 13px; line-height: 19px; color: var(--gs-text-2); }
+/* A module page: its switch card on top; with the module off it is amber and the rest is disabled. */
+.gs-modcard .gs-card { box-shadow: inset 0 0 0 1px rgba(20, 80, 60, 0.1), 0 12px 40px rgba(13, 36, 28, 0.07); }
+.gs-modcard.off .gs-card { background: rgba(255, 248, 236, 0.78); box-shadow: inset 0 0 0 1px rgba(154, 91, 0, 0.22), 0 12px 40px rgba(13, 36, 28, 0.07); }
+.gs-disabled { opacity: 0.42; filter: grayscale(0.6); pointer-events: none; user-select: none; }
+/* A setting row: label and description on the left, the control on the right. */
+.gs-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-height: 60px; box-sizing: border-box; padding: 12px 18px; border-top: 1px solid var(--gs-divider); }
+.gs-row:first-child { border-top: 0; }
+.gs-row-text { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gs-row-text > b { font-size: 14px; font-weight: 600; }
+.gs-row-summary { font-size: 13.5px; font-weight: 600; line-height: 19px; margin-top: 4px; }
+.gs-row-control { flex: none; display: flex; align-items: center; gap: 8px; max-width: 100%; flex-wrap: wrap; }
+.gs-row.sub { padding-left: 46px; position: relative; }
+.gs-row.sub::before { content: ''; position: absolute; left: 26px; top: 0; height: 50%; width: 12px; border-left: 1.5px solid rgba(60, 60, 67, 0.2); border-bottom: 1.5px solid rgba(60, 60, 67, 0.2); border-bottom-left-radius: 6px; }
+.gs-row.dim .gs-row-text, .gs-row.dim .gs-row-control { opacity: 0.45; }
+.gs-row.dim .gs-row-control { pointer-events: none; }
+.gs-error { font-size: 12.5px; line-height: 17px; color: var(--gs-danger-dark); font-weight: 500; }
+.gs-tile { flex: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--white); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.25), 0 3px 8px rgba(0, 0, 0, 0.12); background: var(--mod-other); }
+.gs-unit { font-size: 14px; color: var(--gs-text-2); white-space: nowrap; }
+/* Buttons: pills. */
+.gs-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12); font: inherit; font-size: 13px; font-weight: 600; color: var(--gs-ink); cursor: pointer; white-space: nowrap; transition: transform 0.1s ease-out, background 0.15s ease; }
+.gs-btn:hover { background: var(--white); }
+.gs-btn:active { transform: scale(0.97); }
+.gs-btn.primary { background: var(--gs-green); color: var(--white); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 12px rgba(20, 80, 60, 0.25); }
+.gs-btn.primary:hover { background: var(--gs-green-500); }
+.gs-btn.red { background: var(--gs-danger); color: var(--white); box-shadow: 0 4px 12px rgba(215, 0, 21, 0.22); }
+.gs-btn.red:hover { background: var(--gs-danger-dark); }
+.gs-btn.text-red { color: var(--gs-danger); }
+.gs-btn.small { height: 28px; padding: 0 12px; }
+.gs-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+.gs-x { width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--gs-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex: none; }
+.gs-x:hover:not(:disabled) { background: var(--gs-danger-tint); color: var(--gs-danger); }
+.gs-x.plain:hover:not(:disabled) { background: var(--gs-chip); color: var(--gs-ink); }
+.gs-x:disabled { opacity: 0.3; cursor: default; }
+/* Switch, 44 × 26. */
+.gs-switch { position: relative; flex: none; width: 44px; height: 26px; padding: 0; border: 0; border-radius: 999px; background: var(--gs-chip-2); cursor: pointer; transition: background 0.2s ease; }
+.gs-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 999px; background: var(--white); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.04); transition: transform 0.25s var(--gs-ease); }
+.gs-switch.on { background: var(--gs-green); }
+.gs-switch.on::after { transform: translateX(18px); }
+.gs-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Segmented control. */
+.gs-seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; padding: 3px; border-radius: 999px; background: var(--gs-chip); }
+.gs-seg button { height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--gs-ink); cursor: pointer; white-space: nowrap; }
+.gs-seg button.on { background: var(--white); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.gs-seg button:disabled { cursor: default; }
+/* Text input, 38 px (34 px in rows), inset outline; the error state is red. */
+.gs-input { font: inherit; font-size: 14px; color: var(--gs-ink); border: 0; border-radius: 10px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); height: 38px; padding: 0 12px; width: 100%; box-sizing: border-box; }
+.gs-input.s { height: 34px; font-size: 13.5px; }
+.gs-input::placeholder { color: var(--gs-faint); }
+.gs-input:focus { outline: 2px solid var(--gs-green); outline-offset: 0; }
+.gs-input[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px var(--gs-danger); background: var(--gs-danger-field); }
+.gs-input:disabled { opacity: 0.6; }
+textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: vertical; }
+.gs-field { display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
+/* Dropdown: a button with the value, and a glass list with a check on the chosen option. */
+.gs-dd { position: relative; display: inline-flex; max-width: 100%; }
+.gs-ddb { display: flex; align-items: center; justify-content: space-between; gap: 8px; max-width: 100%; height: 34px; box-sizing: border-box; padding: 0 10px 0 12px; border: 0; border-radius: 10px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; font-size: 13.5px; color: var(--gs-ink); cursor: pointer; text-align: left; }
+.gs-ddb:hover { background: var(--white); }
+.gs-ddb[aria-expanded='true'] { box-shadow: 0 0 0 2px var(--gs-green); }
+.gs-ddb:disabled { opacity: 0.6; cursor: default; }
+.gs-ddb .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-ddb svg { flex: none; color: var(--gs-text-2); }
+.gs-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; min-width: 100%; max-width: min(360px, calc(100vw - 24px)); max-height: 260px; overflow-y: auto; box-sizing: border-box; padding: 5px; border-radius: 14px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); display: flex; flex-direction: column; animation: gsPop 0.18s var(--gs-ease); transform-origin: top right; }
+.gs-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13.5px; color: var(--gs-ink); text-align: left; cursor: pointer; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; flex: none; }
+.gs-opt:hover, .gs-opt.active { background: rgba(20, 80, 60, 0.08); }
+.gs-opt .ok { display: flex; color: transparent; }
+.gs-opt.on { font-weight: 600; }
+.gs-opt.on .ok { color: var(--gs-green); }
+.gs-opt.red { color: var(--gs-danger); }
+.gs-opt:disabled { color: var(--gs-muted); cursor: default; background: transparent; }
+@keyframes gsPop { from { opacity: 0; transform: scale(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes gsFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gsRise { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes gsSlide { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+/* The time zone picker in the glass look. */
+.gs .tz-trigger { height: 34px; width: 280px; max-width: 100%; box-sizing: border-box; border: 0; border-radius: 10px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); padding: 0 12px; font-size: 13.5px; color: var(--gs-ink); }
+.gs .tz-pop { width: 340px; max-width: calc(100vw - 32px); max-height: 360px; border: 0; border-radius: 14px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); right: 0; left: auto; }
+.gs .tz-search { border: 0; border-radius: 10px; background: rgba(120, 120, 128, 0.1); }
+/* Tables in a glass card. */
+.gs-table { overflow-x: auto; }
+.gs-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.gs-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--gs-text-2); padding: 12px 10px 10px; border-bottom: 1px solid var(--gs-divider); white-space: nowrap; }
+.gs-table td { padding: 9px 10px; border-top: 1px solid var(--gs-divider-2); vertical-align: middle; }
+.gs-table tbody tr:first-child td { border-top: 0; }
+.gs-table th:first-child, .gs-table td:first-child { padding-left: 18px; }
+.gs-table th:last-child, .gs-table td:last-child { padding-right: 18px; }
+.gs-table .num { text-align: right; white-space: nowrap; }
+.gs-table .center { text-align: center; }
+.gs-table td.center > .gs-field { display: inline-flex; vertical-align: middle; text-align: left; }
+.gs-table .end { text-align: right; white-space: nowrap; width: 1%; }
+.gs-table-empty { padding: 26px 16px; text-align: center; font-size: 13.5px; color: var(--gs-muted); border-top: 1px solid var(--gs-divider-2); }
+.gs-cell { display: flex; flex-direction: column; gap: 1px; line-height: 18px; min-width: 0; }
+.gs-cell b { font-weight: 600; }
+.gs-cell .gs-sub { font-size: 12px; line-height: 16px; }
+.gs-mark { display: inline-flex; width: 22px; height: 22px; border-radius: 999px; align-items: center; justify-content: center; background: rgba(120, 120, 128, 0.1); color: transparent; }
+.gs-mark.on { background: var(--gs-green-soft); color: var(--gs-green); }
+/* Badges and chips. */
+.gs-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: rgba(120, 120, 128, 0.14); color: var(--gs-ink-3); }
+.gs-badge.green { background: var(--gs-green-soft); color: var(--gs-green); }
+.gs-badge.blue { background: var(--gs-blue-bg); color: var(--gs-blue); }
+.gs-badge.violet { background: var(--gs-violet-bg); color: var(--gs-violet); }
+.gs-badge.amber { background: var(--gs-amber-bg); color: var(--gs-amber); }
+.gs-badge.red { background: var(--gs-danger-soft); color: var(--gs-danger-dark); }
+.gs-code { white-space: nowrap; font-family: var(--gs-mono); font-size: 12.5px; color: var(--gs-violet); background: var(--gs-violet-bg); padding: 2px 6px; border-radius: 6px; }
+/* Tags with add: grey pills with a remove ×, then a dashed "+ Add" that turns into an input. */
+.gs-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gs-tag { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--gs-chip); font-size: 13px; }
+.gs-tag button { width: 22px; height: 22px; border: 0; border-radius: 999px; background: transparent; color: var(--gs-text-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.gs-tag button:hover { background: rgba(0, 0, 0, 0.06); color: var(--gs-ink); }
+.gs-tag-text { border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; color: var(--gs-ink); padding: 0; min-width: 0; }
+.gs-tag-add { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1.5px dashed rgba(60, 60, 67, 0.28); border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--gs-green); cursor: pointer; }
+.gs-tag-add:hover { background: rgba(20, 80, 60, 0.06); border-color: var(--gs-green); }
+.gs-tags .gs-input { width: 200px; height: 32px; }
+.gs-label .gs-sub { font-weight: 400; }
+.gs-draft-stages { padding: 6px 0; }
+.gs-draft-stage { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 16px; }
+.gs-draft-stage + .gs-draft-stage { border-top: 1px solid var(--gs-divider); }
+.gs-draft-stage .gs-input { flex: 1; min-width: 0; height: 36px; }
+.gs-draft-stage .gs-badge { flex: none; }
+/* Logo tile, 52 px: initials or the logo; a dark overlay with a pen on hover. */
+.gs-logo { position: relative; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 14px; overflow: hidden; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: var(--gs-green-soft); color: var(--gs-green); font: inherit; font-weight: 700; font-size: 17px; box-shadow: inset 0 0 0 1px rgba(20, 80, 60, 0.14); }
+.gs-logo img { width: 100%; height: 100%; object-fit: cover; }
+.gs-logo .pen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13, 36, 28, 0.78); color: var(--white); opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
+.gs-logo:hover .pen, .gs-logo:focus-visible .pen { opacity: 1; }
+.gs-logo:disabled { cursor: progress; }
+/* Previews: numbered chips joined by arrows. */
+.gs-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px; }
+.gs-pst { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 5px; border-radius: 999px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-divider); font-size: 13px; font-weight: 500; }
+.gs-pn { width: 22px; height: 22px; border-radius: 999px; background: var(--gs-green-soft); color: var(--gs-green); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.gs-par { color: var(--gs-faint); display: flex; }
+/* Working days: a toggle per day. */
+.gs-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.gs-days button { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 12.5px; font-weight: 500; color: var(--gs-ink-3); cursor: pointer; transition: background 0.15s ease; }
+.gs-days button.on { background: var(--gs-green); color: var(--white); }
+/* Checkbox buttons ("All to-dos done"). */
+.gs-check { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 8px; border: 0; border-radius: 10px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; font-size: 13.5px; color: var(--gs-ink); cursor: pointer; }
+.gs-check .box { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px rgba(60, 60, 67, 0.3); display: inline-flex; align-items: center; justify-content: center; color: transparent; background: var(--white); }
+.gs-check.on .box { background: var(--gs-green); box-shadow: none; color: var(--white); }
+.gs-check:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Modals, the confirm dialog and the drawer: glass over a light scrim. */
+.gs-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: gsFade 0.2s ease-out; }
+.gs-dialog-wrap { position: fixed; inset: 0; z-index: 51; display: flex; align-items: flex-start; justify-content: center; padding: 80px 16px 16px; overflow-y: auto; pointer-events: none; }
+.gs-sheet { pointer-events: auto; position: relative; width: 480px; max-width: 100%; box-sizing: border-box; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: rgba(255, 255, 255, 0.82); animation: gsRise 0.26s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
+.gs-sheet.wide { width: 600px; }
+.gs-sheet.confirm { width: 440px; }
+.gs-sheet h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.gs-sheet > h2 { padding-right: 36px; }
+.gs-sheet-x { position: absolute; top: 18px; right: 18px; }
+.gs-sheet .gs-sub { font-size: 14px; line-height: 20px; }
+.gs-sheet .gs-card { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px var(--gs-divider); border-radius: 16px; overflow: visible; }
+.gs-sheet-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.gs-sheet-actions .grow { flex: 1; }
+.gs-drop { position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 16px; border: 1.5px dashed var(--gs-dash); background: var(--gs-drop); font-size: 14px; }
+.gs-drop:hover { background: var(--gs-drop-hover); }
+.gs-drop.ok { border-color: var(--gs-green); background: var(--gs-green-soft); }
+.gs-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gs-drop:focus-within { outline: 2px solid var(--gs-green); outline-offset: 2px; }
+.gs-found-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.gs-found { font-size: 12.5px; border-radius: 8px; padding: 4px 8px; background: var(--gs-chip); color: var(--gs-ink-3); font-weight: 400; }
+.gs-found code { font-family: var(--gs-mono); color: var(--gs-ink); }
+.gs-found.bad { background: var(--gs-danger-tint); color: var(--gs-danger-dark); }
+.gs-label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--gs-text-2); }
+.gs-danger-tile { width: 40px; height: 40px; border-radius: 12px; background: var(--gs-danger-soft); color: var(--gs-danger); display: flex; align-items: center; justify-content: center; }
+.gs-move { display: flex; flex-wrap: wrap; gap: 6px; }
+.gs-move button { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 13px; color: var(--gs-ink); cursor: pointer; }
+.gs-move button.on { background: var(--gs-green); color: var(--white); }
+/* Layers: the glass sheets and the drawer (50/51) sit under the app's popovers (date picker, 60) and its confirm dialog (70); a glass confirm (52/53) sits over a sheet or the drawer; menus float over all of them (56); the toast is on top (80). */
+.gs-scrim.confirm { z-index: 52; }
+.gs-dialog-wrap.confirm { z-index: 53; padding-top: 120px; }
+.gs-float { position: fixed; top: auto; right: auto; z-index: 56; }
+.gs-drawer-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: gsFade 0.2s ease-out; }
+.gs-drawer { position: fixed; top: 12px; right: 12px; bottom: 12px; z-index: 51; width: min(760px, calc(100% - 24px)); border-radius: 24px; background: rgba(246, 248, 247, 0.97); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(13, 36, 28, 0.22); animation: gsSlide 0.28s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
+.gs-drawer-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid var(--gs-divider); }
+.gs-drawer-head .titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gs-drawer-title, .gs-drawer-line { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: inherit; color: var(--gs-ink); padding: 2px 6px; margin-left: -6px; border-radius: 8px; }
+.gs-drawer-title { font-family: var(--gs-font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.gs-drawer-line { font-size: 13.5px; color: var(--gs-text-2); }
+.gs-drawer-title:hover, .gs-drawer-title:focus, .gs-drawer-line:hover, .gs-drawer-line:focus { background: rgba(120, 120, 128, 0.1); outline: none; }
+.gs-drawer-title[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px var(--gs-danger); background: var(--gs-danger-field); }
+.gs-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px 28px; display: flex; flex-direction: column; gap: 24px; }
+.gs-drawer-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--gs-divider); }
+/* Funnel stages in the drawer: one row each, the open one expands in place. */
+.gs-stages { padding: 6px; }
+.gs-stage { border-radius: 14px; margin: 0 0 2px; }
+.gs-stage.on { background: var(--white); box-shadow: 0 0 0 2px var(--gs-green); margin: 6px 0; }
+.gs-stage-row { position: relative; display: flex; align-items: center; gap: 4px; border-radius: 12px; }
+.gs-stage:not(.on) .gs-stage-row:hover { background: rgba(255, 255, 255, 0.7); }
+.gs-stage-row.drop { box-shadow: inset 0 2px 0 var(--gs-green); }
+.gs-grip { flex: none; width: 16px; display: flex; justify-content: center; color: var(--gs-faint); opacity: 0; cursor: grab; }
+.gs-stage-row:hover .gs-grip { opacity: 1; }
+.gs-stage-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 6px; border: 0; background: transparent; font: inherit; color: var(--gs-ink); text-align: left; cursor: pointer; }
+.gs-stage-n { flex: none; width: 26px; height: 26px; border-radius: 999px; background: var(--gs-green-soft); color: var(--gs-green); font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.gs-stage.won .gs-stage-n { background: var(--gs-green); color: var(--white); }
+.gs-stage-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 90px; }
+.gs-stage-chips { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.gs-sc { height: 20px; padding: 0 7px; border-radius: 6px; background: var(--gs-chip); color: var(--gs-ink-3); font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap; }
+.gs-sc.amber { background: var(--gs-amber-bg); color: var(--gs-amber); }
+.gs-sc.blue { background: var(--gs-blue-bg); color: var(--gs-blue); }
+.gs-sc.green { background: var(--gs-green-soft); color: var(--gs-green); }
+.gs-sc.bad { background: var(--gs-danger-soft); color: var(--gs-danger-dark); }
+.gs-stage-menu { flex: none; width: 32px; display: flex; justify-content: center; }
+.gs-stage-edit { margin: 6px 0 10px; padding: 14px 14px 12px 36px; display: flex; flex-direction: column; gap: 14px; }
+.gs-fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.gs-ff { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.gs-ff.wide { grid-column: 1 / -1; }
+.gs-ff > .lab { font-size: 12px; font-weight: 600; color: var(--gs-text-2); }
+.gs-ff .ctl { display: flex; align-items: center; gap: 8px; }
+.gs-ff .gs-dd, .gs-ff .gs-ddb { width: 100%; }
+.gs-ff .gs-ddb { height: 36px; }
+/* The toast in Settings: a dark pill at the bottom right with a green check; red for an error. */
+.toast.toast-glass { z-index: 80; left: auto; right: 28px; bottom: 28px; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 11px 18px; border-radius: 999px; background: rgba(29, 29, 31, 0.84); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--white); font-size: 13.5px; font-weight: 500; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); animation: gsFade 0.2s ease-out both; }
+.toast.toast-glass svg { flex: none; color: var(--gs-check); }
+/* A failed save or a refusal: the same pill in red. */
+.toast.toast-glass.error { background: var(--gs-toast-error); box-shadow: var(--gs-toast-error-shadow); }
+@media (prefers-reduced-motion: reduce) {
+  .gs *, .gs-sheet, .gs-drawer, .gs-scrim, .gs-drawer-scrim, .gs-menu, .toast.toast-glass { transition: none !important; animation: none !important; }
+}
+/* Below 1280 px the column shrinks; below 900 px the sidebar is a row of pills above the content. */
+@media (max-width: 899px) {
+  .gs { flex-direction: column; align-items: stretch; }
+  .gs-main { margin-left: 0; }
+  .gs-side { position: static; width: auto; flex: none; min-height: 0; margin: 12px 12px 0; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-radius: 999px; padding: 6px; gap: 4px; }
+  .gs-side::-webkit-scrollbar { display: none; }
+  .gs-home { margin: 0 4px 0 0; }
+  .gs-side-ws { display: none; }
+  .gs-nav { flex-direction: row; gap: 4px; }
+  .gs-nav-row { width: auto; flex: none; border-radius: 999px; padding: 0 12px; }
+  .gs-nav-row .label { overflow: visible; }
+  .gs-main { padding: 20px 12px 32px; }
+  .gs-topbar { position: static; margin: 0; display: flex; flex-wrap: wrap; border-radius: 22px; }
+  .gs-topbar .header-right { margin-left: auto; }
+  .gs-topbar .header-center { flex: 1 1 100%; order: 3; }
+  .gs-drawer { top: 6px; right: 6px; bottom: 6px; width: calc(100% - 12px); }
+  .gs-fgrid { grid-template-columns: 1fr; }
+  .gs-stage-edit { padding-left: 14px; }
 }
 @media (max-width: 560px) {
-  .ws-row { padding: 12px 14px; }
-  .ws-row-control { justify-content: flex-start; flex: 1 1 100%; }
-  .ws-row.with-switch { flex-wrap: nowrap; }
-  .ws-row.with-switch .ws-row-control { flex: 0 0 auto; }
-  .ws-row-control > .form-input, .ws-row-control > .select-wrap, .ws-row-control .tz-trigger, .ws-row-control > .form-input.wide, .ws-row-control > .form-input.short { width: 100%; }
-  .ws-stage-opps { display: none; }
-  .ws-chips-end { justify-content: flex-start; }
+  .gs-row { padding: 12px 14px; }
+  .gs-row-control { flex: 1 1 100%; }
+  .gs-row.switch-row { flex-wrap: nowrap; }
+  .gs-row.switch-row .gs-row-control { flex: none; }
+  .gs-row-control > .gs-input, .gs-row-control > .gs-dd, .gs-row-control .gs-ddb, .gs-row-control .tz-trigger { width: 100% !important; }
+  .gs-row-control > div:has(> .tz-trigger) { width: 100%; }
 }
 
 /* ---------------------------------------------------------------- your account (CD-525, design G-Profile) */

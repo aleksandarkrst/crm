@@ -6,7 +6,7 @@
 // from the company node; a level with units can't be removed; the panel fits a phone.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, confirmInApp, email, setValue, signIn, createWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, confirmGlass, email, setValue, signIn, createWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 describe('org levels and units', () => {
   const browser = useBrowser();
@@ -79,32 +79,37 @@ describe('org levels and units', () => {
   });
 
   step('Settings → Employees: the levels become Sector, Department and Team', async () => {
-    await page.goto(`${BASE_URL}/settings/org-levels`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=org-level-row]');
     assert.deepEqual(await levelNames(), ['Department', 'Team']);
-    // Added at the bottom, then moved to the top.
-    await page.type('[data-testid=org-level-new]', 'Sector');
-    await click(page, '[data-testid=org-level-add]');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 3);
-    await click(page, '[data-testid=org-level-row][data-name=Sector] [data-testid=org-level-up]');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]')[1]?.dataset.name === 'Sector');
-    await click(page, '[data-testid=org-level-row][data-name=Sector] [data-testid=org-level-up]');
-    await page.waitForFunction(() => document.querySelector('[data-testid=org-level-row]')?.dataset.name === 'Sector');
-    // Renamed inline (Team → Squad), removed when it has no units, and back as Team at the bottom.
-    const name = '[data-testid=org-level-row][data-name=Team] [data-testid=org-level-name]';
-    await page.$eval(name, (el) => el.select());
-    await page.type(name, 'Squad');
-    await page.keyboard.press('Enter');
-    await page.waitForSelector('[data-testid=org-level-row][data-name=Squad]');
-    // The levels sit at the bottom of the tab (below the working day, CD-153): "Level renamed" covers Remove.
-    await waitForToastToClear(page);
+    /** Renames a level inline: Enter saves. */
+    const rename = async (from, to) => {
+      const name = `[data-testid=org-level-row][data-name="${from}"] [data-testid=org-level-name]`;
+      await page.$eval(name, (el) => el.select());
+      await page.type(name, to);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector(`[data-testid=org-level-row][data-name="${to}"]`);
+      await waitForToastToClear(page);
+    };
+    /** "Add level" adds "New level" at the bottom (CD-524: no name field), renamed after. */
+    const add = async (as) => {
+      const before = (await levelNames()).length;
+      await click(page, '[data-testid=org-level-add]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-testid=org-level-row]').length === n, {}, before + 1);
+      await page.waitForSelector('[data-testid=org-level-row][data-name="New level"]');
+      await waitForToastToClear(page);
+      await rename('New level', as);
+    };
+    // Renamed inline (Team → Squad), removed when it has no units (only the lowest level can be).
+    await rename('Team', 'Squad');
     await click(page, '[data-testid=org-level-row][data-name=Squad] [data-testid=org-level-remove]');
-    assert.equal(await confirmInApp(page), 'Remove the level Squad?');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 2);
+    assert.equal(await confirmGlass(page), 'Remove the level Squad?');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 1);
     await waitForToastToClear(page);
-    await page.type('[data-testid=org-level-new]', 'Team');
-    await click(page, '[data-testid=org-level-add]');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 3);
+    // Levels can't be moved any more (CD-524): Sector goes on top by renaming, the rest are added below.
+    await rename('Department', 'Sector');
+    await add('Department');
+    await add('Team');
     assert.deepEqual(await levelNames(), ['Sector', 'Department', 'Team']);
     assert.deepEqual(
       (await api(page, '/people/org-levels')).map((l) => [l.name, l.position]),
@@ -225,9 +230,11 @@ describe('org levels and units', () => {
     await page.goto(`${BASE_URL}/people/${id.bo}`, { waitUntil: 'networkidle0' });
     // An Admin edits it: one Unit select, each unit with its path.
     await page.waitForFunction(() => document.querySelector('[data-testid=emp-work] select[name=unitId]')?.selectedOptions[0]?.textContent === 'Commercial › Sales › North');
-    await page.goto(`${BASE_URL}/settings/org-levels`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=org-level-row][data-name=Team]');
-    assert.equal(await page.$eval('[data-testid=org-level-row][data-name=Team] [data-testid=org-level-remove]', (b) => b.disabled), true);
+    // The lowest level has units: no Remove, an "In use" badge instead (CD-524).
+    assert.equal(await page.$('[data-testid=org-level-row][data-name=Team] [data-testid=org-level-remove]'), null);
+    assert.match(await page.$eval('[data-testid=org-level-row][data-name=Team]', (el) => el.textContent), /In use/);
   });
 
   step('the units can be set up on a phone', async () => {

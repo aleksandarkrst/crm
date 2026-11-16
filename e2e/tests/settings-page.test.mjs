@@ -1,6 +1,6 @@
-// Workspace settings page (CD-280): the left nav grouped by module, each section on its own URL,
-// Settings keeps the sidebar of the module it was opened from, and on a narrow window the nav sits
-// above the content.
+// Workspace settings page (CD-280, rebuilt in CD-524): its own area with six pages in a sidebar
+// (no module sidebar), each page on its own URL, old section links landing on the page that has
+// them now, and on a narrow window the nav sits above the content.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
@@ -13,58 +13,66 @@ describe('settings page', () => {
   const step = steps(browser, 'settings-page');
   let page;
 
-  const navGroups = () =>
-    page.$$eval('[data-testid=settings-nav] .settings-nav-group', (els) =>
-      els.map((el) => [el.getAttribute('data-group'), [...el.querySelectorAll('.settings-nav-item')].map((b) => b.textContent)]),
-    );
-  const active = () => page.$$eval('[data-testid=settings-nav] .settings-nav-item.on', (els) => els.map((el) => el.textContent));
-  const sidebarModule = () => page.$eval(LOGO, (el) => el.getAttribute('data-current-module'));
+  const navItems = () => page.$$eval('[data-testid=settings-nav] .gs-nav-row', (els) => els.map((el) => [el.dataset.section, el.querySelector('.label').textContent]));
+  const active = () => page.$$eval('[data-testid=settings-nav] .gs-nav-row[aria-current=page]', (els) => els.map((el) => el.dataset.section));
 
   step('sets up a workspace', async () => {
     page = await browser.person('stella');
     await newUserWithWorkspace(page, { label: 'settingspage', name: 'Stella Settings', workspace: 'Settings Co' });
   });
 
-  step('from Projects, the switcher opens Workspace settings and the Projects sidebar stays (TC 1)', async () => {
+  step('from Projects, the switcher opens Workspace settings: six pages, no module sidebar (TC 1)', async () => {
     await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
     await click(page, LOGO);
     await click(page, `${POP} [data-module=settings]`);
-    await page.waitForFunction(() => location.pathname === '/settings/workspace');
-    await page.waitForSelector('[data-testid=settings-nav] .settings-nav-item');
-    assert.equal(await sidebarModule(), 'projects');
-    assert.deepEqual(await navGroups(), [
-      ['Workspace', ['General', 'Company details', 'Modules', 'Roles & permissions']],
-      ['CRM', ['Funnels', 'Document templates', 'Custom fields', 'Sales bonuses']],
-      ['Projects', ['Project hierarchy', 'Project types', 'Technicians']],
-      ['Employees', ['Employee record', 'Organization levels']],
-      ['Timesheet', ['Submission and approval']],
-      ['Time off', ['Vacation', 'Leave and absence', 'Holidays']],
+    await page.waitForFunction(() => location.pathname === '/settings/general');
+    await page.waitForSelector('[data-testid=settings-nav] .gs-nav-row');
+    assert.deepEqual(await navItems(), [
+      ['general', 'General'],
+      ['crm', 'CRM'],
+      ['projects', 'Projects'],
+      ['employees', 'Employees'],
+      ['timesheet', 'Timesheet'],
+      ['timeoff', 'Time off'],
     ]);
-    assert.deepEqual(await active(), ['General']);
-    assert.equal(await page.$eval('.settings-title', (el) => el.textContent), 'General');
+    assert.deepEqual(await active(), ['general']);
+    assert.equal(await page.$eval('.gs-topbar h1', (el) => el.textContent), 'General');
+    assert.equal(await page.$('.app-sidebar'), null, 'no module sidebar on settings pages');
   });
 
-  step('each section has its own URL, kept on reload (TC 2)', async () => {
-    await click(page, '[data-testid=settings-nav] [data-section=project-types]');
-    await page.waitForFunction(() => location.pathname === '/settings/project-types');
-    await page.waitForFunction(() => document.querySelector('.settings-nav-item.on')?.textContent === 'Project types');
+  step('each page has its own URL, kept on reload; old section links land on their page (TC 2)', async () => {
+    await click(page, '[data-testid=settings-nav] [data-section=projects]');
+    await page.waitForFunction(() => location.pathname === '/settings/projects');
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=project-type]');
-    assert.deepEqual(await active(), ['Project types']);
-    assert.equal(await sidebarModule(), 'projects', 'still the Projects sidebar');
-    // From the CRM, Settings keeps the CRM sidebar.
-    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    await click(page, '.app-sidebar a[href="/settings"]');
-    await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
-    assert.equal(await sidebarModule(), 'crm');
+    assert.deepEqual(await active(), ['projects']);
+    assert.equal(await page.$eval('.gs-topbar h1', (el) => el.textContent), 'Projects');
+    for (const [old, now] of [
+      ['project-types', 'projects'],
+      ['funnel', 'crm'],
+      ['holidays', 'timeoff'],
+      ['org-levels', 'employees'],
+      ['approvals', 'timesheet'],
+      ['workspace', 'general'],
+    ]) {
+      await page.goto(`${BASE_URL}/settings/${old}`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction((now) => location.pathname === `/settings/${now}`, {}, now);
+    }
   });
 
-  step('moving a stage up updates the preview at once (TC 3)', async () => {
-    await page.goto(BASE_URL + '/settings/project-types', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=project-stage]');
-    const rows = await page.$$('[data-testid=project-stage]');
+  step('moving a stage up in the project type editor reorders the stages at once (TC 3)', async () => {
+    // The stage preview is gone (CD-524): the editor's stage list itself shows the new order.
+    await page.goto(BASE_URL + '/settings/projects', { waitUntil: 'networkidle0' });
+    await click(page, '[data-testid=project-type] [data-testid=project-type-menu]');
+    await click(page, '[data-testid=project-type-edit]');
+    await page.waitForSelector('[data-testid=project-type-card] [data-testid=project-stage]');
+    const names = () => page.$$eval('[data-testid=project-type-card] [data-testid=project-stage] input', (els) => els.map((el) => el.value).join());
+    const before = (await names()).split(',');
+    const rows = await page.$$('[data-testid=project-type-card] [data-testid=project-stage]');
     await (await rows[1].$('button[aria-label="Move up"]')).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=project-type-preview] .ws-preview-name')].map((el) => el.textContent).join() === 'In progress,Planning,Review');
+    await page.waitForFunction((want) => [...document.querySelectorAll('[data-testid=project-type-card] [data-testid=project-stage] input')].map((el) => el.value).join() === want, {}, [before[1], before[0], ...before.slice(2)].join());
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=project-type-card]'));
   });
 
   step('at 700 px the nav sits above the content (TC 5)', async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../components/icons';
 import { useStore } from '../../store/store';
-import { Row } from './parts';
+import { Row, TextField } from './parts';
 
 /** The API refuses more (CD-378); checked here too so the message comes before the upload. */
 const MAX_BYTES = 1024 * 1024;
@@ -53,95 +53,65 @@ const initials = (name: string) =>
     .join('') || 'W';
 
 /**
- * Settings → General → Logo (CD-378; a row since CD-524, design G-Settings): printed at the top of
- * the meeting minutes PDF sent to customers. Upload (PNG or JPG, at most 1 MB, checked before it is
- * sent) and Remove save at once; a refusal shows under the label.
+ * General → Logo (CD-378; the design's logo tile since CD-524): printed at the top of the meeting
+ * minutes PDF sent to customers. Hovering the tile shows a pen; a click picks the image (PNG or JPG,
+ * at most 1 MB, checked before it is sent). Upload and Remove save at once and say so in a toast.
  */
 export function LogoRow() {
-  const { s, canEditWorkspace, setLogo, removeLogo } = useStore();
+  const { s, canEditWorkspace, setLogo, removeLogo, flash } = useStore();
   const logo = useLogo();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const has = !!s.workspace.logoUpdatedAt;
-  const run = async (action: () => Promise<string | null>) => {
+  const run = async (action: () => Promise<string | null>, done: string) => {
     setBusy(true);
     setError('');
     const problem = await action();
     setBusy(false);
     if (problem) setError(problem);
+    else flash(done);
   };
   const pick = (f: File | undefined) => {
     if (input.current) input.current.value = '';
     if (!f) return;
     if (!TYPES.includes(f.type)) return setError('The logo must be a PNG or JPG image.');
     if (f.size > MAX_BYTES) return setError('The logo can be at most 1 MB. Choose a smaller image.');
-    void run(() => setLogo(f));
+    void run(() => setLogo(f), 'Logo updated');
   };
+  const face = logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>;
   return (
-    <Row label="Logo" hint="At the top of the meeting minutes PDF sent to customers. PNG or JPG, up to 1 MB." error={error || (logo.failed ? "The logo can't be shown. Reload the page, or upload it again." : '')} testId="workspace-info">
-      {canEditWorkspace ? (
-        // The logo itself is the button (CD-524 review): a pen shows on hover, a click picks the image.
-        <button type="button" className="ws-avatar ws-avatar-btn" data-testid="workspace-logo-pick" aria-label={has ? 'Change the logo' : 'Add a logo'} title={has ? 'Change the logo' : 'Add a logo'} disabled={busy} onClick={() => input.current?.click()}>
-          {logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>}
-          <span className="ws-avatar-edit" aria-hidden="true">
-            <Icon name="pencil" size={18} />
-          </span>
+    <Row label="Logo" desc="Shown in the module switcher and on documents. Click it to upload a PNG or JPG, up to 1 MB." error={error || (logo.failed ? "The logo can't be shown. Reload the page, or upload it again." : '')} testId="workspace-info">
+      {canEditWorkspace && has && (
+        <button type="button" className="gs-btn" data-testid="workspace-logo-remove" disabled={busy} onClick={() => void run(removeLogo, 'Logo removed')}>
+          Remove
         </button>
-      ) : (
-        <span className="ws-avatar" data-testid="workspace-logo">
-          {logo.url ? <img src={logo.url} alt="Workspace logo" data-testid="workspace-logo-img" /> : <span>{initials(s.workspace.name)}</span>}
-        </span>
       )}
-      {canEditWorkspace && (
+      {canEditWorkspace ? (
         <>
           <input ref={input} type="file" accept="image/png,image/jpeg" hidden data-testid="workspace-logo-input" onChange={(e) => pick(e.target.files?.[0])} />
-          {busy && <span className="ws-unit">Saving…</span>}
-          {has && !busy && (
-            <button type="button" className="btn-plain" data-testid="workspace-logo-remove" disabled={busy} onClick={() => void run(removeLogo)}>
-              Remove
-            </button>
-          )}
+          <button type="button" className="gs-logo" data-testid="workspace-logo-pick" aria-label={has ? 'Change the logo' : 'Add a logo'} title={has ? 'Change the logo' : 'Add a logo'} disabled={busy} onClick={() => input.current?.click()}>
+            {face}
+            <span className="pen" aria-hidden="true">
+              <Icon name="pencil" size={18} />
+            </span>
+          </button>
         </>
+      ) : (
+        <span className="gs-logo" data-testid="workspace-logo">
+          {face}
+        </span>
       )}
     </Row>
   );
 }
 
-/** Settings → General → Name (CD-378): saved when the field is left; it can't be empty. */
+/** General → Name (CD-378): required; saved when the field is left. */
 export function NameRow() {
   const { s, setWorkspace, canEditWorkspace } = useStore();
-  const saved = s.workspace.name;
-  const [draft, setDraft] = useState(saved);
-  const [empty, setEmpty] = useState(false);
-  const [seen, setSeen] = useState(saved);
-  if (seen !== saved) {
-    setSeen(saved);
-    setDraft(saved);
-  }
-  const commit = () => {
-    const next = draft.trim();
-    if (!next) return setEmpty(true);
-    if (next !== saved) setWorkspace({ name: next });
-    setDraft(next);
-  };
   return (
-    <Row label="Name" hint="Shown in the module switcher, in emails and on the meeting minutes PDF." error={empty ? 'Enter the workspace name. The saved one stays until you do.' : ''}>
-      <input
-        className="form-input"
-        aria-label="Workspace name"
-        data-testid="workspace-info-name"
-        value={draft}
-        maxLength={MAX_NAME}
-        disabled={!canEditWorkspace}
-        aria-invalid={empty}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          if (empty && e.target.value.trim()) setEmpty(false);
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      />
+    <Row label="Name" desc="Shown in the module switcher and in emails">
+      <TextField label="Workspace name" testId="workspace-info-name" value={s.workspace.name} maxLength={MAX_NAME} disabled={!canEditWorkspace} validate={(v) => (v.trim() ? '' : 'Enter the workspace name.')} onSave={(v) => setWorkspace({ name: v.trim() })} />
     </Row>
   );
 }

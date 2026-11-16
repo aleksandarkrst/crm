@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { ApiCompanyDetails } from '../../lib/api';
-import { MB_FORMAT, checkMb, checkPib } from '../../lib/serbianIds';
-import { GhostSelect } from '../../components/ui';
+import { mbProblem, pibProblem } from '../../lib/serbianIds';
 import { useStore } from '../../store/store';
-import { Block, Note, Row, Rows } from './parts';
+import { Block, Card, Dropdown, Note, Row, RowsModal, SummaryRow, TextField } from './parts';
 
-/** Countries offered in Settings → Workspace (CD-167): Serbia first, it turns vacation decisions on. */
+/** Countries offered in Settings → General (CD-167): Serbia first, it turns vacation decisions on. */
 export const COUNTRIES = ['RS', 'BA', 'ME', 'MK', 'HR', 'SI', 'BG', 'RO', 'HU', 'GR', 'AL', 'AT', 'DE', 'CH', 'IT', 'FR', 'ES', 'NL', 'BE', 'PL', 'CZ', 'SK', 'SE', 'DK', 'NO', 'FI', 'IE', 'GB', 'US', 'CA'];
 const regionName = (() => {
   try {
@@ -19,167 +18,105 @@ export const COUNTRY_OPTIONS = [{ value: '', label: 'Not set' }, ...COUNTRIES.ma
 
 type Key = keyof ApiCompanyDetails;
 
-/**
- * The fields, with "e.g." examples that can't pass for saved values (CD-488) and, for the ids, the
- * format under the field instead of a placeholder.
- */
-type Field = { key: Exclude<Key, 'legalBasis'>; label: string; placeholder?: string; hint?: string; inputMode?: 'numeric' };
-/** The design's three groups (CD-524): who the company is, its ids, and who signs. */
-const COMPANY: Field[] = [
-  { key: 'legalName', label: 'Legal name', placeholder: 'e.g. Primer d.o.o.', hint: 'As registered with the business register' },
-  { key: 'address', label: 'Address', placeholder: 'e.g. Street 1, 11000 Beograd' },
-];
-const IDS: Field[] = [
-  { key: 'pib', label: 'Company ID (PIB)', hint: '9 digits. The last digit is a check digit.', inputMode: 'numeric' },
-  { key: 'mb', label: 'MB (registration number)', hint: MB_FORMAT, inputMode: 'numeric' },
-];
-const SIGNING: Field[] = [
-  { key: 'place', label: 'Place of issue', placeholder: 'e.g. Beograd', hint: 'Where documents are signed' },
-  { key: 'signatoryName', label: 'Signatory', placeholder: 'e.g. the director’s full name' },
-  { key: 'signatoryTitle', label: 'Signatory title', placeholder: 'e.g. Direktor' },
-];
-
-type Draft = Record<Key, string>;
-type FieldErrors = Partial<Record<Key, string>>;
-const KEYS: Key[] = ['legalName', 'address', 'pib', 'mb', 'place', 'signatoryName', 'signatoryTitle', 'legalBasis'];
-const draftOf = (c: ApiCompanyDetails): Draft => ({ legalName: c.legalName ?? '', address: c.address ?? '', pib: c.pib ?? '', mb: c.mb ?? '', place: c.place ?? '', signatoryName: c.signatoryName ?? '', signatoryTitle: c.signatoryTitle ?? '', legalBasis: c.legalBasis });
 /** What is sent for a field: the ids without spaces ("104 052 135"), the rest trimmed. */
 const sendable = (key: Key, value: string) => (key === 'pib' || key === 'mb' ? value.replace(/\s/g, '') : value.trim());
 
-/** What is wrong with the draft, per field, in words (CD-487). PIB and MB may stay empty here. */
-function problemsOf(d: Draft, saved: Draft): FieldErrors {
-  const out: FieldErrors = {};
-  if (d.pib.trim()) {
-    const p = checkPib(d.pib);
-    if (!p.ok) out.pib = p.error;
-  }
-  const mb = checkMb(d.mb);
-  if (!mb.ok) out.mb = mb.error;
-  const basis = d.legalBasis.trim();
-  if (basis !== saved.legalBasis.trim() && basis.length < 10) out.legalBasis = 'The legal basis is needed on every decision; write at least 10 characters.';
-  return out;
+/**
+ * The tax ID and registration number checks (CD-487, the API's rules), worded as in the CD-524
+ * spec: digits only and the exact length first, then the check digit. Empty is allowed here.
+ */
+function idProblem(kind: 'pib' | 'mb', input: string): string {
+  const v = input.replace(/\s/g, '');
+  if (!v) return '';
+  const [what, n, example] = kind === 'pib' ? ['tax ID', 9, '109876543'] : ['registration number', 8, '21456789'];
+  if (!/^\d+$/.test(v)) return `The ${what} has exactly ${n} digits, like ${example}. Use digits only, without a country prefix.`;
+  if (v.length !== n) return `The ${what} has exactly ${n} digits, like ${example}. You entered ${v.length}.`;
+  return (kind === 'pib' ? pibProblem(v) : mbProblem(v)) ?? '';
 }
 
 /**
- * Settings → Workspace → Company details (CD-167, spec 10.1): printed on generated documents such
- * as vacation decisions. Owners and admins edit; members read them. Like the rest of General, a
- * field saves itself when you leave it (CD-488), unless it is wrong: PIB and MB are checked as you
- * type (the same rules as the server, CD-487) and a wrong field stays unsaved until it is fixed.
+ * Saving one company detail (CD-167): the value goes to the API on its own; a success says
+ * "Changes saved", a refusal says it couldn't save (with the API's reason) and the field goes back
+ * to the saved value. Shared by Company details and the legal basis on Time off.
+ */
+export function useCompanyField() {
+  const { s, saveCompany, flash, canEditWorkspace } = useStore();
+  const company = s.workspace.company;
+  // A refused value is put back: remounting the field shows the saved one again.
+  const [round, setRound] = useState(0);
+  const value = (key: Key) => (key === 'legalBasis' ? company.legalBasis : (company[key] ?? ''));
+  const save = async (key: Key, raw: string) => {
+    const next = sendable(key, raw);
+    if (next === sendable(key, value(key))) return;
+    const refused = await saveCompany({ [key]: next });
+    if (refused) {
+      flash(refused.fields?.[key] ?? 'Could not save. Try again.', 4000, true);
+      setRound((r) => r + 1);
+    } else flash('Changes saved');
+  };
+  return { value, save, round, readOnly: !canEditWorkspace };
+}
+
+const FIELD: Partial<Record<Key, { label: string; desc?: string; placeholder?: string }>> = {
+  legalName: { label: 'Legal name', desc: 'As registered with the business register', placeholder: 'e.g. Primer d.o.o.' },
+  address: { label: 'Address', placeholder: 'e.g. Street 1, 11000 Beograd' },
+  place: { label: 'Place of issue', desc: 'Where documents are signed', placeholder: 'e.g. Novi Sad' },
+  signatoryName: { label: 'Signatory', placeholder: 'e.g. the director’s full name' },
+  signatoryTitle: { label: 'Signatory title', placeholder: 'e.g. Direktor' },
+};
+
+/**
+ * General → Company details (CD-167; CD-524 spec 2): the country, legal name and address; the tax
+ * ID and registration number once a country is picked; and who signs, as a summary row with a
+ * modal. Each field saves when it is left. The legal basis for vacation decisions is on Time off.
  */
 export function CompanyCard() {
-  const { s, saveCompany, setWorkspace, canEditWorkspace } = useStore();
-  const company = s.workspace.company;
-  const saved = draftOf(company);
-  const [draft, setDraft] = useState<Draft>(saved);
-  const [saving, setSaving] = useState(0);
-  const [status, setStatus] = useState<'saved' | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
-  // A save (or someone else's) brings new values: take them for the fields not being edited.
-  const lastSaved = useRef(saved);
-  useEffect(() => {
-    const before = lastSaved.current;
-    const now = draftOf(company);
-    lastSaved.current = now;
-    setDraft((d) => Object.fromEntries(KEYS.map((k) => [k, d[k] === before[k] ? now[k] : d[k]])) as Draft);
-  }, [company]);
-  const ro = !canEditWorkspace;
-  const serbia = s.workspace.country === 'RS';
-  const errors: FieldErrors = { ...serverErrors, ...problemsOf(draft, saved) };
-  // A hidden field can't be fixed, so it doesn't count (CD-489): the legal basis shows only for Serbia.
-  if (!serbia) delete errors.legalBasis;
-  const edit = (key: Key, value: string) => {
-    setDraft({ ...draft, [key]: value });
-    if (serverErrors[key]) setServerErrors({ ...serverErrors, [key]: undefined });
-    setProblem(null);
-    setStatus(null);
-  };
-  /** Leaving a field saves it when it changed and is right. */
-  const commit = async (key: Key) => {
-    const value = sendable(key, draft[key]);
-    if (ro || errors[key] || value === sendable(key, saved[key])) return;
-    setSaving((n) => n + 1);
-    setStatus(null);
-    const refused = await saveCompany({ [key]: value });
-    setSaving((n) => n - 1);
-    if (refused) {
-      setServerErrors((e) => ({ ...e, ...refused.fields }));
-      setProblem(refused.message);
-    } else setStatus('saved');
-  };
-  const fieldError = (key: Key) => (errors[key] ? <span data-testid={`company-${key}-error`}>{errors[key]}</span> : null);
-  const unsaved = KEYS.some((k) => errors[k] && sendable(k, draft[k]) !== sendable(k, saved[k]));
-  const row = (f: Field) => (
-    <Row key={f.key} label={f.label} hint={ro ? undefined : f.hint} error={fieldError(f.key)}>
-      <input
-        className="form-input"
-        aria-label={f.label}
-        value={draft[f.key]}
-        placeholder={f.placeholder}
-        inputMode={f.inputMode}
-        disabled={ro}
-        aria-invalid={!!errors[f.key]}
-        onChange={(e) => edit(f.key, e.target.value)}
-        onBlur={() => void commit(f.key)}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        data-testid={`company-${f.key}`}
-      />
-    </Row>
+  const { s, setWorkspace } = useStore();
+  const f = useCompanyField();
+  const [signing, setSigning] = useState(false);
+  const country = s.workspace.country ?? '';
+  const serbia = country === 'RS';
+  const text = (key: Key, width: number | string = 260, validate?: (v: string) => string, inputMode?: 'numeric') => (
+    <TextField key={`${key}:${f.round}`} label={FIELD[key]?.label ?? key} testId={`company-${key}`} value={f.value(key)} width={width} placeholder={FIELD[key]?.placeholder} inputMode={inputMode} disabled={f.readOnly} validate={validate} onSave={(v) => void f.save(key, v)} />
   );
+  const sig = [f.value('signatoryName'), f.value('signatoryTitle')].filter(Boolean).join(', ') + (f.value('place') ? `, signed in ${f.value('place')}` : '');
   return (
     <>
-      <Block testId="company-details">
-        <Rows>
-          {/* The country moved here from General with the design (CD-524): it decides the documents. */}
-          <Row label="Country" hint="Serbia turns on the vacation decision document (rešenje) sent when vacation is approved, and its legal basis below.">
-            <GhostSelect
-              className="form-input"
-              aria-label="Country"
-              value={s.workspace.country ?? ''}
-              onChange={(e) => setWorkspace({ country: e.target.value || null })}
-              options={COUNTRY_OPTIONS}
-              data-testid="workspace-country"
-              disabled={ro}
-              chevron
-            />
-          </Row>
-          {COMPANY.map(row)}
-        </Rows>
-      </Block>
-      <Block title="Tax and registration" desc={serbia ? 'As on your APR registration.' : undefined}>
-        <Rows>{IDS.map(row)}</Rows>
-      </Block>
-      <Block title="Signing" desc={serbia ? 'Used on vacation decisions. They need all of these; without them a decision fails and the Admins are emailed.' : 'Used on generated documents. Set the country to Serbia to issue vacation decisions.'}>
-        <Rows>
-          {SIGNING.map(row)}
-          {/* The Serbian Labor Law text only matters where decisions are issued: with the country set to Serbia (CD-489). */}
-          {serbia && (
-            <Row label="Legal basis on vacation decisions" hint={'Follows "Na osnovu". Update it when the Labor Law\'s gazette numbers change.'} error={fieldError('legalBasis')}>
-              <textarea
-                className="form-input wide"
-                aria-label="Legal basis on vacation decisions"
-                rows={3}
-                value={draft.legalBasis}
-                disabled={ro}
-                aria-invalid={!!errors.legalBasis}
-                onChange={(e) => edit('legalBasis', e.target.value)}
-                onBlur={() => void commit('legalBasis')}
-                data-testid="company-legalBasis"
-              />
+      <Card testId="company-details">
+        <Row label="Country" desc={country ? 'Decides the tax fields and the legal text on documents. Serbia turns on vacation decisions (rešenje).' : 'Pick a country first. The tax fields and the legal text on documents depend on it.'}>
+          <Dropdown label="Country" testId="workspace-country" value={country} options={COUNTRY_OPTIONS} disabled={f.readOnly} width={260} onChange={(v) => setWorkspace({ country: v || null })} />
+        </Row>
+        <Row label="Legal name" desc={FIELD.legalName!.desc}>
+          {text('legalName')}
+        </Row>
+        <Row label="Address">{text('address')}</Row>
+      </Card>
+      {country ? (
+        <Block title="Tax and registration" desc={serbia ? 'As on your APR registration.' : `As registered in ${regionName(country)}.`}>
+          <Card>
+            <Row label={serbia ? 'Tax ID (PIB)' : 'Tax ID'} desc={serbia ? 'Serbian tax identification number, 9 digits' : 'Tax identification number, 9 digits'}>
+              {text('pib', 260, (v) => idProblem('pib', v), 'numeric')}
             </Row>
-          )}
-        </Rows>
-      </Block>
-      {problem && (
-        <span className="emp-error" role="alert">
-          {problem}
-        </span>
+            <Row label={serbia ? 'Registration number (MB)' : 'Registration number'} desc={serbia ? 'Matični broj, 8 digits' : 'As in the business register, 8 digits'}>
+              {text('mb', 260, (v) => idProblem('mb', v), 'numeric')}
+            </Row>
+          </Card>
+        </Block>
+      ) : (
+        <Note testId="company-no-country">Tax ID, registration number and the legal basis for vacation decisions show here once a country is picked. Nothing is filled in for you before that.</Note>
       )}
-      <Note testId="company-status">
-        <span role="status">
-          {ro ? 'Only owners and admins can change the company details.' : saving ? 'Saving…' : unsaved ? 'Not saved yet: fix the fields marked in red.' : status === 'saved' ? 'Saved.' : 'Each field is saved when you leave it.'}
-        </span>
-      </Note>
+      <Card>
+        <SummaryRow label="Signing" desc="Used on vacation decisions and travel orders" summary={sig || 'Not set yet'} disabled={f.readOnly} onEdit={() => setSigning(true)} testId="company-signing" />
+      </Card>
+      {signing && (
+        <RowsModal title="Signing" desc="Printed at the bottom of vacation decisions and travel orders." onClose={() => setSigning(false)} testId="signing-modal">
+          {(['place', 'signatoryName', 'signatoryTitle'] as const).map((k) => (
+            <Row key={k} label={FIELD[k]!.label} desc={FIELD[k]!.desc}>
+              {text(k, 240)}
+            </Row>
+          ))}
+        </RowsModal>
+      )}
     </>
   );
 }

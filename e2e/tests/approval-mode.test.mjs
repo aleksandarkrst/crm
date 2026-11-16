@@ -30,8 +30,8 @@ describe('approval mode', () => {
     assert.equal(await page.$('[data-testid=ts-submit-day]'), null);
   });
 
-  step('Settings → Approvals: Day by day', async () => {
-    await page.goto(BASE_URL + '/settings/approvals', { waitUntil: 'networkidle0' });
+  step('Settings → Timesheet: Day by day', async () => {
+    await page.goto(BASE_URL + '/settings/timesheet', { waitUntil: 'networkidle0' });
     assert.ok(await page.$eval('[data-testid=approval-mode-week]', (el) => el.classList.contains('on')));
     await click(page, '[data-testid=approval-mode-day]');
     assert.ok(await eventually(async () => (await mode()) === 'day'));

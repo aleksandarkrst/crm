@@ -63,7 +63,8 @@ export function Home() {
   );
 
   return (
-    <div className="home-page" data-testid="home">
+    // gs-tokens: the redesign's glass tokens, shared with Workspace settings (global.css).
+    <div className="home-page gs-tokens" data-testid="home">
       <div className="home-blobs" aria-hidden="true">
         <span className="home-blob home-blob-1" />
         <span className="home-blob home-blob-2" />

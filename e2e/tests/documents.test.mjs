@@ -58,8 +58,10 @@ describe('document templates and generated documents', () => {
   });
 
   step('downloads the starter template from the merge field reference', async () => {
-    await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('{{opportunity.amount}}'));
+    // Document templates are a section of Settings → CRM; the merge fields list opens on request (CD-524).
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await clickButton(page, 'Show merge fields');
+    await page.waitForFunction(() => document.querySelector('[data-testid=merge-fields]')?.innerText.includes('{{opportunity.amount}}'));
     await clickButton(page, 'Download starter template');
     starter = await downloaded(downloads, /starter template\.docx$/);
     assert.match(docxText(readFileSync(starter)), /\{\{deal\.title\}\}/);
@@ -67,15 +69,18 @@ describe('document templates and generated documents', () => {
   });
 
   step('uploads it as a template: the dialog lists its merge fields first', async () => {
-    await clickButton(page, 'New template');
-    const input = await page.waitForSelector('.modal input[type=file]');
+    // New template opens the glass template modal (CD-524).
+    await click(page, '[data-testid=new-template]');
+    const input = await page.waitForSelector('[data-testid=template-modal] input[aria-label="Template file"]');
     await input.uploadFile(starter);
-    await page.waitForFunction(() => /parameters found/i.test(document.querySelector('.modal')?.innerText ?? ''));
-    const modal = await page.$eval('.modal', (el) => el.innerText);
-    assert.match(modal, /\{\{deal\.title\}\} → Opportunity title/);
+    await page.waitForFunction(() => /Merge fields found/.test(document.querySelector('[data-testid=template-modal]')?.innerText ?? ''));
+    const modal = await page.$eval('[data-testid=template-modal]', (el) => el.innerText);
+    assert.match(modal, /\{\{deal\.title\}\}\s+Opportunity title/);
     assert.ok(!modal.includes('not recognised'), 'every field of the starter is known');
-    await setValue(page, '.modal input[placeholder^="e.g. Proposal"]', 'E2E proposal');
-    await clickButton(page, 'Save template');
+    await setValue(page, '[data-testid=template-modal] input[placeholder^="e.g. Proposal"]', 'E2E proposal');
+    assert.equal(await page.$eval('[data-testid=template-save]', (el) => el.textContent), 'Add template');
+    await click(page, '[data-testid=template-save]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=template-modal]'));
     await page.waitForSelector('[data-template="E2E proposal"]');
     const templates = await api(page, '/crm/document-templates');
     assert.deepEqual(templates.map((t) => t.name), ['E2E proposal']);

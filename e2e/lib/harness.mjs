@@ -158,6 +158,33 @@ export function setByLabel(page, label, value, tag = 'input') {
   );
 }
 
+/**
+ * Picks an option in a Workspace settings dropdown (CD-524: a button, not a <select>): opens it and
+ * clicks the option whose text is `label` (or starts with `label `, so 'RSD' finds 'RSD (дин)').
+ */
+export async function chooseOption(page, button, label) {
+  await click(page, button);
+  await page.waitForSelector('.gs-menu [role=option]');
+  const found = await page.evaluate((label) => {
+    const opts = [...document.querySelectorAll('.gs-menu [role=option]')];
+    const opt = opts.find((el) => el.textContent.trim() === label) ?? opts.find((el) => el.textContent.trim().startsWith(label + ' '));
+    opt?.click();
+    return !!opt;
+  }, label);
+  if (!found) throw new Error(`no option "${label}" in ${button}`);
+  await page.waitForFunction(() => !document.querySelector('.gs-menu [role=option]'));
+}
+
+/**
+ * Fills a Workspace settings text field and leaves it (CD-524: they save on blur or Enter, not
+ * per keystroke).
+ */
+export async function fillField(page, selector, value) {
+  await page.focus(selector);
+  await setValue(page, selector, value);
+  await page.$eval(selector, (el) => el.blur());
+}
+
 /** Calls the API from inside the page, with the page's own session and workspace. */
 export function api(page, path, init = {}) {
   return page.evaluate(
@@ -207,6 +234,19 @@ export async function confirmInApp(page, { ok = true } = {}) {
   const title = await page.$eval('[data-testid=confirm-dialog] .modal-title', (e) => e.textContent);
   await click(page, ok ? '[data-testid=confirm-ok]' : '[data-testid=confirm-cancel]');
   await page.waitForFunction(() => !document.querySelector('[data-testid=confirm-dialog]'));
+  return title;
+}
+
+/**
+ * The glass confirm of Workspace settings (CD-524: removes and deletes there, not the app's
+ * confirm-dialog): waits for it, presses its red button (or Cancel with `ok: false`) and
+ * resolves to its title.
+ */
+export async function confirmGlass(page, { ok = true } = {}) {
+  const dialog = await page.waitForSelector('[data-testid=glass-confirm]');
+  const title = await dialog.evaluate((el) => el.querySelector('h2').textContent);
+  await click(page, ok ? '[data-testid=glass-confirm] [data-testid=gs-confirm]' : '[data-testid=glass-confirm] .gs-sheet-actions .gs-btn:not(.red)');
+  await page.waitForFunction(() => !document.querySelector('[data-testid=glass-confirm]'));
   return title;
 }
 

@@ -32,6 +32,7 @@ const PATHS = {
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
   check: 'm5 12.5 4.5 4.5L19 7.5',
   plus: 'M12 5v14M5 12h14',
+  trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5',
   // Your account's pages (CD-525, design G-Profile).
   profile: 'M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5 20a7 7 0 0 1 14 0',
   preferences: 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4',

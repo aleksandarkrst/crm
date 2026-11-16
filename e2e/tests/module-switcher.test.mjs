@@ -1,6 +1,7 @@
 // The module and workspace switcher (CD-214) and modules as separate apps (CD-223): the button under
 // the Pultly mark shows the module you're in and opens the switcher (also with Ctrl+J); each module
-// has its own sidebar, Settings keeps the last one; picking navigates, locked modules do nothing;
+// has its own sidebar (Workspace settings has none since CD-524), the profile keeps the last one;
+// picking navigates, locked modules do nothing;
 // Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
 // short window go under "More"; on phones it is a bottom sheet. CD-279: Workspace settings is a
 // tile (owners and admins; members don't see it, CD-523), modules turned off for a workspace say "Not in this workspace", and
@@ -108,15 +109,20 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
   });
 
-  step('an employee card is Employees; Settings and the profile keep the last module', async () => {
+  step('an employee card is Employees; Settings has no module sidebar and the profile keeps the last module', async () => {
     const { employeeId } = await api(page, '/people/access');
     assert.ok(employeeId, 'the owner has an employee card');
     await page.goto(`${BASE_URL}/people/${employeeId}`, { waitUntil: 'networkidle0' });
     await inModule('employees');
     await click(page, '.app-sidebar a[href="/settings"]');
     await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
+    // Workspace settings is an area of its own, without a module sidebar (CD-524).
+    await page.waitForSelector('[data-testid=settings-nav]');
+    assert.equal(await page.$('.app-sidebar'), null, 'no module sidebar on Settings');
+    // The profile keeps the last module, remembered in this browser: still Employees after a reload.
+    await page.goto(BASE_URL + '/profile', { waitUntil: 'networkidle0' });
+    await inModule('employees');
     assert.deepEqual(await sidebar(), { module: 'employees', pages: EMPLOYEES_PAGES });
-    // Remembered in this browser: still Employees after a reload.
     await page.reload({ waitUntil: 'networkidle0' });
     await inModule('employees');
     // Back in the CRM, the profile shows the CRM.
@@ -280,13 +286,15 @@ describe('module and workspace switcher', () => {
     );
     await click(page, `${POP} [data-module=settings]`);
     await page.waitForFunction(() => location.pathname.startsWith('/settings'));
-    await click(page, '[data-testid=settings-nav] [data-section=modules]');
+    // Modules is a section of General (CD-524); turning one on needs no confirm.
+    await click(page, '[data-testid=settings-nav] [data-section=general]');
     await page.waitForSelector('[data-testid=workspace-modules]');
     await click(page, '[data-testid=workspace-modules] [data-module=projects] [role=switch]');
     await page.waitForFunction(async () => (await (await fetch('/api/workspace', { headers: { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken'), 'X-Tenant-Id': localStorage.getItem('crm.tenantId') } })).json()).modules.includes('projects'));
+    // Settings has no sidebar, so no switcher button (CD-524): its "current" tile can't be checked there.
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, LOGO);
     assert.equal((await modules()).find((m) => m.id === 'projects').locked, false, 'Projects opens now');
-    assert.equal((await modules()).find((m) => m.id === 'settings').current, true, 'on Settings its tile is the current one');
     await page.keyboard.press('Escape');
     await closed();
   });

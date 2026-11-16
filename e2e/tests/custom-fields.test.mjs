@@ -1,8 +1,9 @@
-// Custom fields (CD-15): an owner adds a field in Settings → Customize Fields, fills it on a deal,
-// and the value survives a reload; members can fill values but not change the definitions.
+// Custom fields (CD-15): an owner adds a field, fills it on a deal, and the value survives a reload;
+// members can fill values but not change the definitions. Custom fields are hidden in Workspace
+// settings since CD-524, so the field is added and deleted through the API.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, confirmInApp, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** Types into the custom field input with this label (data-custom-field) on the screen. */
 async function fillCustom(page, label, value) {
@@ -26,19 +27,17 @@ describe('custom fields', () => {
     await waitForToastToClear(page);
   });
 
-  step('adds an opportunity field in Settings → Customize Fields', async () => {
+  step('adds an opportunity field (through the API: Settings has no custom fields since CD-524)', async () => {
+    // The old Customize fields link lands on Settings → CRM, which has no New field button (CD-524).
     await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
-    assert.ok(!(await text(page)).includes('for this session only'), 'no "session only" note any more');
-    await clickButton(page, 'New field');
-    await page.type('input[placeholder="e.g. Contract end date"]', 'PO number');
-    await clickButton(page, 'Add field');
-    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('PO number added to opportunities'));
+    await page.waitForFunction(() => location.pathname === '/settings/crm');
+    await page.waitForSelector('[data-testid=funnel-builder]');
+    assert.equal(await page.$('button::-p-text(New field)'), null, 'no New field button in Settings');
+    await api(page, '/crm/custom-fields', { method: 'POST', body: JSON.stringify({ entity: 'deal', label: 'PO number', type: 'text' }) });
     field = await eventually(async () => (await api(page, '/crm/custom-fields')).find((f) => f.label === 'PO number'));
     assert.ok(field, 'field saved');
     assert.equal(field.entity, 'deal');
     assert.equal(field.type, 'text');
-    await page.waitForSelector('[data-testid=fields-deal] [data-testid=custom-field]');
-    await waitForToastToClear(page);
   });
 
   step('fills the field on the opportunity', async () => {
@@ -73,14 +72,10 @@ describe('custom fields', () => {
     assert.ok(saved, 'member saved a value');
   });
 
-  step('deleting the field asks first and hides it from the opportunity', async () => {
-    await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
-    await page.click('[data-testid=fields-deal] [data-testid=custom-field] button::-p-text(Delete)');
-    await page.waitForSelector('[data-testid=confirm-dialog]');
-    const question = await page.$eval('[data-testid=confirm-dialog]', (e) => e.textContent);
-    await confirmInApp(page);
+  step('deleting the field hides it from the opportunity', async () => {
+    // Deleted through the API: its Settings screen (and its confirm) is hidden since CD-524.
+    await api(page, `/crm/custom-fields/${field.id}`, { method: 'DELETE' });
     await eventually(async () => !(await api(page, '/crm/custom-fields')).some((f) => f.id === field.id));
-    assert.match(question, /Values already entered are kept/);
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
     assert.equal(await page.$('[data-custom-field="PO number"]'), null, 'field hidden on the opportunity');
   });

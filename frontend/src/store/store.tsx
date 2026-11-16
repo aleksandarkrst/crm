@@ -266,6 +266,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const placeholderRef = useRef<Promise<PlaceholderReference> | null>(null);
   /** Debounced writes that haven't been sent yet, by field key (see saveLater). */
   const saveTimers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>());
+  /** While Workspace settings is open, every save shows a toast (CD-524); see `settingsToasts()`. */
+  const settingsToasts = useRef(false);
   /** Writes sent but not answered yet; `writeSeq` counts every write started. */
   const inFlight = useRef(0);
   const writeSeq = useRef(0);
@@ -294,9 +296,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   }, []);
 
   const flash = useCallback(
-    (msg: string, ms = 2600) => {
+    (msg: string, ms = 2600, error = false) => {
       clearTimeout(toastTimer.current);
-      set({ toast: msg });
+      set({ toast: msg, toastError: error });
       toastTimer.current = setTimeout(() => set({ toast: '' }), ms);
     },
     [set],
@@ -390,7 +392,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * Runs an API write, then `then` on success. On failure it names what wasn't saved and why,
      * and reloads (after the other pending edits are saved) so the screen matches the database.
      */
-    const save = async (write: () => Promise<unknown>, then?: () => unknown, what = 'your change') => {
+    const save = async (write: () => Promise<unknown>, then?: () => unknown, what = 'your change', saved?: string) => {
       inFlight.current++;
       writeSeq.current++;
       let failed: unknown = null;
@@ -403,7 +405,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         notifyIfIdle();
       }
       if (failed) {
-        flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
+        // Workspace settings say it the design's way (CD-524); the reload restores the saved value.
+        if (settingsToasts.current) flash('Could not save. Try again.', 4000, true);
+        else flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
         await reload();
         return;
       }
@@ -411,14 +415,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         await then?.();
       } catch (err) {
         flash('Saved, but could not refresh: ' + errText(err));
+        return;
       }
+      // In Workspace settings every save says so (CD-524): a specific text, or "Changes saved".
+      if (settingsToasts.current) flash(saved ?? 'Changes saved');
     };
     /** Coalesces typing into one write per field (inputs call their action on every keystroke). */
-    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown) => {
+    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown, saved?: string) => {
       clearTimeout(saveTimers.current.get(key)?.timer);
       const run = () => {
         saveTimers.current.delete(key);
-        void save(write, after, what);
+        void save(write, after, what, saved);
       };
       saveTimers.current.set(key, { timer: setTimeout(run, 600), run });
     };
@@ -1288,17 +1295,43 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash(st.name + ' removed' + (moved && target ? ` · ${moved} ${moved === 1 ? 'opportunity' : 'opportunities'} moved to ${target.name}` : '')),
       );
     };
-    /** New funnel from a copy of another one's stages (or a small default set); opens it. */
-    const createFunnel = async (input: { label: string; note: string; copyFrom: string }): Promise<boolean> => {
+    /**
+     * New funnel from a copy of another one's stages (or a small default set); opens it. With
+     * `stages` (the New funnel drawer, CD-524 review), the stages it starts with are then shaped to
+     * that list: `from` is the index of the stage it came from in the copied set (null: a new one).
+     * Kept stages keep their activity and to-dos; renames, additions, removals and the order follow.
+     */
+    const createFunnel = async (input: { label: string; note: string; copyFrom: string; stages?: { from: number | null; name: string }[] }, created = (label: string) => label + ' created · edit its stages below'): Promise<string | null> => {
       try {
         const f = await crmApi.createFunnel({ label: input.label.trim(), note: input.note.trim() || null, ...(input.copyFrom !== 'blank' ? { copyFromFunnelId: input.copyFrom } : {}) });
+        if (input.stages) {
+          const made = [...f.stages].sort((a, b) => a.position - b.position);
+          const ids: string[] = [];
+          for (const st of input.stages) {
+            const name = st.name.trim();
+            const base = st.from === null ? undefined : made[st.from];
+            if (base) {
+              if (base.name !== name) await crmApi.updateStage(f.id, base.id, { name });
+              ids.push(base.id);
+            } else {
+              const after = await crmApi.createStage(f.id, { name });
+              const added = after.stages.find((x) => !made.some((m) => m.id === x.id) && !ids.includes(x.id));
+              if (added) ids.push(added.id);
+            }
+          }
+          // New stages are in before any are removed, so the funnel never runs out of stages.
+          for (const st of made) if (!ids.includes(st.id)) await crmApi.deleteStage(f.id, st.id);
+          await crmApi.reorderStages(f.id, ids);
+        }
         await reload();
         set({ segment: f.id, personaOpen: false });
-        flash(f.label + ' created · edit its stages below');
-        return true;
+        flash(created(f.label));
+        return f.id;
       } catch (err) {
-        flash('Not saved: ' + errText(err));
-        return false;
+        flash('Not saved: ' + errText(err), 4000, true);
+        // The funnel may exist already with part of the stage changes: show it as it is.
+        void reload();
+        return null;
       }
     };
     /** Renames the open funnel or changes its note (one write per field after a pause). */
@@ -2027,10 +2060,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /** Owners and admins change the workspace settings; members see them read-only. */
       canEditWorkspace,
       /**
-       * Edits workspace settings and saves them (one write per field after a pause); each save says
-       * "Saved" in a toast (CD-524), a refusal says why. The bonus trigger is browser-only.
+       * Edits workspace settings and saves them (one write per field after a pause). In Workspace
+       * settings each save says so in a toast, `saved` or "Changes saved" (CD-524); a refusal says
+       * "Could not save. Try again." there and the value goes back. The bonus trigger is browser-only.
        */
-      setWorkspace: (patch: Partial<Workspace>) => {
+      setWorkspace: (patch: Partial<Workspace>, saved?: string) => {
         set((x) => ({ workspace: { ...x.workspace, ...patch } }));
         for (const [k, v] of Object.entries(patch)) {
           const field = WORKSPACE_FIELDS[k as keyof Workspace];
@@ -2044,9 +2078,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
               if (field === 'name') session.renameTenant(ws.name);
             },
             undefined,
-            () => flash('Saved'),
+            // Outside Settings (the org chart's Set CEO, …) a save still says so; Settings shows its own toast.
+            () => !settingsToasts.current && flash('Saved'),
+            saved,
           );
         }
+      },
+      /** Workspace settings turns its save toasts on while it is open (CD-524). */
+      settingsToasts: (on: boolean) => {
+        settingsToasts.current = on;
       },
       /**
        * Renames projects and tasks (CD-143, owners and admins): all four names at once. Returns the

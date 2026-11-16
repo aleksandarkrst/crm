@@ -87,15 +87,14 @@ describe('first-run onboarding', () => {
     assert.equal((await api(page, '/crm/contacts')).length, 1);
   });
 
-  step('hiding the checklist is remembered, and it can be shown again from settings', async () => {
+  step('hiding the checklist is remembered, and it can be shown again', async () => {
     await clickButton(page, 'Hide');
     await page.waitForFunction(() => !document.querySelector('[data-testid=getting-started]'));
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=new-menu]');
     assert.equal(await page.$('[data-testid=getting-started]'), null);
-    await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=sample-data-card]');
-    await clickButton(page, 'Show the getting-started checklist');
+    // Settings' Getting started card is commented out (CD-524): the checklist is shown again through the API.
+    await api(page, '/onboarding/dismissed', { method: 'PUT', body: JSON.stringify({ dismissed: false }) });
     await eventually(async () => !(await api(page, '/onboarding')).dismissed);
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=getting-started]');

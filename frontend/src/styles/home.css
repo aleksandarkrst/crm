@@ -1,6 +1,6 @@
 /*
  * Home (CD-288, spec in the issue, board S-Home), in the redesign's glass look: the --gs-* tokens
- * in global.css (CD-524 spec, section 4). The module gradients are --mod-*, shared with the module
+ * in global.css (CD-524 spec, section 4), which `.gs-tokens` on .home-page brings in. The module gradients are --mod-*, shared with the module
  * switcher and Workspace settings.
  */
 .home-page {
