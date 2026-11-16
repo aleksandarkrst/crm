@@ -529,6 +529,8 @@ export function Tags({
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  // Escape cancels: the blur that follows the input leaving must not add the text after all.
+  const cancelled = useRef(false);
   const done = (add: boolean) => {
     const t = draft.trim();
     if (add && t) onAdd(t);
@@ -538,7 +540,7 @@ export function Tags({
   return (
     <div className="gs-tags" data-testid={testId}>
       {items.map((t, i) => (
-        <span key={t.key} className="gs-tag gate-chip">
+        <span key={t.key} className="gs-tag">
           {onRename && !disabled ? (
             <input className="gs-tag-text" aria-label="To-do" value={t.label} onChange={(e) => onRename(i, e.target.value)} style={{ width: Math.max(6, Math.min(34, t.label.length + 1)) + 'ch' }} />
           ) : (
@@ -563,9 +565,17 @@ export function Tags({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') done(true);
-              if (e.key === 'Escape') done(false);
+              if (e.key === 'Escape') {
+                // Only the to-do is cancelled, not the drawer or modal around it.
+                e.stopPropagation();
+                cancelled.current = true;
+                done(false);
+              }
             }}
-            onBlur={() => done(true)}
+            onBlur={() => {
+              if (cancelled.current) cancelled.current = false;
+              else done(true);
+            }}
           />
         ) : (
           <button type="button" className="gs-tag-add" onClick={() => setAdding(true)}>

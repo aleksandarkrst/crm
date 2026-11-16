@@ -33,7 +33,7 @@ describe('funnels and stages', () => {
     await page.type('[data-testid=new-funnel-name]', 'Mid-market — CMO');
     await page.type('[data-testid=new-funnel-drawer] input[aria-label="How they buy"]', 'Marketing lead decides');
     await click(page, '[data-testid=new-funnel-drawer] [role=radio]::-p-text(Default stages)');
-    const preview = await page.$$eval('[data-testid=new-funnel-stages] .gs-pst-name', (els) => els.map((el) => el.textContent));
+    const preview = await page.$$eval('[data-testid=new-funnel-stage] input', (els) => els.map((el) => el.value));
     assert.deepEqual(preview, ['New opportunity', 'Discovery', 'Proposal', 'Won']);
     await click(page, '[data-testid=new-funnel-create]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=new-funnel-drawer]'));
@@ -136,6 +136,53 @@ describe('funnels and stages', () => {
     await page.goto(BASE_URL + '/deals/' + dealId, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('The stage Discovery was deleted.'));
     assert.match(await text(page), /Moved to Proposal/);
+  });
+
+  step('creates a funnel with its own stages from the New funnel drawer (CD-524 review)', async () => {
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await click(page, '[data-testid=new-funnel]');
+    await page.waitForSelector('[data-testid=new-funnel-drawer] [data-testid=new-funnel-name]');
+    await page.type('[data-testid=new-funnel-name]', 'Partners');
+    const stageInput = (i) => `[data-testid=new-funnel-drawer] [data-testid=new-funnel-stage]:nth-child(${i + 1}) input`;
+    // Rename Discovery, add a stage (it goes in before Won), remove Proposal, move the new one up.
+    await page.$eval(stageInput(1), (el) => el.select());
+    await page.type(stageInput(1), 'Demo call');
+    await click(page, '[data-testid=new-funnel-add-stage]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=new-funnel-stage]').length === 5);
+    // An empty stage name stops Create funnel.
+    await click(page, '[data-testid=new-funnel-create]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=new-funnel-drawer]')?.textContent.includes('Give every stage a name.'));
+    await page.type(stageInput(3), 'Negotiation');
+    await (await page.$$('[data-testid=new-funnel-drawer] [data-testid=new-funnel-stage-menu]'))[2].click();
+    await click(page, '[data-testid=new-funnel-stage-remove]');
+    await (await page.$$('[data-testid=new-funnel-drawer] [data-testid=new-funnel-stage-menu]'))[2].click();
+    await click(page, '.gs-opt::-p-text(Move up)');
+    const draft = await page.$$eval('[data-testid=new-funnel-stage] input', (els) => els.map((el) => el.value));
+    assert.deepEqual(draft, ['New opportunity', 'Negotiation', 'Demo call', 'Won']);
+    await click(page, '[data-testid=new-funnel-create]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-funnel-drawer]'));
+    const made = await eventually(async () => (await api(page, '/crm/funnels')).find((f) => f.label === 'Partners'));
+    assert.deepEqual(
+      made.stages.map((s) => s.name),
+      ['New opportunity', 'Negotiation', 'Demo call', 'Won'],
+    );
+    // The renamed stage kept the default stage's activity: it was renamed, not made again.
+    assert.equal(made.stages[2].activity, 'Discovery call');
+  });
+
+  step('Escape in a to-do being added cancels the to-do, not the funnel drawer (CD-524 review)', async () => {
+    const partners = (await api(page, '/crm/funnels')).find((f) => f.label === 'Partners');
+    await openFunnel(partners.id);
+    await click(page, '[data-testid=funnel-card] .gs-stage-name');
+    const before = await page.$$eval('[data-testid=funnel-card] .gs-tag', (els) => els.length);
+    await click(page, '[data-testid=funnel-card] .gs-tag-add');
+    await page.keyboard.type('Half typed');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=funnel-card] .gs-tags .gs-input'));
+    assert.ok(await page.$('[data-testid=funnel-card]'), 'the drawer stays open');
+    assert.equal(await page.$$eval('[data-testid=funnel-card] .gs-tag', (els) => els.length), before, 'nothing added');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=funnel-card]'));
   });
 
   it('throws no uncaught errors in the page', () => {

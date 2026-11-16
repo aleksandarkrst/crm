@@ -1295,16 +1295,42 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash(st.name + ' removed' + (moved && target ? ` · ${moved} ${moved === 1 ? 'opportunity' : 'opportunities'} moved to ${target.name}` : '')),
       );
     };
-    /** New funnel from a copy of another one's stages (or a small default set); opens it. */
-    const createFunnel = async (input: { label: string; note: string; copyFrom: string }, created = (label: string) => label + ' created · edit its stages below'): Promise<string | null> => {
+    /**
+     * New funnel from a copy of another one's stages (or a small default set); opens it. With
+     * `stages` (the New funnel drawer, CD-524 review), the stages it starts with are then shaped to
+     * that list: `from` is the index of the stage it came from in the copied set (null: a new one).
+     * Kept stages keep their activity and to-dos; renames, additions, removals and the order follow.
+     */
+    const createFunnel = async (input: { label: string; note: string; copyFrom: string; stages?: { from: number | null; name: string }[] }, created = (label: string) => label + ' created · edit its stages below'): Promise<string | null> => {
       try {
         const f = await crmApi.createFunnel({ label: input.label.trim(), note: input.note.trim() || null, ...(input.copyFrom !== 'blank' ? { copyFromFunnelId: input.copyFrom } : {}) });
+        if (input.stages) {
+          const made = [...f.stages].sort((a, b) => a.position - b.position);
+          const ids: string[] = [];
+          for (const st of input.stages) {
+            const name = st.name.trim();
+            const base = st.from === null ? undefined : made[st.from];
+            if (base) {
+              if (base.name !== name) await crmApi.updateStage(f.id, base.id, { name });
+              ids.push(base.id);
+            } else {
+              const after = await crmApi.createStage(f.id, { name });
+              const added = after.stages.find((x) => !made.some((m) => m.id === x.id) && !ids.includes(x.id));
+              if (added) ids.push(added.id);
+            }
+          }
+          // New stages are in before any are removed, so the funnel never runs out of stages.
+          for (const st of made) if (!ids.includes(st.id)) await crmApi.deleteStage(f.id, st.id);
+          await crmApi.reorderStages(f.id, ids);
+        }
         await reload();
         set({ segment: f.id, personaOpen: false });
         flash(created(f.label));
         return f.id;
       } catch (err) {
         flash('Not saved: ' + errText(err), 4000, true);
+        // The funnel may exist already with part of the stage changes: show it as it is.
+        void reload();
         return null;
       }
     };
@@ -2052,7 +2078,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
               if (field === 'name') session.renameTenant(ws.name);
             },
             undefined,
-            undefined,
+            // Outside Settings (the org chart's Set CEO, …) a save still says so; Settings shows its own toast.
+            () => !settingsToasts.current && flash('Saved'),
             saved,
           );
         }

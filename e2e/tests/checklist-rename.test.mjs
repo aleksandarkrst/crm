@@ -47,7 +47,7 @@ describe('renaming a checklist item', () => {
       }, i);
       await page.waitForFunction((i) => document.querySelectorAll('[data-testid=funnel-stage]')[i].hasAttribute('data-open'), {}, i);
       found = await page.evaluate(() => {
-        const input = [...document.querySelectorAll('.gate-chip input')].find((el) => el.value === 'Website + socials reviewed');
+        const input = [...document.querySelectorAll('.gs-tag input')].find((el) => el.value === 'Website + socials reviewed');
         if (input) input.setAttribute('data-e2e', 'rename-me');
         return !!input;
       });

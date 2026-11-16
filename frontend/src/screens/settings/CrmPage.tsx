@@ -6,7 +6,7 @@ import { currencySymbol, curOf, memberLabels, salesPeople } from '../../store/se
 import { useStore } from '../../store/store';
 import type { BonusRule, Stage } from '../../store/types';
 import { TemplatesSection } from '../DocumentTemplates';
-import { Card, Preview, CheckButton, Confirm, Drawer, Dropdown, Row, RowMenu, Section, Segmented, Switch, Table, Tags, TextField, Unit } from './parts';
+import { Badge, Card, CheckButton, Confirm, Drawer, Dropdown, Row, RowMenu, Section, Segmented, Switch, Table, Tags, TextField, Unit } from './parts';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const TARGET_PROBLEM = 'Use whole days from 1 to 365, or leave it empty.';
@@ -299,13 +299,20 @@ function FunnelDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** The default stages a funnel starts with when it copies none: a copy of the API's BLANK_FUNNEL_STAGES (backend default-funnels.ts), shown as the preview. */
+/** The default stages a funnel starts with when it copies none: a copy of the API's BLANK_FUNNEL_STAGES (backend default-funnels.ts). */
 const DEFAULT_STAGES = ['New opportunity', 'Discovery', 'Proposal', 'Won'];
 
+/** A stage in the New funnel draft: `from` is its index in the set it starts from (null: added here). */
+type DraftStage = { key: string; from: number | null; name: string; won: boolean };
+
+let draftKey = 0;
+const draftStages = (names: { name: string; won: boolean }[]): DraftStage[] => names.map((st, i) => ({ key: `d${draftKey++}`, from: i, name: st.name, won: st.won }));
+
 /**
- * New funnel (CD-524 review): the same drawer as Edit, as a draft. Name, how they buy and the
- * stages to start from; nothing is saved until Create funnel. Cancel, the X, Escape or the scrim
- * discard it. Its stages are edited afterwards with Edit, like any funnel's.
+ * New funnel (CD-524 review): the same drawer as Edit, as a draft. Name, how they buy, the set to
+ * start from and its stages, which can be renamed, added, removed and reordered here (Won stays
+ * last). Nothing is saved until Create funnel; Cancel, the X, Escape or the scrim discard it.
+ * Activities, owners and to-dos are set afterwards with Edit, like on any funnel.
  */
 function NewFunnelDrawer({ onClose }: { onClose: () => void }) {
   const store = useStore();
@@ -313,16 +320,38 @@ function NewFunnelDrawer({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [from, setFrom] = useState('blank');
+  const seed = (source: string) =>
+    draftStages(source !== 'blank' && s.funnels[source] ? s.funnels[source]!.stages.map((st) => ({ name: st.name, won: !!st.won })) : DEFAULT_STAGES.map((n, i) => ({ name: n, won: i === DEFAULT_STAGES.length - 1 })));
+  const [stages, setStages] = useState<DraftStage[]>(() => seed('blank'));
+  const [fresh, setFresh] = useState<string | null>(null);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const nameBad = tried && !name.trim();
+  const stagesBad = tried && stages.some((st) => !st.name.trim());
   const sources = [{ value: 'blank', label: 'Default stages' }, ...Object.values(s.funnels).map((f) => ({ value: f.id, label: `Copy ${f.label}` }))];
-  const preview = from === 'blank' ? DEFAULT_STAGES : (s.funnels[from]?.stages.map((st) => st.name) ?? DEFAULT_STAGES);
+  // The last stage that can move: everything but a Won stage at the end.
+  const lastMovable = stages.length > 0 && stages[stages.length - 1]!.won ? stages.length - 2 : stages.length - 1;
+  const pickSource = (v: string) => {
+    setFrom(v);
+    setStages(seed(v));
+  };
+  const rename = (key: string, value: string) => setStages(stages.map((st) => (st.key === key ? { ...st, name: value } : st)));
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...stages];
+    [next[i], next[i + dir]] = [next[i + dir]!, next[i]!];
+    setStages(next);
+  };
+  const add = () => {
+    const key = `d${draftKey++}`;
+    const at = lastMovable + 1;
+    setStages([...stages.slice(0, at), { key, from: null, name: '', won: false }, ...stages.slice(at)]);
+    setFresh(key);
+  };
   const create = async () => {
     setTried(true);
-    if (!name.trim()) return;
+    if (!name.trim() || stages.some((st) => !st.name.trim())) return;
     setBusy(true);
-    const id = await store.createFunnel({ label: name, note, copyFrom: from }, (label) => `${label} created`);
+    const id = await store.createFunnel({ label: name, note, copyFrom: from, stages: stages.map((st) => ({ from: st.from, name: st.name })) }, (label) => `${label} created`);
     if (id) onClose();
     else setBusy(false);
   };
@@ -366,16 +395,60 @@ function NewFunnelDrawer({ onClose }: { onClose: () => void }) {
         Start from
         <span className="gs-move" role="radiogroup" aria-label="Start from">
           {sources.map((o) => (
-            <button key={o.value} type="button" role="radio" aria-checked={o.value === from} className={o.value === from ? 'on' : ''} onClick={() => setFrom(o.value)}>
+            <button key={o.value} type="button" role="radio" aria-checked={o.value === from} className={o.value === from ? 'on' : ''} onClick={() => pickSource(o.value)}>
               {o.label}
             </button>
           ))}
         </span>
+        <span className="gs-sub">
+          {from === 'blank' ? 'A small set to build on.' : 'A copy of its stages with their activities and to-dos, without its opportunities.'}
+        </span>
       </div>
       <div className="gs-label">
         Stages
-        <Preview names={preview} testId="new-funnel-stages" />
-        <span className="gs-sub">{from === 'blank' ? 'A small set to build on.' : 'A copy of its stages and their to-dos, without its opportunities.'} You can change the stages after the funnel is created.</span>
+        <div className="gs-card gs-glass gs-draft-stages" data-testid="new-funnel-stages">
+          {stages.map((st, i) => (
+            <div key={st.key} className="gs-draft-stage" data-testid="new-funnel-stage">
+              <span className="gs-stage-n">{i + 1}</span>
+              <input
+                className="gs-input"
+                aria-label={`Stage ${i + 1} name`}
+                aria-invalid={(stagesBad && !st.name.trim()) || undefined}
+                placeholder="Stage name"
+                value={st.name}
+                autoFocus={fresh === st.key}
+                maxLength={80}
+                onChange={(e) => rename(st.key, e.target.value)}
+              />
+              {st.won ? (
+                <Badge tone="green">Won</Badge>
+              ) : (
+                <RowMenu
+                  label={`Actions for ${st.name || `stage ${i + 1}`}`}
+                  testId="new-funnel-stage-menu"
+                  items={[
+                    ...(i > 0 ? [{ label: 'Move up', onClick: () => move(i, -1) }] : []),
+                    ...(i < lastMovable ? [{ label: 'Move down', onClick: () => move(i, 1) }] : []),
+                    ...(stages.filter((x) => !x.won).length > 1 ? [{ label: 'Remove', onClick: () => setStages(stages.filter((x) => x.key !== st.key)), danger: true, testId: 'new-funnel-stage-remove' }] : []),
+                  ]}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        {stagesBad && (
+          <span className="gs-error" role="alert">
+            Give every stage a name.
+          </span>
+        )}
+        <span>
+          <button type="button" className="gs-tag-add" data-testid="new-funnel-add-stage" onClick={add}>
+            + Add stage
+          </button>
+        </span>
+        <span className="gs-sub">
+          Activities, owners and to-dos are set after the funnel is created, with Edit.
+        </span>
       </div>
     </Drawer>
   );
