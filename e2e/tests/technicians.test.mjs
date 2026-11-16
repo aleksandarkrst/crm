@@ -3,7 +3,7 @@
 // only).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, chooseOption, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('technicians', () => {
   const browser = useBrowser();
@@ -23,13 +23,14 @@ describe('technicians', () => {
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Fit-out', projectTypeId: type.id, companyId: company.id }) });
   });
 
-  step('Settings → Technicians: everyone starts as Office; the work type changes inline', async () => {
-    await page.goto(BASE_URL + '/settings/technicians', { waitUntil: 'networkidle0' });
+  step('Settings → Projects → Technicians: everyone starts as Office; the work type changes inline', async () => {
+    // Technicians are a section of Settings → Projects; the work type is a dropdown (CD-524).
+    await page.goto(BASE_URL + '/settings/projects', { waitUntil: 'networkidle0' });
     await page.waitForSelector(`[data-testid=technician-row][data-employee="${crew}"]`);
-    assert.match(await page.$eval('[data-testid=technicians]', (el) => el.textContent), /Work type decides what someone can be given/);
-    assert.equal(await page.$eval(`[data-testid=technician-row][data-employee="${crew}"] [data-testid=work-type]`, (el) => el.value), 'office');
-    await setValue(page, `[data-testid=technician-row][data-employee="${crew}"] [data-testid=work-type]`, 'service');
-    await page.waitForFunction(() => document.body.innerText.includes('is Service now'));
+    assert.match(await page.$eval('[data-testid=technicians]', (el) => el.textContent), /What each person can be given: project tasks, work orders or both/);
+    assert.equal(await page.$eval(`[data-testid=technician-row][data-employee="${crew}"] [data-testid=work-type]`, (el) => el.dataset.value), 'office');
+    await chooseOption(page, `[data-testid=technician-row][data-employee="${crew}"] [data-testid=work-type]`, 'Service, work orders');
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Changes saved'));
     assert.equal((await api(page, '/people/employees/' + crew)).workType, 'service');
   });
 

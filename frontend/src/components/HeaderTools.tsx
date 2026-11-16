@@ -8,8 +8,8 @@ import { ICONS } from './commands';
 import { currentModule } from './modules';
 import { NewMenu } from './NewMenu';
 
-/** The middle of every screen's header (CD-80): search (opens the command palette) and "+". */
-export function HeaderCenter() {
+/** The middle of every screen's header (CD-80): search (opens the command palette) and "+" (not on Settings, where there is nothing to create). */
+export function HeaderCenter({ create = true }: { create?: boolean }) {
   const { set, session } = useStore();
   const { pathname } = useLocation();
   // The Projects module searches its own records first (CD-229).
@@ -24,7 +24,7 @@ export function HeaderCenter() {
         <span className="search-trigger-text">{placeholder}</span>
         <kbd className="kbd">{SEARCH_SHORTCUT}</kbd>
       </button>
-      <NewMenu />
+      {create && <NewMenu />}
     </div>
   );
 }

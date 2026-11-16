@@ -112,7 +112,8 @@ export function useCommands(): Command[] {
     { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.myNotifications) },
     { id: 'go-project-types', group: 'Settings', label: `${terms.Project} types`, hint: `Stages of ${terms.projects}`, icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
     { id: 'go-funnels', group: 'Settings', label: 'Funnel builder', hint: 'Stages and playbooks', icon: 'pipeline', keywords: 'stages checklist playbook', run: go(paths.settings('funnel')) },
-    { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },
+    // Custom fields are hidden in Workspace settings (CD-524 spec); their command comes back with them.
+    // { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },
     { id: 'go-templates', group: 'Settings', label: 'Document templates', hint: 'Proposals and contracts', icon: 'document', keywords: 'docx proposal contract', run: go(paths.settings('templates')) },
   ];
   // Members get only their own settings: no workspace settings here either (CD-523).

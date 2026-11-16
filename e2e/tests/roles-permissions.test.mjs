@@ -1,6 +1,7 @@
-// Roles and permissions (CD-142) and employee settings (CD-215): the owner sees the workspace roles
-// (the functional matrix and "Who has which role" went with Administration and Payroll, CD-225) and
-// invites someone from the Team tab without functional roles to tick; Settings → Employees saves
+// Roles and permissions (CD-142) and employee settings (CD-215): Roles & permissions is out of
+// Workspace settings since CD-524 (the functional matrix and "Who has which role" went with
+// Administration and Payroll, CD-225), the server still defines the roles; the owner invites
+// someone from the Team tab without functional roles to tick; Settings → Employees saves
 // its three settings and is for Admins only; "Org changes" is a notification toggle; a manager
 // makes visit plans only for their direct report and sees Reports, a member neither.
 import assert from 'node:assert/strict';
@@ -38,11 +39,12 @@ describe('roles and permissions', () => {
     await api(olga, `/people/employees/${ids.mia}`, { method: 'PATCH', body: JSON.stringify({ managerId: ids.max }) });
   });
 
-  step('the owner sees the workspace roles; no functional matrix or "Who has which role" (CD-225)', async () => {
+  step('Roles & permissions is not in Settings (CD-524); the server still defines Employee, Manager and Admin', async () => {
+    // Roles & permissions is commented out of Workspace settings with the CD-524 spec: its old link lands on General.
     await olga.goto(`${BASE_URL}/settings/roles`, { waitUntil: 'networkidle0' });
-    await olga.waitForSelector('[data-testid=workspace-roles]');
-    const body = await text(olga);
-    assert.ok(body.includes('Workspace roles') && body.includes('Make someone an owner or remove an owner'), 'workspace roles kept');
+    await olga.waitForFunction(() => location.pathname === '/settings/general');
+    await olga.waitForSelector('[data-testid=workspace-modules]');
+    assert.equal(await olga.$('[data-testid=workspace-roles]'), null);
     assert.equal(await olga.$('[data-testid=functional-roles]'), null);
     assert.equal(await olga.$('[data-testid=role-holders]'), null);
     // The server still defines the matrix: Employee, Manager and Admin, without open spec questions in its labels (B16).
@@ -75,7 +77,7 @@ describe('roles and permissions', () => {
     ids.hana = access.employeeId;
   });
 
-  step('Settings → Employee record saves its settings; members have no such tab', async () => {
+  step('Settings → Employees saves the employee record settings; members have no such page', async () => {
     // The default weekly hours are no longer shown (CD-524 review); the record's switches are.
     await olga.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await click(olga, '[data-setting=number-required] [role=switch]');

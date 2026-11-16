@@ -473,6 +473,8 @@ export interface State {
   /** When a bonus counts as earned ("On contract signed" or "When fully billed"). */
   bonusTrigger: string;
   toast: string;
+  /** The toast is an error (Workspace settings shows it red, CD-524). */
+  toastError?: boolean;
   /** Document templates (CD-13); null until loaded (see loadTemplates). */
   templates: DocTemplate[] | null;
   /** Generated documents per deal id, loaded when a deal opens (see ensureDocs). */

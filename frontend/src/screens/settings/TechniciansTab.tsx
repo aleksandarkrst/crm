@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { api, peopleCardApi, WORK_TYPE_LABEL, type WorkType } from '../../lib/api';
 import { paths } from '../../lib/paths';
 import { projectError } from '../../store/projects';
+import { initialsOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { Block, Table } from './parts';
+import { Dropdown, Section, Table } from './parts';
 
 interface Technician {
   employeeId: string;
@@ -16,12 +17,16 @@ interface Technician {
   openWorkOrders: number;
 }
 
+const WORK_TYPES = (Object.keys(WORK_TYPE_LABEL) as WorkType[]).map((w) => ({
+  value: w,
+  label: `${WORK_TYPE_LABEL[w]}, ${w === 'office' ? 'project tasks' : w === 'service' ? 'work orders' : 'tasks and work orders'}`,
+}));
+
 /**
- * Settings → Technicians (CD-268, design v2 §8): everyone with their team, their work type (what
- * they can be given; inline) and their open work. The same field as on the Workforce employee card.
- * Owners and admins.
+ * Projects → Technicians (CD-268): everyone with their team, their work type (what they can be
+ * given; the same field as on their employee card) and their open work. Owners and admins.
  */
-export function TechniciansTab() {
+export function TechniciansSection() {
   const { flash } = useStore();
   const [rows, setRows] = useState<Technician[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,49 +41,47 @@ export function TechniciansTab() {
     setRows(before.map((r) => (r.employeeId === t.employeeId ? { ...r, workType } : r)));
     try {
       await peopleCardApi.update(t.employeeId, { workType });
-      flash(`${t.name} is ${WORK_TYPE_LABEL[workType]} now`);
-    } catch (err) {
+      flash('Changes saved');
+    } catch {
       setRows(before);
-      flash(projectError(err));
+      flash('Could not save. Try again.', 4000, true);
     }
   };
 
   return (
-    <Block desc="Work type decides what someone can be given. Office staff get project tasks, service staff get work orders, and people set to both can get either. It's the same field as on the person's employee card." testId="technicians">
+    <Section title="Technicians" desc="What each person can be given: project tasks, work orders or both." testId="technicians">
       {error ? (
-        <div className="hint-box">{error}</div>
+        <span className="gs-sub">{error}</span>
       ) : !rows ? (
-        <div className="hint-box">Loading people</div>
+        <span className="gs-sub">Loading people</span>
       ) : (
-        <Table cols={[{ label: 'Person' }, { label: 'Team' }, { label: 'Work type · can be given' }, { label: 'Open work', align: 'num' }]} minWidth={680} empty={rows.length === 0 ? 'No one here yet.' : undefined}>
+        <Table cols={[{ label: 'Person' }, { label: 'Team' }, { label: 'Work type' }, { label: 'Open work', align: 'num' }]} minWidth={680} empty={rows.length === 0 ? 'No one here yet.' : undefined}>
           {rows.map((t) => (
             <tr key={t.employeeId} data-testid="technician-row" data-employee={t.employeeId}>
               <td>
-                <span className="ws-cell">
-                  <Link to={paths.employee(t.employeeId)} style={{ fontWeight: 600, color: 'var(--ink)', textDecoration: 'none' }}>
-                    {t.name}
-                  </Link>
-                  {t.jobTitle && <span className="ws-row-hint">{t.jobTitle}</span>}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className="gs-face soft">{initialsOf(t.name)}</span>
+                  <span className="gs-cell">
+                    <Link to={paths.employee(t.employeeId)} style={{ fontWeight: 600, color: 'var(--gs-ink)' }}>
+                      {t.name}
+                    </Link>
+                    {t.jobTitle && <span className="gs-sub">{t.jobTitle}</span>}
+                  </span>
                 </span>
               </td>
-              <td style={{ color: 'var(--text-2)' }}>{t.team ?? 'No unit'}</td>
-              <td>
-                <select className="form-input" style={{ width: 240, padding: '7px 10px' }} aria-label={`Work type of ${t.name}`} data-testid="work-type" value={t.workType} onChange={(e) => void change(t, e.target.value as WorkType)}>
-                  {(Object.keys(WORK_TYPE_LABEL) as WorkType[]).map((w) => (
-                    <option key={w} value={w}>
-                      {WORK_TYPE_LABEL[w]}
-                      {w === 'office' ? ' · project tasks' : w === 'service' ? ' · work orders' : ' · tasks and work orders'}
-                    </option>
-                  ))}
-                </select>
+              <td className="gs-sub" style={{ fontSize: 13.5 }}>
+                {t.team ?? 'No unit'}
               </td>
-              <td className="num" style={{ color: t.openTasks || t.openWorkOrders ? 'var(--ink)' : 'var(--muted-2)' }} data-testid="open-work">
-                {[t.openTasks ? `${t.openTasks} ${t.openTasks === 1 ? 'task' : 'tasks'}` : '', t.openWorkOrders ? `${t.openWorkOrders} ${t.openWorkOrders === 1 ? 'work order' : 'work orders'}` : ''].filter(Boolean).join(' · ') || 'Nothing open'}
+              <td>
+                <Dropdown label={`Work type of ${t.name}`} testId="work-type" value={t.workType} options={WORK_TYPES} width={250} onChange={(v) => void change(t, v)} />
+              </td>
+              <td className="num" style={{ color: t.openTasks || t.openWorkOrders ? 'var(--gs-ink)' : 'var(--gs-muted)' }} data-testid="open-work">
+                {[t.openTasks ? `${t.openTasks} ${t.openTasks === 1 ? 'task' : 'tasks'}` : '', t.openWorkOrders ? `${t.openWorkOrders} ${t.openWorkOrders === 1 ? 'work order' : 'work orders'}` : ''].filter(Boolean).join(', ') || 'Nothing open'}
               </td>
             </tr>
           ))}
         </Table>
       )}
-    </Block>
+    </Section>
   );
 }

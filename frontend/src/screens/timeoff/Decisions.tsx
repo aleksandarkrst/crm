@@ -2,11 +2,10 @@ import { useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal, ModalHeader, Switch } from '../../components/ui';
 import { downloadBlob } from '../../lib/csv';
-import { type ApiDecision, type ApiDecisionRow, type ApiTimeOffSettings, DECISION_STATE_LABEL, decisionFileName, decisionStatusLabel, timeOffApi } from '../../lib/timeOffApi';
+import { type ApiDecision, type ApiDecisionRow, DECISION_STATE_LABEL, decisionFileName, decisionStatusLabel, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
-import { Block, Row, Rows } from '../settings/parts';
 import { periodLabel } from './RequestsList';
 
 const STATE_BADGE: Record<ApiDecision['state'], string> = { valid: 'badge badge-brand', outdated: 'badge badge-warn', cancelled: 'badge badge-neutral', superseded: 'badge badge-neutral' };
@@ -189,55 +188,3 @@ function RegenerateDialog({ decision, onClose }: { decision: ApiDecisionRow; onC
   );
 }
 
-/** Settings → Time off → Vacation decisions (CD-167, spec 12): who gets a copy besides the employee. Admins. */
-export function DecisionRecipientsCard() {
-  const { flash, canEditWorkspace } = useStore();
-  const { data, set } = useProjectsRead<ApiTimeOffSettings>(true, () => timeOffApi.settings(), 'timeoff:settings:decisions', 'timeOffRev');
-  const [emails, setEmails] = useState<string | null>(null);
-  if (!data) return null;
-  const save = async (patch: Partial<ApiTimeOffSettings>) => {
-    try {
-      set(await timeOffApi.updateSettings(patch));
-      setEmails(null);
-      flash('Saved');
-    } catch (err) {
-      flash(projectError(err));
-    }
-  };
-  const list = (text: string) =>
-    text
-      .split(/[\s,;]+/)
-      .map((e) => e.trim())
-      .filter(Boolean);
-  // Settings → Time off → Vacation (design G-Settings "timeoff", CD-524): a block of rows.
-  return (
-    <Block title="Vacation decisions" desc="The decision PDF always goes to the employee. Choose who else gets a copy. Changes apply to later decisions only." testId="decision-recipients">
-      <Rows>
-        <Row label="Copy to the workspace's owners and admins" switchRow>
-          <Switch on={data.decisionCopyAdmins} disabled={!canEditWorkspace} onClick={() => void save({ decisionCopyAdmins: !data.decisionCopyAdmins })} label="Copy to the workspace's owners and admins" />
-        </Row>
-        <Row label="HR mailbox" hint="Up to 5 addresses, separated by commas">
-          <input
-            className="form-input wide"
-            aria-label="HR mailbox"
-            value={emails ?? data.decisionCopyEmails.join(', ')}
-            placeholder="hr@company.rs"
-            disabled={!canEditWorkspace}
-            onChange={(e) => setEmails(e.target.value)}
-            data-testid="decision-copy-emails"
-          />
-          {emails !== null && (
-            <>
-              <button type="button" className="btn btn-secondary" onClick={() => setEmails(null)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void save({ decisionCopyEmails: list(emails) })} data-testid="decision-copy-save">
-                Save
-              </button>
-            </>
-          )}
-        </Row>
-      </Rows>
-    </Block>
-  );
-}

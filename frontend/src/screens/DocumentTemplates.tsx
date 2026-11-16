@@ -1,114 +1,28 @@
-import { useEffect, useState } from 'react';
-import { askConfirm } from '../components/ConfirmDialog';
-import { canManageTemplates, type DocTemplate, docMoment, fileSize, type PlaceholderReference } from '../store/documents';
+import { useEffect, useRef, useState } from 'react';
+import { canManageTemplates, DOC_TYPES, type DocTemplate, type DocType, docMoment, fileSize, type PlaceholderReference, type ScanResult, templateFileProblem } from '../store/documents';
 import { useStore } from '../store/store';
-import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../store/wording';
-import { Block, Note, Table } from './settings/parts';
+import { mergeFieldReference, opportunityCopy } from '../store/wording';
+import { askGlassConfirm, Badge, Card, Modal, Row, RowMenu, Section, Table } from './settings/parts';
+
+const TONE: Record<string, 'violet' | 'blue' | 'green' | undefined> = { Proposal: 'violet', Quote: 'blue', Contract: 'green' };
 
 /**
- * Settings → Document templates (CD-13): the uploaded .docx templates, the built-in proposal preview,
- * and the merge field reference with a starter template to download. Owners and admins upload and
- * delete; everyone can download.
+ * CRM → Document templates (CD-13; the design's table since CD-524): the uploaded .docx templates
+ * and the built-in proposal, each with a ⋯ menu; then the merge fields, with the starter template
+ * to download and the full list behind "Show merge fields". Owners and admins upload and delete;
+ * everyone can download. The design's "Used in" column isn't shown: the app doesn't track it.
  */
-export function TemplatesTab() {
-  const { s, session, set, openDoc, loadTemplates, downloadTemplate, deleteTemplate } = useStore();
+export function TemplatesSection() {
+  const { s, session, flash, openDoc, loadTemplates, downloadTemplate, deleteTemplate, loadPlaceholders, downloadStarter } = useStore();
   const lead = s.leads[0];
   const canManage = canManageTemplates(session.tenant.role);
+  const [ref, setRef] = useState<PlaceholderReference | null>(null);
+  const [showFields, setShowFields] = useState(false);
+  // The template being uploaded or replaced ('new' for New template), in the glass modal below.
+  const [upload, setUpload] = useState<DocTemplate | 'new' | null>(null);
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
-
-  const onDelete = async (t: DocTemplate) => {
-    if (!(await askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }))) return;
-    void deleteTemplate(t);
-  };
-  const onEdit = (t: DocTemplate) => set({ templateOpen: true, templateEditing: t });
-
-  // Settings → CRM → Document templates (design G-Settings "templates", CD-524): a table of templates, then the merge fields.
-  return (
-    <>
-      <Block title="Templates">
-        <Table cols={[{ label: 'Template' }, { label: 'Type' }, { label: 'Merge fields' }, { label: '', align: 'actions' }]} minWidth={640}>
-          {(s.templates || []).map((t) => {
-            const unknown = t.placeholders.filter((p) => !p.known);
-            const known = t.placeholders.length - unknown.length;
-            return (
-              <tr key={t.id} data-template={t.name}>
-                <td>
-                  <span className="ws-cell">
-                    <b style={{ overflowWrap: 'anywhere' }}>{t.name}</b>
-                    <span className="ws-row-hint">
-                      {t.uploadedByName ? `${t.uploadedByName} · ` : ''}
-                      {docMoment(t.createdAt, s.workspace.timezone)} · {fileSize(t.sizeBytes)}
-                    </span>
-                  </span>
-                </td>
-                <td>
-                  <span className="badge badge-brand">{t.docType}</span>
-                </td>
-                <td>
-                  <span className="ws-cell" title={t.placeholders.map((p) => (p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`) + (p.label ? ` ${opportunityCopy(p.label)}` : ' not recognised')).join('\n')}>
-                    <span>{t.placeholders.length ? `${known} ${known === 1 ? 'field' : 'fields'}` : 'None'}</span>
-                    {unknown.length > 0 && (
-                      <span className="ws-row-error" style={{ fontSize: 12 }}>
-                        {unknown.length} not recognised, left as written: {unknown.map((p) => `{{${p.tag}}}`).join(', ')}
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="actions">
-                  <button type="button" className="btn-plain" style={{ padding: '6px 11px', fontSize: 12.5 }} onClick={() => void downloadTemplate(t)}>
-                    Download
-                  </button>
-                  {canManage && (
-                    <>
-                      <button type="button" className="btn-plain" style={{ padding: '6px 11px', fontSize: 12.5 }} data-testid="edit-template" onClick={() => onEdit(t)}>
-                        Edit
-                      </button>
-                      <button type="button" className="btn-danger-quiet" style={{ padding: '6px 11px', fontSize: 12.5 }} onClick={() => void onDelete(t)}>
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-          <tr>
-            <td>
-              <span className="ws-cell">
-                <b>Proposal v4</b>
-                <span className="ws-row-hint">{lead ? 'Built in · a preview in the browser, not saved' : 'Built in · add an opportunity to preview it'}</span>
-              </span>
-            </td>
-            <td>
-              <span className="badge badge-neutral">Built in</span>
-            </td>
-            <td>
-              <span className="ws-row-hint">From the discovery notes and lines</span>
-            </td>
-            <td className="actions">
-              {lead && (
-                <button type="button" className="btn-plain" style={{ padding: '6px 11px', fontSize: 12.5 }} onClick={() => openDoc(lead.id)}>
-                  Preview with an opportunity
-                </button>
-              )}
-            </td>
-          </tr>
-        </Table>
-      </Block>
-      {s.templates?.length === 0 && <Note>No templates uploaded yet. {canManage ? 'Download the starter template below, make it yours in Word, and upload it with New template.' : 'Owners and admins can upload them.'}</Note>}
-      <Note>The built-in proposal is assembled from the opportunity's discovery notes and lines. To send a Word file, upload your own template.</Note>
-
-      <PlaceholderReferenceCard />
-    </>
-  );
-}
-
-/** Every merge field, grouped, with an example; and the starter template. */
-function PlaceholderReferenceCard() {
-  const { loadPlaceholders, downloadStarter } = useStore();
-  const [ref, setRef] = useState<PlaceholderReference | null>(null);
   useEffect(() => {
     let live = true;
     void loadPlaceholders().then((r) => live && setRef(r));
@@ -117,59 +31,227 @@ function PlaceholderReferenceCard() {
     };
   }, [loadPlaceholders]);
 
-  const groups = new Map<string, PlaceholderReference['fields']>();
-  for (const f of [...(ref?.fields ?? []), ...(ref?.lineFields ?? [])]) groups.set(f.group, [...(groups.get(f.group) ?? []), f]);
-
+  const onDelete = async (t: DocTemplate) => {
+    if (!(await askGlassConfirm({ title: `Delete the template "${t.name}"?`, text: 'Documents already generated from it are kept.', confirmLabel: 'Delete template' }))) return;
+    void deleteTemplate(t);
+  };
+  const fields = [...(ref?.fields ?? []), ...(ref?.lineFields ?? [])];
   return (
-    <Block
-      title="Merge fields"
-      desc={
-        <>
-          Type them into a Word document in double braces. Amounts come out in the opportunity's currency; a field the opportunity has no value for is left empty and named on the document. Opportunity lines repeat with{' '}
-          <code>{'{{#lines}} … {{/lines}}'}</code>: put the opening tag in the first cell of a table row and the closing tag in its last cell, and the row repeats once per line.
-        </>
-      }
-      actions={
-        <button type="button" className="btn-plain" onClick={() => void downloadStarter()}>
-          Download starter template
+    <Section
+      title="Document templates"
+      desc="Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document."
+      action={
+        <button type="button" className="gs-btn primary" data-testid="new-template" onClick={() => (canManage ? setUpload('new') : flash('Only owners and admins can add templates', 4000, true))}>
+          New template
         </button>
       }
+      testId="templates"
     >
-      <div className="card" style={{ overflow: 'hidden' }}>
-        {!ref && <div style={{ padding: '14px 18px', fontSize: 12.5, color: 'var(--muted)' }}>Loading…</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
-          {[...groups].map(([group, fields]) => (
-            <div key={group} style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)', display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <span className="caps-muted">{mergeFieldGroupHeading(group)}</span>
-              {fields.map((f) => {
-                const shown = mergeFieldReference(f.tag, f.label);
-                return (
-                  // A token is never broken mid-word (CD-488): it keeps its width and the description
-                  // takes the rest of the row, or goes under it when the token is long.
-                  <div key={f.tag} style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontSize: 12.5, alignItems: 'baseline' }}>
-                    <code style={{ whiteSpace: 'nowrap', flex: '0 0 auto' }}>{shown.token}</code>
-                    <span style={{ color: 'var(--text-2)', flex: '1 1 140px', minWidth: 0 }}>
-                      {shown.description} <span style={{ color: 'var(--muted)' }}>· {f.example}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+      <Table cols={[{ label: 'Template' }, { label: 'Type' }, { label: '', align: 'end' }]} minWidth={480}>
+        {(s.templates || []).map((t) => {
+          const unknown = t.placeholders.filter((p) => !p.known);
+          return (
+            <tr key={t.id} data-template={t.name}>
+              <td>
+                <span className="gs-cell">
+                  <b style={{ overflowWrap: 'anywhere' }}>{t.name}</b>
+                  <span className="gs-sub">
+                    {[t.uploadedByName, docMoment(t.createdAt, s.workspace.timezone)].filter(Boolean).join(', ')}
+                    {unknown.length > 0 && <span style={{ color: 'var(--gs-danger-dark)' }}>. {unknown.length} merge fields not recognised: {unknown.map((p) => `{{${p.tag}}}`).join(', ')}</span>}
+                  </span>
+                </span>
+              </td>
+              <td>
+                <Badge tone={TONE[t.docType]}>{t.docType}</Badge>
+              </td>
+              <td className="end">
+                <RowMenu
+                  label={`Actions for ${t.name}`}
+                  testId="template-menu"
+                  items={[
+                    { label: 'Download', onClick: () => void downloadTemplate(t) },
+                    ...(canManage
+                      ? [
+                          { label: 'Upload new version', onClick: () => setUpload(t), testId: 'edit-template' },
+                          { label: 'Delete', onClick: () => void onDelete(t), danger: true },
+                        ]
+                      : []),
+                  ]}
+                />
+              </td>
+            </tr>
+          );
+        })}
+        <tr>
+          <td>
+            <span className="gs-cell">
+              <b>Proposal v4</b>
+              <span className="gs-sub">{lead ? 'Built in, a preview in the browser' : 'Built in, add an opportunity to preview it'}</span>
+            </span>
+          </td>
+          <td>
+            <Badge tone="violet">Proposal</Badge>
+          </td>
+          <td className="end">{lead && <RowMenu label="Actions for Proposal v4" items={[{ label: 'Preview with an opportunity', onClick: () => openDoc(lead.id) }]} />}</td>
+        </tr>
+      </Table>
+      <Card>
+        <Row
+          label="Merge fields"
+          desc={
+            <>
+              {fields.length ? `${fields.length} fields` : 'Fields'} you can type in a Word template, wrapped in double curly braces, like <code className="gs-code">{'{{company.name}}'}</code>
+            </>
+          }
+        >
+          <button type="button" className="gs-btn" onClick={() => void downloadStarter()}>
+            Download starter template
+          </button>
+          <button type="button" className="gs-btn" aria-expanded={showFields} onClick={() => setShowFields(!showFields)}>
+            {showFields ? 'Hide merge fields' : 'Show merge fields'}
+          </button>
+        </Row>
+      </Card>
+      {showFields && (
+        <Table cols={[{ label: 'Field' }, { label: 'Example' }]} minWidth={480} testId="merge-fields">
+          {fields.map((f) => {
+            const shown = mergeFieldReference(f.tag, f.label);
+            return (
+              <tr key={f.tag}>
+                <td>
+                  <span className="gs-cell">
+                    <code className="gs-code" style={{ alignSelf: 'flex-start' }}>
+                      {shown.token}
+                    </code>
+                    <span className="gs-sub">{shown.description}</span>
+                  </span>
+                </td>
+                <td>{f.example}</td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
+      {upload && <TemplateModal editing={upload === 'new' ? null : upload} onClose={() => setUpload(null)} />}
+    </Section>
+  );
+}
+
+/**
+ * Uploading or replacing a template in the glass style (CD-524 review; the logic of the old
+ * NewTemplateModal): the file is checked and its merge fields listed before it is saved, so a typo
+ * like {{deal.amoutn}} shows up as "not recognised" right away. Replacing keeps name and type.
+ */
+function TemplateModal({ editing, onClose }: { editing: DocTemplate | null; onClose: () => void }) {
+  const { uploadTemplate, replaceTemplate, scanTemplate } = useStore();
+  const [docType, setDocType] = useState<DocType>(editing?.docType ?? 'Proposal');
+  const [name, setName] = useState(editing?.name ?? '');
+  const [file, setFile] = useState<File | null>(null);
+  const [scan, setScan] = useState<ScanResult | null>(null);
+  const [problem, setProblem] = useState('');
+  const [busy, setBusy] = useState<'' | 'scan' | 'save'>('');
+  // Only the last chosen file's check counts: an earlier, slower one is ignored when it comes back.
+  const latest = useRef<File | null>(null);
+
+  const pick = async (f: File | undefined) => {
+    setScan(null);
+    setProblem('');
+    setFile(f ?? null);
+    latest.current = f ?? null;
+    if (!f) return;
+    const bad = templateFileProblem(f);
+    if (bad) return setProblem(bad);
+    if (!name.trim()) setName(f.name.replace(/\.docx$/i, ''));
+    setBusy('scan');
+    try {
+      const result = await scanTemplate(f);
+      if (latest.current === f) setScan(result);
+    } catch (err) {
+      if (latest.current === f) setProblem((err as Error).message);
+    } finally {
+      if (latest.current === f) setBusy('');
+    }
+  };
+  const save = async () => {
+    if (!file || !scan) return;
+    setBusy('save');
+    try {
+      if (editing) await replaceTemplate(editing.id, file, name.trim(), docType);
+      else await uploadTemplate(file, name.trim(), docType);
+      onClose();
+    } catch (err) {
+      setProblem((err as Error).message);
+      setBusy('');
+    }
+  };
+  const unknown = scan?.placeholders.filter((p) => !p.known) ?? [];
+  const known = scan?.placeholders.filter((p) => p.known) ?? [];
+
+  return (
+    <Modal
+      title={editing ? 'Upload a new version' : 'New template'}
+      desc={editing ? 'The new Word document replaces this template. Documents already generated from it are kept.' : 'Upload the Word document you already use. Every {{field}} in it becomes a merge field filled from the opportunity.'}
+      onClose={onClose}
+      wide
+      testId="template-modal"
+    >
+      <label className="gs-label">
+        Template name
+        <input className="gs-input" placeholder="e.g. Proposal, brand programme v1" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <div className="gs-label">
+        Document type
+        <span className="gs-move" role="radiogroup" aria-label="Document type">
+          {DOC_TYPES.map((d) => (
+            <button key={d} type="button" role="radio" aria-checked={docType === d} className={docType === d ? 'on' : ''} onClick={() => setDocType(d)}>
+              {d}
+            </button>
           ))}
-        </div>
-        {ref && Object.keys(ref.aliases).length > 0 && (
-          <div style={{ padding: '12px 18px', fontSize: 12, color: 'var(--text-2)' }}>
-            Short forms:{' '}
-            {Object.entries(ref.aliases).map(([a, t], i) => (
-              <span key={a}>
-                {i ? ', ' : ''}
-                <code>{`{{${a}}}`}</code> = <code>{`{{${t}}}`}</code>
-              </span>
-            ))}
-            .
-          </div>
-        )}
+        </span>
       </div>
-    </Block>
+      <label className={'gs-drop' + (scan ? ' ok' : '')}>
+        <input type="file" aria-label="Template file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => void pick(e.target.files?.[0])} />
+        <b>{file ? file.name : editing ? 'Choose the new .docx' : 'Choose a .docx'}</b>
+        <span className="gs-sub">
+          {busy === 'scan'
+            ? 'Checking the document'
+            : scan
+              ? `${fileSize(scan.sizeBytes)}, ${known.length} merge field${known.length === 1 ? '' : 's'} recognised${unknown.length ? `, ${unknown.length} not` : ''}`
+              : editing
+                ? `Now: ${editing.fileName}. Word (.docx), up to 5 MB.`
+                : 'Word (.docx), up to 5 MB. Write merge fields in double curly braces, like {{company.name}}.'}
+        </span>
+      </label>
+      {problem && (
+        <span className="gs-error" role="alert">
+          {problem}
+        </span>
+      )}
+      {scan && (
+        <div className="gs-label">
+          Merge fields found
+          {scan.placeholders.length === 0 ? (
+            <span className="gs-sub">None. The document is copied as it is.</span>
+          ) : (
+            <span className="gs-found-list">
+              {scan.placeholders.map((p) => (
+                <span key={p.tag} className={'gs-found' + (p.known ? '' : ' bad')}>
+                  <code>{p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`}</code> {p.known ? opportunityCopy(p.label ?? '') : 'not recognised'}
+                </span>
+              ))}
+            </span>
+          )}
+          {unknown.length > 0 && <span className="gs-sub">Fields not recognised stay in the document as written. Fix the spelling in Word and upload again.</span>}
+        </div>
+      )}
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="gs-btn primary" data-testid="template-save" disabled={!scan || !name.trim() || !!busy} onClick={() => void save()}>
+          {busy === 'save' ? 'Saving' : editing ? 'Save new version' : 'Add template'}
+        </button>
+      </div>
+    </Modal>
   );
 }

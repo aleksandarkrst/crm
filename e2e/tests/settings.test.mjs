@@ -1,7 +1,7 @@
 // Workspace settings and profile settings are saved and survive a reload; a deal's discovery notes reach the proposal.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, setValue, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, email, eventually, fillField, newUserWithWorkspace, chooseOption, RUN, setByLabel, setValue, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** The value of the input/select/textarea next to a label (like setByLabel, for reading). */
 const valueByLabel = (page, label, tag = 'input') =>
@@ -30,51 +30,51 @@ describe('settings and discovery fields', () => {
   });
 
   step('saves the workspace settings', async () => {
-    await page.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/settings/general`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Fiscal year starts'));
-    // The name is edited in the Workspace info dialog (CD-378).
-    await click(page, '[data-testid="workspace-info-edit"]');
-    await setValue(page, '[data-testid="workspace-info-name"]', workspaceName);
-    await click(page, '[data-testid="workspace-info-save"]');
-    await page.waitForFunction((name) => document.querySelector('.ws-info-name')?.textContent.trim() === name, {}, workspaceName);
-    assert.ok(await setByLabel(page, 'Currency', 'RSD', 'select'));
+    // Settings fields save when they are left, and dropdowns are buttons with a menu (CD-524).
+    await fillField(page, '[data-testid="workspace-info-name"]', workspaceName);
+    await chooseOption(page, '[data-testid=workspace-currency]', 'RSD');
     // The time zone is a searchable list (CD-488): search, then Enter picks the first match.
     await click(page, '[data-testid="workspace-timezone"]');
     await page.waitForSelector('input[aria-label="Search time zones"]');
     await page.type('input[aria-label="Search time zones"]', 'london');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelector('[data-testid="workspace-timezone"]')?.dataset.zone === 'Europe/London');
-    assert.ok(await setByLabel(page, 'Fiscal year starts', '4', 'select'));
-    assert.ok(await setByLabel(page, 'Customer email language', 'sr', 'select'));
-    assert.ok((await text(page)).includes('Language of the fixed text in emails to customers'), 'hint under the language');
+    await chooseOption(page, '[data-testid=workspace-fiscal-month]', 'April');
+    await click(page, '[data-testid=customer-email-language] button::-p-text(Srpski)');
+    assert.ok((await text(page)).includes('Default language of the fixed text, such as meeting minutes'), 'hint under the language');
     const saved = await eventually(async () => {
       const ws = await api(page, '/workspace');
       return ws.name === workspaceName && ws.currency === 'RSD' && ws.timezone === 'Europe/London' && ws.fiscalYearStartMonth === 4 && ws.customerEmailLanguage === 'sr' && ws;
     });
     assert.ok(saved, 'workspace settings saved');
+    // Every save in Settings says so in the design's toast (CD-524).
+    await page.waitForFunction(() => document.querySelector('.toast.toast-glass')?.textContent.includes('Changes saved'));
   });
 
-  step('has no Integrations or Billing tab, and their old links go back to Settings (CD-207)', async () => {
-    const tabs = await page.$$eval('button', (els) => els.map((b) => b.textContent.trim()));
-    assert.ok(tabs.includes('Roles & permissions'), 'the tab bar is there');
-    assert.ok(!tabs.includes('Notifications'), 'Notifications is in Profile settings, not here (CD-489)');
-    assert.ok(!tabs.includes('Integrations') && !tabs.includes('Billing'), 'no placeholder tabs');
+  step('has no Integrations or Billing page, and their old links go back to Settings (CD-207)', async () => {
+    const pages = await page.$$eval('[data-testid=settings-nav] .gs-nav-row .label', (els) => els.map((b) => b.textContent.trim()));
+    assert.ok(pages.includes('General'), 'the nav is there');
+    assert.ok(!pages.includes('Notifications'), 'Notifications is in Profile settings, not here (CD-489)');
+    assert.ok(!pages.includes('Integrations') && !pages.includes('Billing'), 'no placeholder pages');
     for (const tab of ['integrations', 'billing']) {
       await page.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
-      await page.waitForFunction(() => location.pathname === '/settings/workspace' && document.body.innerText.includes('Fiscal year starts'));
+      await page.waitForFunction(() => location.pathname === '/settings/general' && document.body.innerText.includes('Fiscal year starts'));
     }
   });
 
   step('shows the saved workspace settings after a reload, and the new name in the session', async () => {
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Fiscal year starts'));
-    assert.equal(await page.$eval('.ws-info-name', (el) => el.textContent.trim()), workspaceName);
-    assert.equal(await valueByLabel(page, 'Currency', 'select'), 'RSD');
+    assert.equal(await page.$eval('[data-testid="workspace-info-name"]', (el) => el.value), workspaceName);
+    assert.equal(await page.$eval('[data-testid=workspace-currency]', (el) => el.dataset.value), 'RSD');
     assert.equal(await page.$eval('[data-testid="workspace-timezone"]', (el) => el.dataset.zone), 'Europe/London');
-    assert.equal(await valueByLabel(page, 'Fiscal year starts', 'select'), '4');
-    assert.equal(await valueByLabel(page, 'Customer email language', 'select'), 'sr');
+    assert.equal(await page.$eval('[data-testid=workspace-fiscal-month]', (el) => el.dataset.value), '4');
+    assert.equal(await page.$eval('[data-testid=customer-email-language] button[aria-pressed=true]', (el) => el.textContent), 'Srpski');
+    // The session has the new name: the module switcher names the workspace.
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction((name) => document.body.innerText.includes(name), {}, workspaceName);
+    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, workspaceName);
   });
 
   step('saves the profile settings, without password fields or fake toasts', async () => {
@@ -91,7 +91,7 @@ describe('settings and discovery fields', () => {
     // A save says so in a toast (CD-525).
     await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Your name saved'));
     // Leaving the name empty isn't saved: a toast says why and the saved name comes back (CD-525 QA).
-    await page.click('input[aria-label="Full name"]', { clickCount: 3 });
+    await page.$eval('input[aria-label="Full name"]', (el) => (el.focus(), el.select()));
     await page.keyboard.press('Backspace');
     await page.click('h2.settings-title');
     await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes("your name can't be empty"));
@@ -101,7 +101,8 @@ describe('settings and discovery fields', () => {
     // Preferences and Notifications are pages of the account (CD-525).
     await click(page, '[data-testid=account-nav] [data-section=preferences]');
     await page.waitForFunction(() => location.pathname === '/profile/preferences');
-    assert.ok(await setByLabel(page, 'Default funnel', ent.id, 'select'));
+    await page.waitForSelector('select[aria-label="Default funnel"]');
+    await setValue(page, 'select[aria-label="Default funnel"]', ent.id);
     await click(page, '[data-testid=account-nav] [data-section=notifications]');
     await page.waitForSelector('[data-notification=digest] .switch');
     await page.click('[data-notification=digest] .switch');
@@ -163,8 +164,10 @@ describe('settings and discovery fields', () => {
         headline: 'One story across six markets',
       }),
     });
-    await page.goto(`${BASE_URL}/settings/templates`, { waitUntil: 'networkidle0' });
-    await clickButton(page, 'Preview with an opportunity');
+    // The built-in proposal's preview is in its row's menu in CRM → Document templates (CD-524).
+    await page.goto(`${BASE_URL}/settings/crm`, { waitUntil: 'networkidle0' });
+    await click(page, 'button[aria-label="Actions for Proposal v4"]');
+    await click(page, '[role=menuitem]::-p-text(Preview with an opportunity)');
     await page.waitForFunction(() => document.body.textContent.includes('01 — Scope'));
     const doc = await text(page);
     for (const note of ['What you told us', 'One story across six markets', '3 September 2026', 'a repositioning across six markets', 'procurement requires three approvals', 'the CMO with CFO sign-off']) {
@@ -223,9 +226,13 @@ describe('settings and discovery fields', () => {
     const { user } = await api(member, '/me');
     await api(page, `/team/members/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: 'admin' }) });
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
-    await member.waitForFunction((name) => document.querySelector('.ws-info-name')?.textContent.trim() === name, {}, workspaceName);
-    assert.equal(await valueByLabel(member, 'Currency', 'select'), 'RSD');
+    await member.waitForFunction((name) => document.querySelector('[data-testid="workspace-info-name"]')?.value === name, {}, workspaceName);
+    assert.equal(await member.$eval('[data-testid=workspace-currency]', (el) => el.dataset.value), 'RSD');
+    // Settings has no module sidebar (CD-524): the link is in a module's sidebar.
+    await member.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     assert.ok(await member.$('.app-sidebar a[href="/settings"]'), 'Settings in the sidebar');
+    await member.goto(`${BASE_URL}/settings/general`, { waitUntil: 'networkidle0' });
+    await member.waitForSelector('[data-testid=settings-nav]');
 
     await api(page, `/team/members/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: 'member' }) });
     await member.reload({ waitUntil: 'networkidle0' });

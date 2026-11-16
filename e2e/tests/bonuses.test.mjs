@@ -1,4 +1,4 @@
-// Sales bonus rules (CD-17): owners and admins set them in Settings → Sales bonuses and see the
+// Sales bonus rules (CD-17): owners and admins set them in Settings → CRM → Sales bonuses and see the
 // bonus card on Overview; members see neither, and the API refuses them.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -23,8 +23,8 @@ describe('sales bonus rules', () => {
     memberId = (await api(page, '/team')).members.find((m) => m.displayName === 'Sara Seller').userId;
   });
 
-  step('the owner sets a rule in Settings → Sales bonuses, and it is saved', async () => {
-    await page.goto(BASE_URL + '/settings/bonuses', { waitUntil: 'networkidle0' });
+  step('the owner sets a rule in Settings → CRM → Sales bonuses, and it is saved', async () => {
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
     const rate = await page.waitForSelector('input[aria-label="Rate for Sara Seller"]');
     await rate.type('7.5');
     await page.type('input[aria-label="Minimum for Sara Seller"]', '10000');
@@ -47,7 +47,7 @@ describe('sales bonus rules', () => {
 
   step('a member sees no bonus tab, no bonus card, and gets 403 from the API', async () => {
     // Members have no Settings at all (CD-523): the bonus rules' URL goes home.
-    await member.goto(BASE_URL + '/settings/bonuses', { waitUntil: 'networkidle0' });
+    await member.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => !location.pathname.startsWith('/settings'));
     assert.equal(await member.$('input[aria-label="Rate for Sara Seller"]'), null);
 
