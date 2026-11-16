@@ -1349,7 +1349,8 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-blob { position: absolute; border-radius: 999px; filter: blur(70px); pointer-events: none; }
 .gs-glass { background: var(--gs-glass); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: 1px solid var(--gs-glass-line); box-shadow: var(--gs-glass-shadow); }
 /* The sidebar: back to the modules, the six pages (an Off pill when the module is off), your account. */
-.gs-side { position: sticky; top: 12px; z-index: 2; flex: 0 0 248px; box-sizing: border-box; margin: 12px 0 12px 12px; min-height: calc(100vh - 24px); border-radius: 22px; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+/* The sidebar stays put; only the page scrolls. */
+.gs-side { position: fixed; top: 12px; left: 12px; bottom: 12px; z-index: 30; width: 248px; overflow-y: auto; box-sizing: border-box; border-radius: 22px; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
 .gs-home { position: relative; flex: none; width: 32px; height: 32px; margin: 6px 8px 10px; border-radius: 9px; background: var(--gs-green-dark); display: flex; align-items: center; justify-content: center; color: var(--white); transition: background 0.2s ease, transform 0.1s ease-out; }
 .gs .gs-home, .gs .gs-home:hover { color: var(--white); }
 .gs-home:hover, .gs-home:focus-visible { background: var(--gs-green); }
@@ -1371,7 +1372,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-face { flex: none; width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; background: var(--gs-ink); color: var(--white); }
 .gs-face.soft { background: var(--gs-green-soft); color: var(--gs-green); }
 /* The main column: the glass top bar with the title, then the page. */
-.gs-main { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 18px; }
+.gs-main { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; margin-left: 272px; box-sizing: border-box; padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 18px; }
 .gs-topbar { position: sticky; top: 12px; z-index: 20; display: flex; align-items: center; gap: 10px; margin: -14px -14px 0; padding: 8px 10px 8px 18px; border-radius: 999px; }
 .gs-topbar h1 { margin: 0 12px 0 0; font-family: var(--gs-font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
 .gs-topbar .header-center { flex: 0 1 420px; min-width: 0; }
@@ -1591,7 +1592,8 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 /* Below 1280 px the column shrinks; below 900 px the sidebar is a row of pills above the content. */
 @media (max-width: 899px) {
   .gs { flex-direction: column; align-items: stretch; }
-  .gs-side { position: static; flex: none; min-height: 0; margin: 12px 12px 0; flex-direction: row; align-items: center; overflow-x: auto; scrollbar-width: none; border-radius: 999px; padding: 6px; gap: 4px; }
+  .gs-main { margin-left: 0; }
+  .gs-side { position: static; width: auto; flex: none; min-height: 0; margin: 12px 12px 0; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-radius: 999px; padding: 6px; gap: 4px; }
   .gs-side::-webkit-scrollbar { display: none; }
   .gs-home { margin: 0 4px 0 0; }
   .gs-nav { flex-direction: row; gap: 4px; }
