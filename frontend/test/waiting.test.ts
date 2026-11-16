@@ -37,14 +37,15 @@ const src = {
 };
 
 describe('Waiting for you (CD-288)', () => {
-  it('lists what needs this person, oldest first, with where to act on it', () => {
+  it('lists what needs this person, late items first, then the newest, with where to act on it', () => {
     assert.deepEqual(
       waitingItems(src).map((w) => [w.module, w.text, w.meta, w.action, w.to]),
       [
-        ['timesheet', 'Jelena Savić submitted week 45, 40 hours', 'Timesheet · Yesterday', 'Review', '/approvals/e1?week=2026-11-02'],
-        ['crm', 'Send the offer, NIS', 'CRM · 4 days late', 'Open', '/deals/d1'],
-        ['projects', 'Measure the room, Alpha fit-out', 'Projects · 3 days late', 'Open', '/tasks/t1'],
-        ['timeoff', 'Nikola Kostić asks for 3 days off, 26 to 28 November', 'Time off · Yesterday', 'Review', '/timeoff?tab=approvals'],
+        // Late first, then the newest first.
+        ['projects', 'Measure the room, Alpha fit-out', 'Projects, 3 days late', 'Open', '/tasks/t1'],
+        ['crm', 'Send the offer, NIS', 'CRM, 4 days late', 'Open', '/deals/d1'],
+        ['timeoff', 'Nikola Kostić asks for 3 days off, 26 to 28 November', 'Time off, Yesterday', 'Review', '/timeoff?tab=approvals'],
+        ['timesheet', 'Jelena Savić submitted week 45, 40 hours', 'Timesheet, Yesterday', 'Review', '/approvals/e1?week=2026-11-02'],
       ],
     );
   });

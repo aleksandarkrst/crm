@@ -12,11 +12,13 @@ export interface WaitingItem {
   key: string;
   module: WaitingModule;
   text: string;
-  /** "Timesheet · Week 41", "CRM · 3 days late". */
+  /** The module and when, separated by a comma: "Timesheet, Friday", "CRM, 3 days late". */
   meta: string;
   action: 'Open' | 'Review';
   to: string;
-  /** For the order: the oldest first. */
+  /** Past its due date: these come first. */
+  late: boolean;
+  /** The day the meta line names; for the order. */
   date: string;
 }
 
@@ -72,8 +74,8 @@ export interface WaitingSources {
 }
 
 /**
- * "Waiting for you" (CD-288): what needs this person across the modules they can open, oldest
- * first. Overdue opportunity tasks (CRM) and project tasks (Projects) that are theirs; the weeks
+ * "Waiting for you" (CD-288): what needs this person across the modules they can open, late
+ * items first, then the newest. Overdue opportunity tasks (CRM) and project tasks (Projects) that are theirs; the weeks
  * they approve with days waiting (Timesheet); the time off requests waiting for their decision
  * (Time off). A module that is off or not theirs adds nothing.
  */
@@ -81,23 +83,24 @@ export function waitingItems(src: WaitingSources): WaitingItem[] {
   const out: WaitingItem[] = [];
   if (src.open.has('crm'))
     for (const t of src.crmTasks)
-      out.push({ key: 'crm:' + t.id, module: 'crm', text: t.leadName ? `${t.title}, ${t.leadName}` : t.title, meta: `CRM · ${lateLabel(t.due, src.today)}`, action: 'Open', to: paths.lead(t.leadId), date: t.due });
+      out.push({ key: 'crm:' + t.id, module: 'crm', text: t.leadName ? `${t.title}, ${t.leadName}` : t.title, meta: `CRM, ${lateLabel(t.due, src.today)}`, action: 'Open', to: paths.lead(t.leadId), late: true, date: t.due });
   if (src.open.has('projects'))
     for (const t of src.projectTasks ?? [])
       if (t.dueDate && t.dueDate < src.today && t.status !== 'done')
-        out.push({ key: 'task:' + t.id, module: 'projects', text: `${t.name}, ${t.projectName}`, meta: `Projects · ${lateLabel(t.dueDate, src.today)}`, action: 'Open', to: paths.task(t.id), date: t.dueDate });
+        out.push({ key: 'task:' + t.id, module: 'projects', text: `${t.name}, ${t.projectName}`, meta: `Projects, ${lateLabel(t.dueDate, src.today)}`, action: 'Open', to: paths.task(t.id), late: true, date: t.dueDate });
   if (src.open.has('timesheet'))
     for (const w of src.timesheets ?? [])
       for (const r of w.rows) {
         if (r.waiting === 0 || !r.approvable) continue;
         const what = w.approvalMode === 'week' ? `week ${w.weekNumber}` : `${r.waiting} ${r.waiting === 1 ? 'day' : 'days'} of week ${w.weekNumber}`;
-        out.push({ key: `ts:${r.employee.id}:${w.weekStart}`, module: 'timesheet', text: `${r.employee.name} submitted ${what}, ${hours(r.enteredMinutes)}`, meta: `Timesheet · ${whenLabel(w.deadline.date, src.today)}`, action: 'Review', to: paths.approval(r.employee.id, w.weekStart), date: w.weekStart });
+        out.push({ key: `ts:${r.employee.id}:${w.weekStart}`, module: 'timesheet', text: `${r.employee.name} submitted ${what}, ${hours(r.enteredMinutes)}`, meta: `Timesheet, ${whenLabel(w.deadline.date, src.today)}`, action: 'Review', to: paths.approval(r.employee.id, w.weekStart), late: false, date: w.deadline.date });
       }
   if (src.open.has('timeoff'))
     for (const r of src.timeOff ?? []) {
       const days = r.workingDays === 1 ? '1 day' : `${r.workingDays} days`;
       const submitted = r.submittedAt.slice(0, 10);
-      out.push({ key: 'to:' + r.id, module: 'timeoff', text: `${r.employee.fullName} asks for ${days} off, ${periodLabel(r.startDate, r.endDate)}`, meta: `Time off · ${whenLabel(submitted, src.today)}`, action: 'Review', to: paths.timeOff({ tab: 'approvals' }), date: submitted });
+      out.push({ key: 'to:' + r.id, module: 'timeoff', text: `${r.employee.fullName} asks for ${days} off, ${periodLabel(r.startDate, r.endDate)}`, meta: `Time off, ${whenLabel(submitted, src.today)}`, action: 'Review', to: paths.timeOff({ tab: 'approvals' }), late: false, date: submitted });
     }
-  return out.sort((a, b) => a.date.localeCompare(b.date) || a.key.localeCompare(b.key));
+  // Late items first, then by date, the newest first (CD-288 spec).
+  return out.sort((a, b) => Number(b.late) - Number(a.late) || b.date.localeCompare(a.date) || a.key.localeCompare(b.key));
 }

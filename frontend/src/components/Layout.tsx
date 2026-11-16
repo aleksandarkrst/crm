@@ -1,5 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { overdueTasks } from '../store/selectors';
@@ -16,7 +16,7 @@ import { ICONS } from './commands';
 import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
-/** Home (CD-288): on desktop the Pultly mark opens it; on phones, where the mark isn't shown, it is first under "More". */
+/** Home (CD-288): the rail's first item in every module (and the Pultly mark); on phones, first under "More". */
 const HOME: NavDef = { to: paths.home, label: 'Home', icon: ICONS.home };
 
 const SETTINGS = {
@@ -104,7 +104,7 @@ function Sidebar() {
   const pendingApprovals = usePendingApprovals(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam);
   const module = currentModule(pathname, session.userId);
   const terms = useTerms();
-  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam, terms);
+  const items = [HOME, ...navFor(module, session.tenant.role, s.visitScope.seesTeam, terms)];
   // Settings and the profile keep the module you came from.
   const own = routeModule(pathname);
   useEffect(() => {
@@ -165,7 +165,7 @@ function Sidebar() {
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : 'of your tasks overdue'} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
         ))}
         {fit < items.length && <SideMore items={items.slice(fit)} />}
-        <MoreMenu name={name} items={[HOME, ...items.filter((n) => !n.phone)]} onModules={() => setSwitcher(true)} />
+        <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />
       </nav>
       {/* Workspace settings: owners and admins only; members don't see it (CD-523). */}
       {canEditWorkspace && (
@@ -269,6 +269,7 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
   const active = more.some((n) => onPage(pathname, n.to));
   const fg = active || open ? '#F5F7F6' : '#93A39B';
   const others = session.tenants.filter((t) => t.id !== session.tenant.id);
+  const navigate = useNavigate();
   return (
     <>
       <button type="button" className="nav-more" aria-expanded={open} aria-label="More" data-testid="nav-more" onClick={() => setOpen(!open)} style={{ color: fg }}>
@@ -307,7 +308,11 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
             <div className="menu-divider" />
             <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
             {others.map((t) => (
-              <button key={t.id} type="button" className="menu-item" role="menuitem" onClick={() => session.switchTenant(t.id)}>
+              <button key={t.id} type="button" className="menu-item" role="menuitem" onClick={() => {
+                  // Every workspace switch lands on Home (CD-288).
+                  navigate(paths.home);
+                  session.switchTenant(t.id);
+                }}>
                 <span className="menu-item-title">Switch to {t.name}</span>
               </button>
             ))}
@@ -320,8 +325,6 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
 
 export function Layout() {
   const { s, set } = useStore();
-  // Home has no sidebar (CD-288, as in its design): its tiles are the way into the modules.
-  const home = useLocation().pathname === paths.home;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -335,8 +338,9 @@ export function Layout() {
   }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
-      {!home && <Sidebar />}
-      <main className={'app-main' + (home ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Every page has the rail, Home too (CD-288 spec: Home is its first item). */}
+      <Sidebar />
+      <main className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <GettingStarted />
         <Outlet />
       </main>
