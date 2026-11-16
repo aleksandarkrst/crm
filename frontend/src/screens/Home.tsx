@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HeaderRight, usePopover } from '../components/HeaderTools';
 import { Icon } from '../components/icons';
@@ -186,6 +186,18 @@ function WorkspaceSwitcher() {
     pop.setOpen(false);
     if (t.id !== session.tenant.id) session.switchTenant(t.id);
   };
+  // Opening focuses the current workspace; arrow keys, Home and End move between the rows.
+  useEffect(() => {
+    if (pop.open) pop.ref.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  }, [pop.open, pop.ref]);
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const rows = Array.from(pop.ref.current?.querySelectorAll<HTMLElement>('[role=menuitemradio]') ?? []);
+    const at = rows.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : (at + (e.key === 'ArrowUp' ? -1 : 1) + rows.length) % rows.length;
+    rows[next]?.focus();
+  };
   return (
     <div ref={pop.ref} className="home-ws">
       <button type="button" className="home-ws-btn" aria-haspopup="menu" aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)} data-testid="home-workspace">
@@ -196,7 +208,7 @@ function WorkspaceSwitcher() {
         </svg>
       </button>
       {pop.open && (
-        <div className="home-menu" role="menu" aria-label="Workspaces">
+        <div className="home-menu" role="menu" aria-label="Workspaces" onKeyDown={onKeyDown}>
           <div className="home-menu-head">Workspaces</div>
           {tenants.map((t) => (
             <button key={t.id} type="button" role="menuitemradio" aria-checked={t.id === session.tenant.id} className="home-menu-row" onClick={() => pick(t)}>

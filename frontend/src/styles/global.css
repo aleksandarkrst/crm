@@ -65,6 +65,31 @@
   /* Lifts a coloured app icon off its tile (design "Home, all modules"). */
   --shadow-icon: 0 6px 16px rgba(13, 36, 28, 0.12);
 
+  /*
+   * The redesign's glass look (CD-524 spec, section 4), used by Home (CD-288). Same names and values
+   * as the Workspace settings rebuild (CD-524), so the two pages are one product.
+   */
+  --gs-ink: #1D1D1F;
+  --gs-text-2: #6E6E73;
+  --gs-muted: #8E8E93;
+  --gs-divider: rgba(60, 60, 67, 0.08);
+  --gs-chip: rgba(120, 120, 128, 0.12);
+  --gs-chip-2: rgba(120, 120, 128, 0.22);
+  --gs-bg: #EEF2F0;
+  --gs-glass: rgba(255, 255, 255, 0.58);
+  --gs-glass-strong: rgba(255, 255, 255, 0.92);
+  --gs-glass-line: rgba(255, 255, 255, 0.75);
+  --gs-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(13, 36, 28, 0.07);
+  --gs-pop-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 16px 40px rgba(13, 36, 28, 0.16);
+  --gs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --gs-blob-2: #A9D8C3;
+  --gs-blob-3: #B9CFF5;
+  --gs-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter, 'Segoe UI', system-ui, sans-serif;
+  --gs-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', system-ui, sans-serif;
+  /* A module tile under the pointer on Home (CD-288 spec: white .7 with a soft shadow). */
+  --gs-tile-hover: rgba(255, 255, 255, 0.7);
+  --gs-tile-hover-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(13, 36, 28, 0.08);
+
   /* Onest for the interface, Unbounded for brand voice: titles and big figures. */
   --font: 'Onest', system-ui, sans-serif;
   --font-display: 'Unbounded', 'Onest', system-ui, sans-serif;
@@ -335,7 +360,7 @@ html.modal-open { overflow: hidden; }
 
 @media (max-width: 700px) {
   .app-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  /* Home has no bottom bar (CD-288). */
+  /* A page without the bottom bar (set by Layout when a page has none). */
   .app-main.app-main-full { padding-bottom: env(safe-area-inset-bottom); }
 
   /* The sidebar becomes a bottom bar: the module's everyday screens and "More". */

@@ -164,11 +164,6 @@ export function moduleMatches(m: ModuleDef, query: string): boolean {
   return !q || `${m.name} ${m.description} ${m.keywords ?? ''}`.toLowerCase().includes(q);
 }
 
-/** The first module this person can open in a workspace with these modules (switching workspaces, CD-279). */
-export function firstOpenModule(role: string, modules?: readonly string[]): ModuleDef | undefined {
-  return MODULES.find((m) => !m.settings && !lockReason(m, role, modules));
-}
-
 /** The module the screen at `pathname` belongs to (none for settings and the profile). */
 export function routeModule(pathname: string): ModuleDef | undefined {
   return MODULES.find((m) => m.screens.some((s) => pathname === s || pathname.startsWith(s + '/')));
