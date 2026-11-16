@@ -578,7 +578,15 @@ export function Tags({
             }}
           />
         ) : (
-          <button type="button" className="gs-tag-add" onClick={() => setAdding(true)}>
+          <button
+            type="button"
+            className="gs-tag-add"
+            onClick={() => {
+              // A cancel whose blur never came (the input just went away) must not drop this one.
+              cancelled.current = false;
+              setAdding(true);
+            }}
+          >
             + {addLabel}
           </button>
         ))}
