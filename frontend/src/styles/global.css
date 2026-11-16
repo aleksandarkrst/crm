@@ -1367,10 +1367,6 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-nav-row .ic { display: flex; width: 20px; justify-content: center; color: var(--gs-green); }
 .gs-nav-row .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gs-off-pill { flex: none; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(120, 120, 128, 0.14); color: var(--gs-text-2); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
-.gs-account { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 10px 2px; border-top: 1px solid var(--gs-divider); }
-.gs .gs-account { color: var(--gs-ink); }
-.gs-account b { display: block; font-size: 13px; font-weight: 600; }
-.gs-account span span { display: block; font-size: 12px; color: var(--gs-text-2); }
 .gs-face { flex: none; width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; background: var(--gs-ink); color: var(--white); }
 .gs-face.soft { background: var(--gs-green-soft); color: var(--gs-green); }
 /* The main column: the glass top bar with the title, then the page. */
@@ -1615,7 +1611,6 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
   .gs-nav { flex-direction: row; gap: 4px; }
   .gs-nav-row { width: auto; flex: none; border-radius: 999px; padding: 0 12px; }
   .gs-nav-row .label { overflow: visible; }
-  .gs-account { display: none; }
   .gs-main { padding: 20px 12px 32px; }
   .gs-topbar { position: static; margin: 0; display: flex; flex-wrap: wrap; border-radius: 22px; }
   .gs-topbar .header-right { margin-left: auto; }

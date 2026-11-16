@@ -5,7 +5,6 @@ import { Icon, type IconName } from '../components/icons';
 import { Logo } from '../components/Logo';
 import { MODULES, WORKSPACE_MODULES, enabledModules, type WorkspaceModule } from '../components/modules';
 import { paths } from '../lib/paths';
-import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { CrmPage } from './settings/CrmPage';
 import { EmployeesPage } from './settings/EmployeesPage';
@@ -85,7 +84,7 @@ export function useModuleSwitch() {
 export function Settings() {
   const { tab = 'general' } = useParams();
   const navigate = useNavigate();
-  const { s, session, canEditWorkspace, settingsToasts } = useStore();
+  const { s, canEditWorkspace, settingsToasts } = useStore();
   const [params] = useSearchParams();
   const modules = enabledModules(s.workspace.modules);
   const sw = useModuleSwitch();
@@ -144,13 +143,6 @@ export function Settings() {
             );
           })}
         </nav>
-        <Link className="gs-account" to={paths.profile}>
-          <span className="gs-face">{initialsOf(s.profile.name || session.userName)}</span>
-          <span>
-            <b>{s.profile.name || session.userName}</b>
-            <span>Your account settings</span>
-          </span>
-        </Link>
       </aside>
       <div className="gs-main">
         <header className="gs-topbar gs-glass">
