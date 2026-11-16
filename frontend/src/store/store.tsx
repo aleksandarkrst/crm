@@ -266,6 +266,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const placeholderRef = useRef<Promise<PlaceholderReference> | null>(null);
   /** Debounced writes that haven't been sent yet, by field key (see saveLater). */
   const saveTimers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>());
+  /** While Workspace settings is open, every save shows a toast (CD-524); see `settingsToasts()`. */
+  const settingsToasts = useRef(false);
   /** Writes sent but not answered yet; `writeSeq` counts every write started. */
   const inFlight = useRef(0);
   const writeSeq = useRef(0);
@@ -390,7 +392,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * Runs an API write, then `then` on success. On failure it names what wasn't saved and why,
      * and reloads (after the other pending edits are saved) so the screen matches the database.
      */
-    const save = async (write: () => Promise<unknown>, then?: () => unknown, what = 'your change') => {
+    const save = async (write: () => Promise<unknown>, then?: () => unknown, what = 'your change', saved?: string) => {
       inFlight.current++;
       writeSeq.current++;
       let failed: unknown = null;
@@ -403,7 +405,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         notifyIfIdle();
       }
       if (failed) {
-        flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
+        // Workspace settings say it the design's way (CD-524); the reload restores the saved value.
+        if (settingsToasts.current) flash('Could not save. Try again.');
+        else flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
         await reload();
         return;
       }
@@ -411,14 +415,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         await then?.();
       } catch (err) {
         flash('Saved, but could not refresh: ' + errText(err));
+        return;
       }
+      // In Workspace settings every save says so (CD-524): a specific text, or "Changes saved".
+      if (settingsToasts.current) flash(saved ?? 'Changes saved');
     };
     /** Coalesces typing into one write per field (inputs call their action on every keystroke). */
-    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown) => {
+    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown, saved?: string) => {
       clearTimeout(saveTimers.current.get(key)?.timer);
       const run = () => {
         saveTimers.current.delete(key);
-        void save(write, after, what);
+        void save(write, after, what, saved);
       };
       saveTimers.current.set(key, { timer: setTimeout(run, 600), run });
     };
@@ -2030,7 +2037,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        * Edits workspace settings and saves them (one write per field after a pause); each save says
        * "Saved" in a toast (CD-524), a refusal says why. The bonus trigger is browser-only.
        */
-      setWorkspace: (patch: Partial<Workspace>) => {
+      setWorkspace: (patch: Partial<Workspace>, saved?: string) => {
         set((x) => ({ workspace: { ...x.workspace, ...patch } }));
         for (const [k, v] of Object.entries(patch)) {
           const field = WORKSPACE_FIELDS[k as keyof Workspace];
@@ -2044,9 +2051,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
               if (field === 'name') session.renameTenant(ws.name);
             },
             undefined,
-            () => flash('Saved'),
+            undefined,
+            saved,
           );
         }
+      },
+      /** Workspace settings turns its save toasts on while it is open (CD-524). */
+      settingsToasts: (on: boolean) => {
+        settingsToasts.current = on;
       },
       /**
        * Renames projects and tasks (CD-143, owners and admins): all four names at once. Returns the

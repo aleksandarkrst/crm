@@ -320,8 +320,12 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
 
 export function Layout() {
   const { s, set } = useStore();
+  const { pathname } = useLocation();
   // Home has no sidebar (CD-288, as in its design): its tiles are the way into the modules.
-  const home = useLocation().pathname === paths.home;
+  const home = pathname === paths.home;
+  // Workspace settings is an area of its own with its own sidebar (CD-524, design G-Settings).
+  const settings = pathname.startsWith('/settings/');
+  const full = home || settings;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -335,14 +339,23 @@ export function Layout() {
   }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
-      {!home && <Sidebar />}
-      <main className={'app-main' + (home ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <GettingStarted />
+      {!full && <Sidebar />}
+      <main className={'app-main' + (full ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {!settings && <GettingStarted />}
         <Outlet />
       </main>
       <Modals />
       {s.paletteOpen && <CommandPalette />}
-      {s.toast && <div className="toast">{s.toast}</div>}
+      {s.toast &&
+        (settings ? (
+          // Settings' toast is the design's dark pill with a green check (CD-524).
+          <div className="toast toast-glass" role="status">
+            <Icon name="check" size={14} />
+            {s.toast}
+          </div>
+        ) : (
+          <div className="toast">{s.toast}</div>
+        ))}
       <ConfirmHost />
     </div>
   );
