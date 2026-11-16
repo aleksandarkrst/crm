@@ -360,7 +360,7 @@ html.modal-open { overflow: hidden; }
 
 @media (max-width: 700px) {
   .app-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  /* A page without the bottom bar (set by Layout when a page has none). */
+  /* Home has no bottom bar (CD-288). */
   .app-main.app-main-full { padding-bottom: env(safe-area-inset-bottom); }
 
   /* The sidebar becomes a bottom bar: the module's everyday screens and "More". */

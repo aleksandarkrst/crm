@@ -117,10 +117,6 @@
 @media (max-width: 900px) {
   .home-ws-name { max-width: 140px; }
 }
-@media (max-width: 700px) {
-  /* The page colour runs under the phone's bottom bar (.app-main keeps 64px free for it). */
-  .home-page { margin-bottom: calc(-64px - env(safe-area-inset-bottom)); padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-}
 @media (max-width: 600px) {
   .home-bar { margin: 10px 12px 0; top: 10px; gap: 8px; }
   .home-brand-name { display: none; }

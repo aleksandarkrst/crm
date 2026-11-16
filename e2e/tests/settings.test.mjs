@@ -139,8 +139,8 @@ describe('settings and discovery fields', () => {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=home-modules]');
     assert.equal(new URL(page.url()).pathname, '/');
-    // The rail stays on Home, with Home as its first item, marked (CD-288 spec).
-    assert.equal(await page.$eval('.app-sidebar nav .nav-item', (el) => [el.getAttribute('href'), el.classList.contains('active')].join(' ')), '/ true');
+    // Home has no sidebar, as in its design (CD-288).
+    assert.equal(await page.$('.app-sidebar'), null, 'Home has no sidebar');
     assert.match(await page.$eval('[data-testid=home-waiting]', (el) => el.innerText), /Waiting for you[\s\S]*From all your modules/);
     // "Find a module" finds by keyword, says when nothing matches, and Escape clears it.
     await page.type('[data-testid=home-search]', 'hours');

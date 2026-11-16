@@ -2650,9 +2650,10 @@ project tasks (`GET /tasks?assigneeId=me`), the weeks with days waiting that the
 (`GET /timesheet/approvals` for the Approvals week and the one before; managers, Admins and the
 owner), and the time off requests waiting for their decision (`GET /timeoff/approvals`). Each row:
 the module's icon, what it is, the module and when ("Timesheet, Friday"), and Open or Review to where it is acted on.
-Nothing: "Nothing is waiting for you." The rail stays on Home: **Home is the rail's first item in
-every module** (`HOME` in `Layout.tsx`), and the Pultly mark opens it too; on phones Home is first
-under "More"; ⌘K has "Home" too.
+Nothing: "Nothing is waiting for you." Home itself has no sidebar (nor the phone bar), as in its
+design: its tiles are the way in. Everywhere else **Home is the rail's first item in every module**
+(`HOME` in `Layout.tsx`), and the Pultly mark opens it too; on phones Home is first under "More";
+⌘K has "Home" too.
 
 ### Modules as separate apps (CD-223)
 

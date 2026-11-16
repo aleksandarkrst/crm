@@ -48,6 +48,9 @@ describe('module and workspace switcher', () => {
     }));
   const inModule = (id) => page.waitForFunction((id) => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === id, {}, id);
   const closed = () => page.waitForFunction((sel) => !document.querySelector(sel), {}, POP);
+  /** In this workspace: the sidebar's switcher says so, or Home's workspace switcher (Home has no sidebar, CD-288). */
+  const inWorkspace = (name) =>
+    page.waitForFunction((name) => (document.querySelector('[data-testid=module-switcher]')?.title ?? document.querySelector('[data-testid=home-workspace]')?.textContent ?? '').includes(name), {}, name);
   const focused = () => page.evaluate(() => document.activeElement?.getAttribute('data-module') ?? document.activeElement?.getAttribute('data-testid'));
   const ctrlJ = async () => {
     await page.keyboard.down('Control');
@@ -237,7 +240,7 @@ describe('module and workspace switcher', () => {
     await page.waitForSelector(`${POP} [data-module]`);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, firstWorkspace);
+    await inWorkspace(firstWorkspace);
   });
 
   /** Sets a workspace's modules through the API, as its owner (whichever workspace is open). */
@@ -261,13 +264,14 @@ describe('module and workspace switcher', () => {
     await click(page, LOGO);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${secondWorkspace}"]`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, secondWorkspace);
+    await inWorkspace(secondWorkspace);
     await page.waitForSelector('[data-testid=home-modules]');
     assert.equal(new URL(page.url()).pathname, '/');
     assert.deepEqual(await page.$$eval('[data-testid=home-modules] [data-module]', (els) => els.map((el) => el.dataset.module)), ['crm', 'settings']);
   });
 
   step('modules turned off show "Not in this workspace"; Settings → Modules turns them on (CD-318)', async () => {
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, LOGO);
     const rows = await modules();
     assert.deepEqual(
@@ -293,7 +297,7 @@ describe('module and workspace switcher', () => {
     await click(page, LOGO);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, firstWorkspace);
+    await inWorkspace(firstWorkspace);
     await page.waitForSelector('[data-testid=home-empty]');
     assert.equal(new URL(page.url()).pathname, '/');
     assert.match(await page.$eval('[data-testid=home-empty]', (el) => el.textContent), /No modules are on yet\.Turn on modules/);
