@@ -1218,33 +1218,34 @@ the store is the one place that talks to the backend.
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
   view, which shows fields that are still empty as bracketed gaps.
 
-**The Settings page** (CD-280, `screens/Settings.tsx`): a 200 px left nav grouped by module, the
-section on the right (title, one-line description, the section's action button). Each section has
-its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Company
-details, Modules, Roles & permissions), **CRM** (Funnels, Document templates, Custom fields, Sales
-bonuses), **Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employee
-record, Organization levels), **Timesheet** (Submission and approval) and
-**Time off** (Vacation, Leave and absence, Holidays; CD-153 / CD-163 / CD-318; one Workforce group
-until CD-521). Since CD-524 the page follows the design G-Settings: the nav has the workspace at its
-head and an icon per section, and says when modules are off; a section is a column of blocks (a
-heading over a card of rows, a table or a list) built from `screens/settings/parts.tsx`, where a
-row is a setting with its label and hint on the left and its control on the right. A workspace
-setting that saves as you change it says "Saved" in a toast. The logo is a button: a pen shows on
-hover and a click picks the image. CD-524 split sections the design shows on their own:
-Company details (with the country) from General; Employee record and Organization levels from
-Employees. General holds the standard working day: hours per day and the working days, one letter
-per weekday (with Employees on; the day's start and end and the default weekly hours stay in the
-API but are not shown) and time entry: time format, max hours, time on a project without a task
-(with Timesheet on); Leave and absence (paid leave and other absence
-reasons, sick leave types) from Policies. "Create a project when an opportunity is won" moved to
-Project hierarchy. The routes kept their keys (`workspace`, `employees`, `approvals`, `timeoff`); the
-new ones are `company`, `org-levels` and `leave`. The design's Business
-trips, contract types, lost reasons and workspace deletion are not in the app and were not built.
-Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
-`/settings/team` redirects there, `?invite=1` included). The design also names Workforce → Cost
-rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
-can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it
-was opened from. Under 800 px the nav wraps above the content.
+**The Settings page** (CD-280; rebuilt in CD-524 to its spec and the design G-Settings,
+`screens/Settings.tsx` and `screens/settings/`) is an area of its own in the design's glass
+style: no module sidebar, its own sidebar (back to the modules, the pages, your account) and a glass
+top bar with the page title, search and your menu. The styles are the `gs-*` rules in
+`global.css`, scoped under `.gs` with their own tokens so the rest of the app keeps its look; the
+components (setting rows, summary rows with a modal, switch, segmented control, dropdown, inputs
+that save on blur, tables with a ⋯ menu, tags with an add button, modal, confirm dialog with
+"Move them to" pills, side drawer) are in `screens/settings/parts.tsx`. Six pages, each one long
+page of sections (`/settings/<page>`): **General** (Workspace, Company details, Modules), **CRM**
+(Funnels, Document templates, Sales bonuses), **Projects** (Project hierarchy, Project types,
+Technicians), **Employees** (Employee record, Working time, Organization levels), **Timesheet** (Time
+entry, Submission and approval) and **Time off** (Vacation, Leave and absence, Holidays). A module
+page starts with the module's switch (the same setting as Modules on General; turning one off asks
+first); with the module off its page keeps its place in the sidebar with an "Off" pill, the switch
+card turns amber and the sections stay visible but disabled (`inert`). Funnels are edited in a side
+drawer whose stages open in place; project types, vacation policies, names, signing, the working
+day and the timesheet deadline are edited in modals. While Settings is open every save shows a
+toast ("Changes saved" or a specific text; "Could not save. Try again." when it fails; see
+`settingsToasts` in the store). The older section routes (`workspace`, `funnel`, `project-types`,
+`approvals`, `holidays`, …) redirect to their page. Commented out with the spec: Custom fields,
+Roles & permissions and Getting started (sample data). Settings the spec names that the app doesn't
+have were not built: lost reasons as a list, a default funnel and Duplicate, deleting the
+workspace, contract types, the next employee number, the org chart switch, the name of a unit's
+head, where employees may be placed, required notes, locking approved weeks, business trips, the
+vacation request rules and per-country tax ID rules. Members moved out to Employees → **Team**
+(`/team`, `screens/Team.tsx`, owners and admins; `/settings/team` redirects there, `?invite=1`
+included). Sales bonuses stay hidden from those who can't use them. Below 900 px the sidebar is a
+row of pills above the content.
 
 Settings has no Integrations or Billing tab: both were placeholders that saved nothing and were
 removed in CD-207 (`/settings/integrations` and `/settings/billing` go to Settings like any unknown
