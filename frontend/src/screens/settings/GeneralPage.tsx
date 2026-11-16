@@ -1,11 +1,11 @@
 import { Icon } from '../../components/icons';
-import { MODULES, WORKSPACE_MODULES, type WorkspaceModule } from '../../components/modules';
+import { MODULES, type WorkspaceModule } from '../../components/modules';
 import { CURRENCIES } from '../../store/seed';
 import { useStore } from '../../store/store';
 import type { Workspace } from '../../store/types';
 import { MODULE_TILE, moduleName, useModuleSwitch } from '../Settings';
 import { CompanyCard } from './CompanyCard';
-import { Block, Card, Dropdown, Row, Section, Segmented, Switch } from './parts';
+import { Card, Dropdown, Row, Section, Segmented, Switch } from './parts';
 import { TimeZonePicker } from './TimeZonePicker';
 import { LogoRow, NameRow } from './WorkspaceInfo';
 // import { RolesTab } from './RolesTab';
@@ -15,8 +15,11 @@ const LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'sr', label: 'Srpski' },
 ] as const;
-/** The design's two groups of modules: used every day, and a few times a year. */
-const DAILY: readonly WorkspaceModule[] = ['crm', 'projects', 'timesheet', 'timeoff', 'reporting'];
+/**
+ * The modules listed, in the sidebar's order. Planning, Finance and Reporting aren't built yet, so
+ * they aren't offered here (their switches come back with them): 'planning', 'finance', 'reporting'.
+ */
+const LISTED: readonly WorkspaceModule[] = ['crm', 'projects', 'employees', 'timesheet', 'timeoff'];
 
 /**
  * Workspace settings → General (CD-524 spec 2, design G-Settings): Workspace, Company details and
@@ -86,12 +89,9 @@ function ModulesSection() {
   };
   return (
     <Section title="Modules" desc="The modules this workspace uses. A module that is off is hidden from everyone; its data is kept." testId="workspace-modules">
-      <Block title="Daily work">
-        <Card>{WORKSPACE_MODULES.filter((m) => DAILY.includes(m)).map(row)}</Card>
-      </Block>
-      <Block title="Planning and management" desc="Used a few times a year.">
-        <Card>{WORKSPACE_MODULES.filter((m) => !DAILY.includes(m)).map(row)}</Card>
-      </Block>
+      <Card>{LISTED.map(row)}</Card>
+      {/* Not built yet, so not listed (CD-524 review):
+      <Card>{(['planning', 'finance', 'reporting'] as const).map(row)}</Card> */}
       {/* The spec's note says module access is set per person in HRM; the app has no per-person
           module access (only roles), so the note isn't shown. */}
       {sw.dialog}
