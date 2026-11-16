@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canManageTemplates, DOC_TYPES, type DocTemplate, type DocType, docMoment, fileSize, type PlaceholderReference, type ScanResult, templateFileProblem } from '../store/documents';
 import { useStore } from '../store/store';
 import { mergeFieldReference, opportunityCopy } from '../store/wording';
@@ -150,22 +150,26 @@ function TemplateModal({ editing, onClose }: { editing: DocTemplate | null; onCl
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [problem, setProblem] = useState('');
   const [busy, setBusy] = useState<'' | 'scan' | 'save'>('');
+  // Only the last chosen file's check counts: an earlier, slower one is ignored when it comes back.
+  const latest = useRef<File | null>(null);
 
   const pick = async (f: File | undefined) => {
     setScan(null);
     setProblem('');
     setFile(f ?? null);
+    latest.current = f ?? null;
     if (!f) return;
     const bad = templateFileProblem(f);
     if (bad) return setProblem(bad);
     if (!name.trim()) setName(f.name.replace(/\.docx$/i, ''));
     setBusy('scan');
     try {
-      setScan(await scanTemplate(f));
+      const result = await scanTemplate(f);
+      if (latest.current === f) setScan(result);
     } catch (err) {
-      setProblem((err as Error).message);
+      if (latest.current === f) setProblem((err as Error).message);
     } finally {
-      setBusy('');
+      if (latest.current === f) setBusy('');
     }
   };
   const save = async () => {
@@ -229,7 +233,7 @@ function TemplateModal({ editing, onClose }: { editing: DocTemplate | null; onCl
           {scan.placeholders.length === 0 ? (
             <span className="gs-sub">None. The document is copied as it is.</span>
           ) : (
-            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <span className="gs-found-list">
               {scan.placeholders.map((p) => (
                 <span key={p.tag} className={'gs-found' + (p.known ? '' : ' bad')}>
                   <code>{p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`}</code> {p.known ? opportunityCopy(p.label ?? '') : 'not recognised'}

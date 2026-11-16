@@ -299,8 +299,7 @@ function FunnelDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** One stage, open in place: its fields in two columns, its to-dos as tags, and the checks before moving on. */
-/** The default stages a funnel starts with when it copies none (the API's set). */
+/** The default stages a funnel starts with when it copies none: a copy of the API's BLANK_FUNNEL_STAGES (backend default-funnels.ts), shown as the preview. */
 const DEFAULT_STAGES = ['New opportunity', 'Discovery', 'Proposal', 'Won'];
 
 /**
@@ -382,6 +381,7 @@ function NewFunnelDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** One stage, open in place: its fields in two columns, its to-dos as tags, and the checks before moving on. */
 function StageEditor({ idx, stage: st, editable, defaultTarget, lowerThan, members }: { idx: number; stage: Stage; editable: boolean; defaultTarget: number | null; lowerThan: { name: string; prob: number } | null; members: [string, string][] }) {
   const store = useStore();
   const [pending, setPending] = useState<{ at: number; label: string } | null>(null);

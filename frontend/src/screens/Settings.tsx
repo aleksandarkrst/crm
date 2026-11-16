@@ -70,6 +70,7 @@ export function useModuleSwitch() {
       title={`Turn off ${moduleName(asking)}?`}
       text={`${moduleName(asking)} disappears for everyone in ${s.workspace.name}, and its settings are hidden. Its data is kept, and everything comes back when you turn it on again.`}
       confirmLabel={`Turn off ${moduleName(asking)}`}
+      icon="lock"
       onCancel={() => setAsking(null)}
       onConfirm={() => {
         apply(asking, false);

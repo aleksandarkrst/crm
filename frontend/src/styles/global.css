@@ -1325,7 +1325,9 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
  * Everything is scoped under `.gs` with its own tokens, so the rest of the app keeps its look.
  */
 .gs, .gs-tokens, .toast-glass {
-  --gs-check: #7FD8A8; --gs-toast-error: rgba(215, 0, 21, 0.92);
+  --gs-check: #7FD8A8; --gs-toast-error: rgba(215, 0, 21, 0.92); --gs-toast-error-shadow: 0 10px 30px rgba(215, 0, 21, 0.28);
+  --gs-danger-tint: rgba(215, 0, 21, 0.08); --gs-dash: rgba(0, 0, 0, 0.18); --gs-drop: rgba(255, 255, 255, 0.6); --gs-drop-hover: rgba(255, 255, 255, 0.9);
+  --gs-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --gs-green: #14503C; --gs-green-500: #2F7A5E; --gs-green-dark: #0D241C; --gs-green-soft: #E7F2EE;
   --gs-ink: #1D1D1F; --gs-text-2: #6E6E73; --gs-muted: #8E8E93; --gs-faint: #AEAEB2; --gs-ink-3: #3A3A3C;
   --gs-border: rgba(60, 60, 67, 0.16); --gs-outline: rgba(60, 60, 67, 0.14); --gs-divider: rgba(60, 60, 67, 0.08); --gs-divider-2: rgba(60, 60, 67, 0.06);
@@ -1421,7 +1423,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-btn.small { height: 28px; padding: 0 12px; }
 .gs-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
 .gs-x { width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--gs-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex: none; }
-.gs-x:hover:not(:disabled) { background: rgba(215, 0, 21, 0.08); color: var(--gs-danger); }
+.gs-x:hover:not(:disabled) { background: var(--gs-danger-tint); color: var(--gs-danger); }
 .gs-x.plain:hover:not(:disabled) { background: var(--gs-chip); color: var(--gs-ink); }
 .gs-x:disabled { opacity: 0.3; cursor: default; }
 /* Switch, 44 × 26. */
@@ -1493,7 +1495,7 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-badge.violet { background: var(--gs-violet-bg); color: var(--gs-violet); }
 .gs-badge.amber { background: var(--gs-amber-bg); color: var(--gs-amber); }
 .gs-badge.red { background: var(--gs-danger-soft); color: var(--gs-danger-dark); }
-.gs-code { white-space: nowrap; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; color: var(--gs-violet); background: var(--gs-violet-bg); padding: 2px 6px; border-radius: 6px; }
+.gs-code { white-space: nowrap; font-family: var(--gs-mono); font-size: 12.5px; color: var(--gs-violet); background: var(--gs-violet-bg); padding: 2px 6px; border-radius: 6px; }
 /* Tags with add: grey pills with a remove ×, then a dashed "+ Add" that turns into an input. */
 .gs-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gs-tag { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--gs-chip); font-size: 13px; }
@@ -1536,14 +1538,15 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-sheet .gs-card { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px var(--gs-divider); border-radius: 16px; overflow: visible; }
 .gs-sheet-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .gs-sheet-actions .grow { flex: 1; }
-.gs-drop { position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 16px; border: 1.5px dashed rgba(0, 0, 0, 0.18); background: rgba(255, 255, 255, 0.6); font-size: 14px; }
-.gs-drop:hover { background: rgba(255, 255, 255, 0.9); }
+.gs-drop { position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 16px; border: 1.5px dashed var(--gs-dash); background: var(--gs-drop); font-size: 14px; }
+.gs-drop:hover { background: var(--gs-drop-hover); }
 .gs-drop.ok { border-color: var(--gs-green); background: var(--gs-green-soft); }
 .gs-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .gs-drop:focus-within { outline: 2px solid var(--gs-green); outline-offset: 2px; }
+.gs-found-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .gs-found { font-size: 12.5px; border-radius: 8px; padding: 4px 8px; background: var(--gs-chip); color: var(--gs-ink-3); font-weight: 400; }
-.gs-found code { font-family: ui-monospace, monospace; color: var(--gs-ink); }
-.gs-found.bad { background: rgba(215, 0, 21, 0.08); color: var(--gs-danger-dark); }
+.gs-found code { font-family: var(--gs-mono); color: var(--gs-ink); }
+.gs-found.bad { background: var(--gs-danger-tint); color: var(--gs-danger-dark); }
 .gs-label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--gs-text-2); }
 .gs-danger-tile { width: 40px; height: 40px; border-radius: 12px; background: var(--gs-danger-soft); color: var(--gs-danger); display: flex; align-items: center; justify-content: center; }
 .gs-move { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1596,7 +1599,7 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .toast.toast-glass { z-index: 80; left: auto; right: 28px; bottom: 28px; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 11px 18px; border-radius: 999px; background: rgba(29, 29, 31, 0.84); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--white); font-size: 13.5px; font-weight: 500; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); animation: gsFade 0.2s ease-out both; }
 .toast.toast-glass svg { flex: none; color: var(--gs-check); }
 /* A failed save or a refusal: the same pill in red. */
-.toast.toast-glass.error { background: var(--gs-toast-error); box-shadow: 0 10px 30px rgba(215, 0, 21, 0.28); }
+.toast.toast-glass.error { background: var(--gs-toast-error); box-shadow: var(--gs-toast-error-shadow); }
 @media (prefers-reduced-motion: reduce) {
   .gs *, .gs-sheet, .gs-drawer, .gs-scrim, .gs-drawer-scrim, .gs-menu, .toast.toast-glass { transition: none !important; animation: none !important; }
 }

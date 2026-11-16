@@ -662,6 +662,7 @@ export function Confirm({
   onCancel,
   move,
   blocked,
+  icon = 'trash',
   testId,
 }: {
   title: string;
@@ -670,6 +671,8 @@ export function Confirm({
   onConfirm: () => void;
   onCancel: () => void;
   move?: { label: string; options: Opt[]; value: string; onPick: (v: string) => void };
+  /** The tile: a bin for deletes, a lock for switching something off (its data is kept). */
+  icon?: 'trash' | 'lock';
   /** The action can't run yet (the text says why): the red button is off. */
   blocked?: boolean;
   testId?: string;
@@ -681,7 +684,7 @@ export function Confirm({
       <div className="gs-dialog-wrap confirm">
         <div ref={box} className="gs-sheet gs-glass confirm" role="alertdialog" aria-modal="true" aria-label={title} data-testid={testId}>
           <span className="gs-danger-tile" aria-hidden="true">
-            <Icon name="trash" size={18} />
+            <Icon name={icon} size={18} />
           </span>
           <h2>{title}</h2>
           <p className="gs-sub" style={{ margin: 0 }}>
