@@ -1351,6 +1351,8 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 /* The sidebar: back to the modules, the six pages (an Off pill when the module is off), your account. */
 /* The sidebar stays put; only the page scrolls. */
 .gs-side { position: fixed; top: 12px; left: 12px; bottom: 12px; z-index: 30; width: 248px; overflow-y: auto; box-sizing: border-box; border-radius: 22px; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+.gs-side-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.gs-side-ws { min-width: 0; margin: -4px 8px 0 0; font-weight: 600; font-size: 14.5px; color: var(--gs-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gs-home { position: relative; flex: none; width: 32px; height: 32px; margin: 6px 8px 10px; border-radius: 9px; background: var(--gs-green-dark); display: flex; align-items: center; justify-content: center; color: var(--white); transition: background 0.2s ease, transform 0.1s ease-out; }
 .gs .gs-home, .gs .gs-home:hover { color: var(--white); }
 .gs-home:hover, .gs-home:focus-visible { background: var(--gs-green); }
@@ -1373,10 +1375,10 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-face.soft { background: var(--gs-green-soft); color: var(--gs-green); }
 /* The main column: the glass top bar with the title, then the page. */
 .gs-main { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; margin-left: 272px; box-sizing: border-box; padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 18px; }
-.gs-topbar { position: sticky; top: 12px; z-index: 20; display: flex; align-items: center; gap: 10px; margin: -14px -14px 0; padding: 8px 10px 8px 18px; border-radius: 999px; }
-.gs-topbar h1 { margin: 0 12px 0 0; font-family: var(--gs-font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
-.gs-topbar .header-center { flex: 0 1 420px; min-width: 0; }
-.gs-topbar .header-right { margin-left: auto; }
+.gs-topbar { position: sticky; top: 12px; z-index: 20; display: grid; grid-template-columns: 1fr minmax(0, 420px) 1fr; align-items: center; gap: 10px; margin: -14px -14px 0; padding: 8px 10px 8px 18px; border-radius: 999px; }
+.gs-topbar h1 { margin: 0; justify-self: start; font-family: var(--gs-font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+.gs-topbar .header-center { min-width: 0; }
+.gs-topbar .header-right { justify-self: end; }
 .gs-page { width: 100%; max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; padding: 2px 0 40px; }
 /* A section: its header (19 px title, one line, a primary button), then blocks; sections are divided by a line. */
 .gs-section { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
@@ -1480,6 +1482,7 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-table th:last-child, .gs-table td:last-child { padding-right: 18px; }
 .gs-table .num { text-align: right; white-space: nowrap; }
 .gs-table .center { text-align: center; }
+.gs-table td.center > .gs-field { display: inline-flex; vertical-align: middle; text-align: left; }
 .gs-table .end { text-align: right; white-space: nowrap; width: 1%; }
 .gs-table-empty { padding: 26px 16px; text-align: center; font-size: 13.5px; color: var(--gs-muted); border-top: 1px solid var(--gs-divider-2); }
 .gs-cell { display: flex; flex-direction: column; gap: 1px; line-height: 18px; min-width: 0; }
@@ -1516,8 +1519,8 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-pn { width: 22px; height: 22px; border-radius: 999px; background: var(--gs-green-soft); color: var(--gs-green); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .gs-par { color: var(--gs-faint); display: flex; }
 /* Working days: a toggle per day. */
-.gs-days { display: flex; gap: 4px; flex-wrap: wrap; }
-.gs-days button { width: 42px; height: 30px; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 12.5px; font-weight: 500; color: var(--gs-ink-3); cursor: pointer; transition: background 0.15s ease; }
+.gs-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.gs-days button { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 12.5px; font-weight: 500; color: var(--gs-ink-3); cursor: pointer; transition: background 0.15s ease; }
 .gs-days button.on { background: var(--gs-green); color: var(--white); }
 /* Checkbox buttons ("All to-dos done"). */
 .gs-check { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 8px; border: 0; border-radius: 10px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; font-size: 13.5px; color: var(--gs-ink); cursor: pointer; }
@@ -1527,14 +1530,24 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 /* Modals, the confirm dialog and the drawer: glass over a light scrim. */
 .gs-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: gsFade 0.2s ease-out; }
 .gs-dialog-wrap { position: fixed; inset: 0; z-index: 51; display: flex; align-items: flex-start; justify-content: center; padding: 80px 16px 16px; overflow-y: auto; pointer-events: none; }
-.gs-sheet { pointer-events: auto; width: 480px; max-width: 100%; box-sizing: border-box; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: rgba(255, 255, 255, 0.82); animation: gsRise 0.26s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
+.gs-sheet { pointer-events: auto; position: relative; width: 480px; max-width: 100%; box-sizing: border-box; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: rgba(255, 255, 255, 0.82); animation: gsRise 0.26s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
 .gs-sheet.wide { width: 600px; }
 .gs-sheet.confirm { width: 440px; }
 .gs-sheet h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.gs-sheet > h2 { padding-right: 36px; }
+.gs-sheet-x { position: absolute; top: 18px; right: 18px; }
 .gs-sheet .gs-sub { font-size: 14px; line-height: 20px; }
 .gs-sheet .gs-card { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px var(--gs-divider); border-radius: 16px; overflow: visible; }
 .gs-sheet-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .gs-sheet-actions .grow { flex: 1; }
+.gs-drop { position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 16px; border: 1.5px dashed rgba(0, 0, 0, 0.18); background: rgba(255, 255, 255, 0.6); font-size: 14px; }
+.gs-drop:hover { background: rgba(255, 255, 255, 0.9); }
+.gs-drop.ok { border-color: var(--gs-green); background: var(--gs-green-soft); }
+.gs-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gs-drop:focus-within { outline: 2px solid var(--gs-green); outline-offset: 2px; }
+.gs-found { font-size: 12.5px; border-radius: 8px; padding: 4px 8px; background: var(--gs-chip); color: var(--gs-ink-3); font-weight: 400; }
+.gs-found code { font-family: ui-monospace, monospace; color: var(--gs-ink); }
+.gs-found.bad { background: rgba(215, 0, 21, 0.08); color: var(--gs-danger-dark); }
 .gs-label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--gs-text-2); }
 .gs-danger-tile { width: 40px; height: 40px; border-radius: 12px; background: var(--gs-danger-soft); color: var(--gs-danger); display: flex; align-items: center; justify-content: center; }
 .gs-move { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1554,7 +1567,7 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-drawer-title:hover, .gs-drawer-title:focus, .gs-drawer-line:hover, .gs-drawer-line:focus { background: rgba(120, 120, 128, 0.1); outline: none; }
 .gs-drawer-title[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px var(--gs-danger); background: var(--gs-danger-field); }
 .gs-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px 28px; display: flex; flex-direction: column; gap: 24px; }
-.gs-drawer-foot { display: flex; justify-content: flex-end; padding: 12px 22px; border-top: 1px solid var(--gs-divider); }
+.gs-drawer-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--gs-divider); }
 /* Funnel stages in the drawer: one row each, the open one expands in place. */
 .gs-stages { padding: 6px; }
 .gs-stage { border-radius: 14px; margin: 0 0 2px; }
@@ -1598,12 +1611,14 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
   .gs-side { position: static; width: auto; flex: none; min-height: 0; margin: 12px 12px 0; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-radius: 999px; padding: 6px; gap: 4px; }
   .gs-side::-webkit-scrollbar { display: none; }
   .gs-home { margin: 0 4px 0 0; }
+  .gs-side-ws { display: none; }
   .gs-nav { flex-direction: row; gap: 4px; }
   .gs-nav-row { width: auto; flex: none; border-radius: 999px; padding: 0 12px; }
   .gs-nav-row .label { overflow: visible; }
   .gs-account { display: none; }
   .gs-main { padding: 20px 12px 32px; }
-  .gs-topbar { position: static; margin: 0; flex-wrap: wrap; border-radius: 22px; }
+  .gs-topbar { position: static; margin: 0; display: flex; flex-wrap: wrap; border-radius: 22px; }
+  .gs-topbar .header-right { margin-left: auto; }
   .gs-topbar .header-center { flex: 1 1 100%; order: 3; }
   .gs-drawer { top: 6px; right: 6px; bottom: 6px; width: calc(100% - 12px); }
   .gs-fgrid { grid-template-columns: 1fr; }

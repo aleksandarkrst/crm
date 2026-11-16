@@ -1,13 +1,12 @@
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { askConfirm } from '../../components/ConfirmDialog';
 import type { ApiTimesheetSettings } from '../../lib/api';
 import { type ApiOrgLevel, orgApi } from '../../lib/orgApi';
 import { paths } from '../../lib/paths';
 import { parseHours, shortHours } from '../../lib/timesheetApi';
 import { orgError } from '../../store/org';
 import { useStore } from '../../store/store';
-import { Badge, Card, DayToggles, Note, Preview, RemoveX, Row, RowsModal, Section, SummaryRow, Switch, Table, TextField, Unit } from './parts';
+import { askGlassConfirm, Badge, Card, DayToggles, Note, Preview, RemoveX, Row, RowsModal, Section, SummaryRow, Switch, Table, TextField, Unit } from './parts';
 
 /** At most this many levels (the API's limit, CD-226). */
 const MAX_LEVELS = 5;
@@ -188,7 +187,7 @@ function OrgLevelsSection() {
                     <RemoveX
                       label={`Remove level ${i + 1}`}
                       testId="org-level-remove"
-                      onClick={() => void askConfirm({ title: `Remove the level ${l.name}?`, confirmLabel: 'Remove', danger: true }).then((ok) => ok && run(() => orgApi.deleteLevel(l.id), `Level ${l.name} removed`))}
+                      onClick={() => void askGlassConfirm({ title: `Remove the level ${l.name}?`, text: 'No unit is on it. The org chart loses this level.', confirmLabel: 'Remove level' }).then((ok) => ok && run(() => orgApi.deleteLevel(l.id), `Level ${l.name} removed`))}
                     />
                   )
                 ) : null}

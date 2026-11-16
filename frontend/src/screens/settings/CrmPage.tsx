@@ -6,7 +6,7 @@ import { currencySymbol, curOf, memberLabels, salesPeople } from '../../store/se
 import { useStore } from '../../store/store';
 import type { BonusRule, Stage } from '../../store/types';
 import { TemplatesSection } from '../DocumentTemplates';
-import { Card, CheckButton, Confirm, Drawer, Dropdown, Row, RowMenu, Section, Segmented, Switch, Table, Tags, TextField, Unit } from './parts';
+import { Card, Preview, CheckButton, Confirm, Drawer, Dropdown, Row, RowMenu, Section, Segmented, Switch, Table, Tags, TextField, Unit } from './parts';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const TARGET_PROBLEM = 'Use whole days from 1 to 365, or leave it empty.';
@@ -45,6 +45,8 @@ function FunnelsSection() {
     set({ segment: id });
     setEditing(id);
   };
+  // New funnel (CD-524 review): a draft in the drawer; nothing is saved until Create funnel.
+  const [adding, setAdding] = useState(false);
   const doomed = deleting ? s.funnels[deleting] : null;
   const doomedDeals = deleting ? dealsIn(deleting) : 0;
   return (
@@ -53,7 +55,7 @@ function FunnelsSection() {
       desc="The stages opportunities move through. Open a funnel to edit its stages."
       action={
         editable && (
-          <button type="button" className="gs-btn primary" data-testid="new-funnel" onClick={() => set({ personaOpen: true, personaBase: s.segment })}>
+          <button type="button" className="gs-btn primary" data-testid="new-funnel" onClick={() => setAdding(true)}>
             New funnel
           </button>
         )
@@ -84,6 +86,7 @@ function FunnelsSection() {
         ))}
       </Table>
       {editing && s.funnels[editing] && <FunnelDrawer onClose={() => setEditing(null)} />}
+      {adding && <NewFunnelDrawer onClose={() => setAdding(false)} />}
       {doomed && (
         <Confirm
           title={`Delete ${doomed.label}?`}
@@ -297,6 +300,88 @@ function FunnelDrawer({ onClose }: { onClose: () => void }) {
 }
 
 /** One stage, open in place: its fields in two columns, its to-dos as tags, and the checks before moving on. */
+/** The default stages a funnel starts with when it copies none (the API's set). */
+const DEFAULT_STAGES = ['New opportunity', 'Discovery', 'Proposal', 'Won'];
+
+/**
+ * New funnel (CD-524 review): the same drawer as Edit, as a draft. Name, how they buy and the
+ * stages to start from; nothing is saved until Create funnel. Cancel, the X, Escape or the scrim
+ * discard it. Its stages are edited afterwards with Edit, like any funnel's.
+ */
+function NewFunnelDrawer({ onClose }: { onClose: () => void }) {
+  const store = useStore();
+  const { s } = store;
+  const [name, setName] = useState('');
+  const [note, setNote] = useState('');
+  const [from, setFrom] = useState('blank');
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const nameBad = tried && !name.trim();
+  const sources = [{ value: 'blank', label: 'Default stages' }, ...Object.values(s.funnels).map((f) => ({ value: f.id, label: `Copy ${f.label}` }))];
+  const preview = from === 'blank' ? DEFAULT_STAGES : (s.funnels[from]?.stages.map((st) => st.name) ?? DEFAULT_STAGES);
+  const create = async () => {
+    setTried(true);
+    if (!name.trim()) return;
+    setBusy(true);
+    const id = await store.createFunnel({ label: name, note, copyFrom: from }, (label) => `${label} created`);
+    if (id) onClose();
+    else setBusy(false);
+  };
+  return (
+    <Drawer
+      label="New funnel"
+      onClose={onClose}
+      testId="new-funnel-drawer"
+      head={
+        <>
+          <input
+            className="gs-drawer-title"
+            aria-label="Funnel name"
+            aria-invalid={nameBad}
+            placeholder="Funnel name"
+            value={name}
+            data-testid="new-funnel-name"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void create()}
+          />
+          {nameBad && (
+            <span className="gs-error" role="alert">
+              Give the funnel a name.
+            </span>
+          )}
+          <input className="gs-drawer-line" aria-label="How they buy" placeholder="How they buy, in one line" value={note} onChange={(e) => setNote(e.target.value)} />
+        </>
+      }
+      foot={
+        <>
+          <button type="button" className="gs-btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="gs-btn primary" data-testid="new-funnel-create" disabled={busy} onClick={() => void create()}>
+            Create funnel
+          </button>
+        </>
+      }
+    >
+      <div className="gs-label">
+        Start from
+        <span className="gs-move" role="radiogroup" aria-label="Start from">
+          {sources.map((o) => (
+            <button key={o.value} type="button" role="radio" aria-checked={o.value === from} className={o.value === from ? 'on' : ''} onClick={() => setFrom(o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="gs-label">
+        Stages
+        <Preview names={preview} testId="new-funnel-stages" />
+        <span className="gs-sub">{from === 'blank' ? 'A small set to build on.' : 'A copy of its stages and their to-dos, without its opportunities.'} You can change the stages after the funnel is created.</span>
+      </div>
+    </Drawer>
+  );
+}
+
 function StageEditor({ idx, stage: st, editable, defaultTarget, lowerThan, members }: { idx: number; stage: Stage; editable: boolean; defaultTarget: number | null; lowerThan: { name: string; prob: number } | null; members: [string, string][] }) {
   const store = useStore();
   const [pending, setPending] = useState<{ at: number; label: string } | null>(null);

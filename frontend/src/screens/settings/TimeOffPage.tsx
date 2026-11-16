@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { askConfirm } from '../../components/ConfirmDialog';
 import { type DateRange, DateRangePicker, rangeText } from '../../components/DateRangePicker';
 import { type ApiHoliday, holidaysApi, shortHours } from '../../lib/timesheetApi';
 import { type ApiExperienceRule, type ApiPolicyInput, type ApiSickLeaveType, type ApiTimeOffPolicy, type ApiTimeOffReason, type ApiTimeOffSettings, carryOverLabel, experienceSummary, type ReasonKind, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { useCompanyField } from './CompanyCard';
-import { Badge, Block, Card, Modal, RemoveX, Row, RowMenu, Section, Segmented, Switch, Table, TextField, Unit } from './parts';
+import { askGlassConfirm, Badge, Block, Card, Modal, RemoveX, Row, RowMenu, Section, Segmented, Switch, Table, TextField, Unit } from './parts';
 
 /** The Labor Law's minimum (spec 3.3, A1) and the most a policy can give. */
 const MIN_BASE_DAYS = 20;
@@ -255,7 +254,7 @@ function PolicyModal({ policy, onClose }: { policy?: ApiTimeOffPolicy; onClose: 
             onClick={() => {
               // The policy's sheet closes first: the confirmation is never inside another overlay.
               onClose(false);
-              void askConfirm({ title: `Delete ${policy.name}?`, message: 'Nobody is on this policy. Its history stays in the audit log.', confirmLabel: 'Delete', danger: true }).then(async (ok) => {
+              void askGlassConfirm({ title: `Delete ${policy.name}?`, text: 'Nobody is on this policy. Its history stays in the audit log.', confirmLabel: 'Delete policy' }).then(async (ok) => {
                 if (!ok) return;
                 try {
                   await timeOffApi.policies.remove(policy.id);
@@ -424,7 +423,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
     }
   };
   const remove = async (r: ApiTimeOffReason) => {
-    if (!(await askConfirm({ title: `Delete ${r.name}?`, message: 'No request uses it. A used reason can only be deactivated.', confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await askGlassConfirm({ title: `Delete ${r.name}?`, text: 'No request uses it. A used reason can only be deactivated.', confirmLabel: 'Delete reason' }))) return;
     try {
       await timeOffApi.reasons.remove(r.id);
       flash(`${r.name} deleted`);
@@ -445,7 +444,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
       testId={`timeoff-reasons-${kind}`}
     >
       {error && <span className="gs-error">{error}</span>}
-      <Table cols={paid ? [{ label: 'Reason' }, { label: 'Days per case', align: 'num' }, { label: 'Counts toward limit', align: 'center' }, { label: '', align: 'end' }] : [{ label: 'Reason' }, { label: 'Paid by' }, { label: '', align: 'end' }]} minWidth={paid ? 560 : 420}>
+      <Table cols={paid ? [{ label: 'Reason' }, { label: 'Days per case', align: 'center' }, { label: 'Counts toward limit', align: 'center' }, { label: '', align: 'end' }] : [{ label: 'Reason' }, { label: 'Paid by' }, { label: '', align: 'end' }]} minWidth={paid ? 560 : 420}>
         {data?.map((r) => (
           <tr key={`${r.id}:${r.name}:${r.maxDays}:${r.countsTowardLimit}:${r.paidByEmployer}:${r.active}`} data-testid="reason-row" data-name={r.name} data-active={r.active}>
             <td>
@@ -456,7 +455,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
             </td>
             {paid ? (
               <>
-                <td className="num">
+                <td className="center">
                   <TextField
                     label={`Days per case for ${r.name}`}
                     width={70}
@@ -580,7 +579,7 @@ function HolidaysSection() {
     setBusy(false);
   };
   const remove = async (h: ApiHoliday) => {
-    if (!(await askConfirm({ title: `Delete ${h.name}?`, message: 'It goes from every year. The Timesheet expects the standard day on these dates again.', confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await askGlassConfirm({ title: `Delete ${h.name}?`, text: 'It goes from every year. The Timesheet expects the standard day on these dates again.', confirmLabel: 'Delete holiday' }))) return;
     try {
       await holidaysApi.remove(h.id);
       flash(`${h.name} deleted`);

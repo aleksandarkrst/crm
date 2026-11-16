@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { askConfirm } from '../components/ConfirmDialog';
-import { canManageTemplates, type DocTemplate, docMoment, type PlaceholderReference } from '../store/documents';
+import { canManageTemplates, DOC_TYPES, type DocTemplate, type DocType, docMoment, fileSize, type PlaceholderReference, type ScanResult, templateFileProblem } from '../store/documents';
 import { useStore } from '../store/store';
-import { mergeFieldReference } from '../store/wording';
-import { Badge, Card, Row, RowMenu, Section, Table } from './settings/parts';
+import { mergeFieldReference, opportunityCopy } from '../store/wording';
+import { askGlassConfirm, Badge, Card, Modal, Row, RowMenu, Section, Table } from './settings/parts';
 
 const TONE: Record<string, 'violet' | 'blue' | 'green' | undefined> = { Proposal: 'violet', Quote: 'blue', Contract: 'green' };
 
@@ -14,11 +13,13 @@ const TONE: Record<string, 'violet' | 'blue' | 'green' | undefined> = { Proposal
  * everyone can download. The design's "Used in" column isn't shown: the app doesn't track it.
  */
 export function TemplatesSection() {
-  const { s, session, set, flash, openDoc, loadTemplates, downloadTemplate, deleteTemplate, loadPlaceholders, downloadStarter } = useStore();
+  const { s, session, flash, openDoc, loadTemplates, downloadTemplate, deleteTemplate, loadPlaceholders, downloadStarter } = useStore();
   const lead = s.leads[0];
   const canManage = canManageTemplates(session.tenant.role);
   const [ref, setRef] = useState<PlaceholderReference | null>(null);
   const [showFields, setShowFields] = useState(false);
+  // The template being uploaded or replaced ('new' for New template), in the glass modal below.
+  const [upload, setUpload] = useState<DocTemplate | 'new' | null>(null);
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
@@ -31,7 +32,7 @@ export function TemplatesSection() {
   }, [loadPlaceholders]);
 
   const onDelete = async (t: DocTemplate) => {
-    if (!(await askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await askGlassConfirm({ title: `Delete the template "${t.name}"?`, text: 'Documents already generated from it are kept.', confirmLabel: 'Delete template' }))) return;
     void deleteTemplate(t);
   };
   const fields = [...(ref?.fields ?? []), ...(ref?.lineFields ?? [])];
@@ -40,7 +41,7 @@ export function TemplatesSection() {
       title="Document templates"
       desc="Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document."
       action={
-        <button type="button" className="gs-btn primary" onClick={() => (canManage ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates', 4000, true))}>
+        <button type="button" className="gs-btn primary" data-testid="new-template" onClick={() => (canManage ? setUpload('new') : flash('Only owners and admins can add templates', 4000, true))}>
           New template
         </button>
       }
@@ -71,7 +72,7 @@ export function TemplatesSection() {
                     { label: 'Download', onClick: () => void downloadTemplate(t) },
                     ...(canManage
                       ? [
-                          { label: 'Upload new version', onClick: () => set({ templateOpen: true, templateEditing: t }), testId: 'edit-template' },
+                          { label: 'Upload new version', onClick: () => setUpload(t), testId: 'edit-template' },
                           { label: 'Delete', onClick: () => void onDelete(t), danger: true },
                         ]
                       : []),
@@ -131,6 +132,122 @@ export function TemplatesSection() {
           })}
         </Table>
       )}
+      {upload && <TemplateModal editing={upload === 'new' ? null : upload} onClose={() => setUpload(null)} />}
     </Section>
+  );
+}
+
+/**
+ * Uploading or replacing a template in the glass style (CD-524 review; the logic of the old
+ * NewTemplateModal): the file is checked and its merge fields listed before it is saved, so a typo
+ * like {{deal.amoutn}} shows up as "not recognised" right away. Replacing keeps name and type.
+ */
+function TemplateModal({ editing, onClose }: { editing: DocTemplate | null; onClose: () => void }) {
+  const { uploadTemplate, replaceTemplate, scanTemplate } = useStore();
+  const [docType, setDocType] = useState<DocType>(editing?.docType ?? 'Proposal');
+  const [name, setName] = useState(editing?.name ?? '');
+  const [file, setFile] = useState<File | null>(null);
+  const [scan, setScan] = useState<ScanResult | null>(null);
+  const [problem, setProblem] = useState('');
+  const [busy, setBusy] = useState<'' | 'scan' | 'save'>('');
+
+  const pick = async (f: File | undefined) => {
+    setScan(null);
+    setProblem('');
+    setFile(f ?? null);
+    if (!f) return;
+    const bad = templateFileProblem(f);
+    if (bad) return setProblem(bad);
+    if (!name.trim()) setName(f.name.replace(/\.docx$/i, ''));
+    setBusy('scan');
+    try {
+      setScan(await scanTemplate(f));
+    } catch (err) {
+      setProblem((err as Error).message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const save = async () => {
+    if (!file || !scan) return;
+    setBusy('save');
+    try {
+      if (editing) await replaceTemplate(editing.id, file, name.trim(), docType);
+      else await uploadTemplate(file, name.trim(), docType);
+      onClose();
+    } catch (err) {
+      setProblem((err as Error).message);
+      setBusy('');
+    }
+  };
+  const unknown = scan?.placeholders.filter((p) => !p.known) ?? [];
+  const known = scan?.placeholders.filter((p) => p.known) ?? [];
+
+  return (
+    <Modal
+      title={editing ? 'Upload a new version' : 'New template'}
+      desc={editing ? 'The new Word document replaces this template. Documents already generated from it are kept.' : 'Upload the Word document you already use. Every {{field}} in it becomes a merge field filled from the opportunity.'}
+      onClose={onClose}
+      wide
+      testId="template-modal"
+    >
+      <label className="gs-label">
+        Template name
+        <input className="gs-input" placeholder="e.g. Proposal, brand programme v1" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <div className="gs-label">
+        Document type
+        <span className="gs-move" role="radiogroup" aria-label="Document type">
+          {DOC_TYPES.map((d) => (
+            <button key={d} type="button" role="radio" aria-checked={docType === d} className={docType === d ? 'on' : ''} onClick={() => setDocType(d)}>
+              {d}
+            </button>
+          ))}
+        </span>
+      </div>
+      <label className={'gs-drop' + (scan ? ' ok' : '')}>
+        <input type="file" aria-label="Template file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => void pick(e.target.files?.[0])} />
+        <b>{file ? file.name : editing ? 'Choose the new .docx' : 'Choose a .docx'}</b>
+        <span className="gs-sub">
+          {busy === 'scan'
+            ? 'Checking the document'
+            : scan
+              ? `${fileSize(scan.sizeBytes)}, ${known.length} merge field${known.length === 1 ? '' : 's'} recognised${unknown.length ? `, ${unknown.length} not` : ''}`
+              : editing
+                ? `Now: ${editing.fileName}. Word (.docx), up to 5 MB.`
+                : 'Word (.docx), up to 5 MB. Write merge fields in double curly braces, like {{company.name}}.'}
+        </span>
+      </label>
+      {problem && (
+        <span className="gs-error" role="alert">
+          {problem}
+        </span>
+      )}
+      {scan && (
+        <div className="gs-label">
+          Merge fields found
+          {scan.placeholders.length === 0 ? (
+            <span className="gs-sub">None. The document is copied as it is.</span>
+          ) : (
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {scan.placeholders.map((p) => (
+                <span key={p.tag} className={'gs-found' + (p.known ? '' : ' bad')}>
+                  <code>{p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`}</code> {p.known ? opportunityCopy(p.label ?? '') : 'not recognised'}
+                </span>
+              ))}
+            </span>
+          )}
+          {unknown.length > 0 && <span className="gs-sub">Fields not recognised stay in the document as written. Fix the spelling in Word and upload again.</span>}
+        </div>
+      )}
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="gs-btn primary" data-testid="template-save" disabled={!scan || !name.trim() || !!busy} onClick={() => void save()}>
+          {busy === 'save' ? 'Saving' : editing ? 'Save new version' : 'Add template'}
+        </button>
+      </div>
+    </Modal>
   );
 }

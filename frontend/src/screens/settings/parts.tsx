@@ -626,6 +626,9 @@ export function Modal({ title, desc, onClose, children, wide, testId }: { title:
           <h2>{title}</h2>
           {desc && <p className="gs-sub" style={{ margin: 0 }}>{desc}</p>}
           {children}
+          <button type="button" className="gs-x plain gs-sheet-x" aria-label="Close" data-testid="gs-close" onClick={onClose}>
+            {xIcon()}
+          </button>
         </div>
       </div>
     </div>,
@@ -678,7 +681,7 @@ export function Confirm({
       <div className="gs-dialog-wrap confirm">
         <div ref={box} className="gs-sheet gs-glass confirm" role="alertdialog" aria-modal="true" aria-label={title} data-testid={testId}>
           <span className="gs-danger-tile" aria-hidden="true">
-            <Icon name="lock" size={18} />
+            <Icon name="trash" size={18} />
           </span>
           <h2>{title}</h2>
           <p className="gs-sub" style={{ margin: 0 }}>
@@ -704,6 +707,9 @@ export function Confirm({
               {confirmLabel}
             </button>
           </div>
+          <button type="button" className="gs-x plain gs-sheet-x" aria-label="Close" data-testid="gs-close" onClick={onCancel}>
+            {xIcon()}
+          </button>
         </div>
       </div>
     </div>,
@@ -711,8 +717,37 @@ export function Confirm({
   );
 }
 
+
+type Ask = { title: string; text: ReactNode; confirmLabel: string };
+let showAsk: ((a: (Ask & { resolve: (ok: boolean) => void }) | null) => void) | null = null;
+
+/**
+ * Asks with the glass confirm (CD-524 review): resolves true on the red button, false on Cancel,
+ * the X, Escape or the scrim. Shown by the GlassConfirmHost in the Settings shell, so it still
+ * works after the sheet that asked has closed.
+ */
+export function askGlassConfirm(a: Ask): Promise<boolean> {
+  return new Promise((resolve) => (showAsk ? showAsk({ ...a, resolve }) : resolve(false)));
+}
+
+/** Renders askGlassConfirm's question; mounted once by the Settings shell. */
+export function GlassConfirmHost() {
+  const [ask, setAsk] = useState<(Ask & { resolve: (ok: boolean) => void }) | null>(null);
+  useEffect(() => {
+    showAsk = setAsk;
+    return () => {
+      showAsk = null;
+    };
+  }, []);
+  if (!ask) return null;
+  const answer = (ok: boolean) => {
+    ask.resolve(ok);
+    setAsk(null);
+  };
+  return <Confirm title={ask.title} text={ask.text} confirmLabel={ask.confirmLabel} onConfirm={() => answer(true)} onCancel={() => answer(false)} testId="glass-confirm" />;
+}
 /** The side drawer: fixed to the right, its own header, a scrolling body and Done. */
-export function Drawer({ label, head, onClose, children, testId }: { label: string; head: ReactNode; onClose: () => void; children: ReactNode; testId?: string }) {
+export function Drawer({ label, head, onClose, children, foot, testId }: { label: string; head: ReactNode; onClose: () => void; children: ReactNode; foot?: ReactNode; testId?: string }) {
   const box = useOverlay(onClose);
   return createPortal(
     <div className="gs-tokens">
@@ -726,9 +761,11 @@ export function Drawer({ label, head, onClose, children, testId }: { label: stri
         </div>
         <div className="gs-drawer-body">{children}</div>
         <div className="gs-drawer-foot">
-          <button type="button" className="gs-btn primary" onClick={onClose}>
-            Done
-          </button>
+          {foot ?? (
+            <button type="button" className="gs-btn primary" onClick={onClose}>
+              Done
+            </button>
+          )}
         </div>
       </aside>
     </div>,

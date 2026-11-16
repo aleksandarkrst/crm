@@ -1296,16 +1296,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       );
     };
     /** New funnel from a copy of another one's stages (or a small default set); opens it. */
-    const createFunnel = async (input: { label: string; note: string; copyFrom: string }): Promise<boolean> => {
+    const createFunnel = async (input: { label: string; note: string; copyFrom: string }, created = (label: string) => label + ' created · edit its stages below'): Promise<string | null> => {
       try {
         const f = await crmApi.createFunnel({ label: input.label.trim(), note: input.note.trim() || null, ...(input.copyFrom !== 'blank' ? { copyFromFunnelId: input.copyFrom } : {}) });
         await reload();
         set({ segment: f.id, personaOpen: false });
-        flash(f.label + ' created · edit its stages below');
-        return true;
+        flash(created(f.label));
+        return f.id;
       } catch (err) {
-        flash('Not saved: ' + errText(err));
-        return false;
+        flash('Not saved: ' + errText(err), 4000, true);
+        return null;
       }
     };
     /** Renames the open funnel or changes its note (one write per field after a pause). */

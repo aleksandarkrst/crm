@@ -13,7 +13,7 @@ import { GeneralPage } from './settings/GeneralPage';
 import { ProjectsPage } from './settings/ProjectsPage';
 import { TimeOffPage } from './settings/TimeOffPage';
 import { TimesheetPage } from './settings/TimesheetPage';
-import { Card, Confirm, Disabled, Row, Switch } from './settings/parts';
+import { Card, Confirm, Disabled, GlassConfirmHost, Row, Switch } from './settings/parts';
 
 type PageKey = 'general' | 'crm' | 'projects' | 'employees' | 'timesheet' | 'timeoff';
 
@@ -64,8 +64,7 @@ export function useModuleSwitch() {
   const { s, setWorkspace } = useStore();
   const [asking, setAsking] = useState<WorkspaceModule | null>(null);
   const on = (id: WorkspaceModule) => s.workspace.modules.includes(id);
-  const apply = (id: WorkspaceModule, next: boolean) =>
-    setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? next : s.workspace.modules.includes(m))) }, `${moduleName(id)} is ${next ? 'on' : 'off'}`);
+  const apply = (id: WorkspaceModule, next: boolean) => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? next : s.workspace.modules.includes(m))) }, `${moduleName(id)} is ${next ? 'on' : 'off'}`);
   const flip = (id: WorkspaceModule) => (on(id) ? setAsking(id) : apply(id, true));
   const dialog = asking && (
     <Confirm
@@ -116,16 +115,21 @@ export function Settings() {
       <span className="gs-blob" aria-hidden="true" style={{ width: 440, height: 440, right: -100, top: 40, background: 'var(--gs-blob-2)', opacity: 0.5 }} />
       <span className="gs-blob" aria-hidden="true" style={{ width: 520, height: 380, left: '35%', bottom: -200, background: 'var(--gs-blob-3)', opacity: 0.45 }} />
       <aside className="gs-side gs-glass" aria-label="Settings" data-testid="settings-nav">
-        <Link className="gs-home" to={paths.home} aria-label="Back to all modules" title="All modules">
-          <span className="mark" aria-hidden="true">
-            <Logo height={14} onDark wordmark={false} />
+        <div className="gs-side-head">
+          <Link className="gs-home" to={paths.home} aria-label="Back to all modules" title="All modules">
+            <span className="mark" aria-hidden="true">
+              <Logo height={14} onDark wordmark={false} />
+            </span>
+            <span className="back" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M11 6l-6 6 6 6" />
+              </svg>
+            </span>
+          </Link>
+          <span className="gs-side-ws" title={s.workspace.name} data-testid="settings-workspace-name">
+            {s.workspace.name}
           </span>
-          <span className="back" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M11 6l-6 6 6 6" />
-            </svg>
-          </span>
-        </Link>
+        </div>
         <nav className="gs-nav">
           {PAGES.map((p) => {
             const isOff = p.module !== null && !modules.includes(p.module);
@@ -151,7 +155,7 @@ export function Settings() {
       <div className="gs-main">
         <header className="gs-topbar gs-glass">
           <h1>{page.label}</h1>
-          <HeaderCenter />
+          <HeaderCenter create={false} />
           <HeaderRight />
         </header>
         <div className="gs-page" data-testid="settings-content" data-section={page.k}>
@@ -183,6 +187,7 @@ export function Settings() {
               {page.k === 'timeoff' && <TimeOffPage />}
             </div>
           </Disabled>
+          <GlassConfirmHost />
         </div>
       </div>
       {sw.dialog}

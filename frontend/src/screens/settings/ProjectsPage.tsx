@@ -247,10 +247,20 @@ function TypeModal({ type, types, onClose, onSaved }: { type: ApiProjectType | n
         id = all.find((t) => !before.has(t.id))!.id;
       } else if (name.trim() !== type!.name) all = await projectsApi.renameType(id, name.trim());
       const current = () => all.find((t) => t.id === id)!;
-      const keep = new Set(stages.filter((st) => st.id).map((st) => st.id));
+      // A new type comes with the API's default stages: a stage of the same name takes that one over
+      // instead of being added again (the API refuses two stages with one name).
+      const claimed = new Set<string>();
+      const wanted = stages.map((st) => {
+        if (st.id) return st;
+        const same = current().stages.find((x) => !claimed.has(x.id) && !stages.some((o) => o.id === x.id) && x.name.trim().toLowerCase() === st.name.trim().toLowerCase());
+        if (!same) return st;
+        claimed.add(same.id);
+        return { ...st, id: same.id };
+      });
+      const keep = new Set(wanted.filter((st) => st.id).map((st) => st.id));
       // New stages first (a type always keeps one), then renames, then removals, then the order.
       const ids: string[] = [];
-      for (const st of stages) {
+      for (const st of wanted) {
         if (st.id) {
           const was = current().stages.find((x) => x.id === st.id);
           if (was && was.name !== st.name.trim()) all = await projectsApi.renameStage(id, st.id, st.name.trim());
