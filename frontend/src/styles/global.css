@@ -1324,7 +1324,8 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
  * Workspace settings is its own area in the design's glass style (CD-524 spec, sections 3 and 4).
  * Everything is scoped under `.gs` with its own tokens, so the rest of the app keeps its look.
  */
-.gs, .gs-tokens {
+.gs, .gs-tokens, .toast-glass {
+  --gs-check: #7FD8A8;
   --gs-green: #14503C; --gs-green-500: #2F7A5E; --gs-green-dark: #0D241C; --gs-green-soft: #E7F2EE;
   --gs-ink: #1D1D1F; --gs-text-2: #6E6E73; --gs-muted: #8E8E93; --gs-faint: #AEAEB2; --gs-ink-3: #3A3A3C;
   --gs-border: rgba(60, 60, 67, 0.16); --gs-outline: rgba(60, 60, 67, 0.14); --gs-divider: rgba(60, 60, 67, 0.08); --gs-divider-2: rgba(60, 60, 67, 0.06);
@@ -1340,7 +1341,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   --gs-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', system-ui, sans-serif;
 }
 .gs {
-  position: relative; display: flex; align-items: flex-start; min-height: 100vh; overflow: hidden; background: var(--gs-bg); color: var(--gs-ink); font-family: var(--gs-font); -webkit-font-smoothing: antialiased;
+  position: relative; display: flex; align-items: flex-start; min-height: 100vh; overflow: clip; background: var(--gs-bg); color: var(--gs-ink); font-family: var(--gs-font); -webkit-font-smoothing: antialiased;
 }
 .gs a { color: var(--gs-green); text-decoration: none; }
 .gs a:hover { color: var(--gs-green-dark); }
@@ -1523,8 +1524,8 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-check.on .box { background: var(--gs-green); box-shadow: none; color: var(--white); }
 .gs-check:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Modals, the confirm dialog and the drawer: glass over a light scrim. */
-.gs-scrim { position: fixed; inset: 0; z-index: 70; background: var(--gs-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: gsFade 0.2s ease-out; }
-.gs-dialog-wrap { position: fixed; inset: 0; z-index: 71; display: flex; align-items: flex-start; justify-content: center; padding: 80px 16px 16px; overflow-y: auto; pointer-events: none; }
+.gs-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: gsFade 0.2s ease-out; }
+.gs-dialog-wrap { position: fixed; inset: 0; z-index: 51; display: flex; align-items: flex-start; justify-content: center; padding: 80px 16px 16px; overflow-y: auto; pointer-events: none; }
 .gs-sheet { pointer-events: auto; width: 480px; max-width: 100%; box-sizing: border-box; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: rgba(255, 255, 255, 0.82); animation: gsRise 0.26s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
 .gs-sheet.wide { width: 600px; }
 .gs-sheet.confirm { width: 440px; }
@@ -1538,8 +1539,12 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-move { display: flex; flex-wrap: wrap; gap: 6px; }
 .gs-move button { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 13px; color: var(--gs-ink); cursor: pointer; }
 .gs-move button.on { background: var(--gs-green); color: var(--white); }
-.gs-drawer-scrim { position: fixed; inset: 0; z-index: 70; background: var(--gs-scrim); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: gsFade 0.2s ease-out; }
-.gs-drawer { position: fixed; top: 12px; right: 12px; bottom: 12px; z-index: 71; width: min(760px, calc(100% - 24px)); border-radius: 24px; background: rgba(246, 248, 247, 0.97); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(13, 36, 28, 0.22); animation: gsSlide 0.28s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
+/* Layers: the glass sheets and the drawer (50/51) sit under the app's popovers (date picker, 60) and its confirm dialog (70); a glass confirm (52/53) sits over a sheet or the drawer; menus float over all of them (56); the toast is on top (80). */
+.gs-scrim.confirm { z-index: 52; }
+.gs-dialog-wrap.confirm { z-index: 53; padding-top: 120px; }
+.gs-float { position: fixed; top: auto; right: auto; z-index: 56; }
+.gs-drawer-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: gsFade 0.2s ease-out; }
+.gs-drawer { position: fixed; top: 12px; right: 12px; bottom: 12px; z-index: 51; width: min(760px, calc(100% - 24px)); border-radius: 24px; background: rgba(246, 248, 247, 0.97); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(13, 36, 28, 0.22); animation: gsSlide 0.28s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }
 .gs-drawer-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; border-bottom: 1px solid var(--gs-divider); }
 .gs-drawer-head .titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .gs-drawer-title, .gs-drawer-line { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: inherit; color: var(--gs-ink); padding: 2px 6px; margin-left: -6px; border-radius: 8px; }
@@ -1578,8 +1583,8 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-ff .gs-dd, .gs-ff .gs-ddb { width: 100%; }
 .gs-ff .gs-ddb { height: 36px; }
 /* The toast in Settings: a dark pill at the bottom centre with a green check (CD-524 spec). */
-.toast.toast-glass { left: 50%; right: auto; bottom: 28px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 11px 18px; border-radius: 999px; background: rgba(29, 29, 31, 0.84); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--white); font-size: 13.5px; font-weight: 500; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); animation: gsFade 0.2s ease-out both; }
-.toast.toast-glass svg { flex: none; color: #7FD8A8; }
+.toast.toast-glass { z-index: 80; left: 50%; right: auto; bottom: 28px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 11px 18px; border-radius: 999px; background: rgba(29, 29, 31, 0.84); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--white); font-size: 13.5px; font-weight: 500; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); animation: gsFade 0.2s ease-out both; }
+.toast.toast-glass svg { flex: none; color: var(--gs-check); }
 @media (prefers-reduced-motion: reduce) {
   .gs *, .gs-sheet, .gs-drawer, .gs-scrim, .gs-drawer-scrim, .gs-menu, .toast.toast-glass { transition: none !important; animation: none !important; }
 }

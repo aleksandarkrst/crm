@@ -20,23 +20,77 @@ const xIcon = (size = 13) => (
   </svg>
 );
 
-/** Closes something when a click lands outside `ref` or Escape is pressed. */
-function useDismiss(open: boolean, close: () => void) {
-  const ref = useRef<HTMLDivElement>(null);
-  const latest = useRef(close);
-  latest.current = close;
+/**
+ * What is open, innermost last (menus, modals, the drawer, confirms): Escape closes only the top
+ * one, so closing a dropdown inside a modal leaves the modal open.
+ */
+const escapeStack: object[] = [];
+function useEscape(active: boolean, onEscape: () => void) {
+  const latest = useRef(onEscape);
+  latest.current = onEscape;
   useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && latest.current();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && latest.current();
-    document.addEventListener('mousedown', onDown);
+    if (!active) return;
+    const token = {};
+    escapeStack.push(token);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || escapeStack[escapeStack.length - 1] !== token) return;
+      e.preventDefault();
+      latest.current();
+    };
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
+      escapeStack.splice(escapeStack.indexOf(token), 1);
     };
+  }, [active]);
+}
+
+/** Closes a menu when a click lands outside its button and its list, or Escape is pressed. */
+function useDismiss(open: boolean, close: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const latest = useRef(close);
+  latest.current = close;
+  useEscape(open, close);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !menu.current?.contains(t)) latest.current();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
-  return ref;
+  return { ref, menu };
+}
+
+/**
+ * A menu floating over everything (portalled, fixed): under its button, right-aligned, or above it
+ * when there's no room below. Cards and tables can't clip it, and it follows scrolling.
+ */
+function FloatMenu({ anchor, menu, children, role, label, id, minWidth }: { anchor: React.RefObject<HTMLDivElement | null>; menu: React.RefObject<HTMLDivElement | null>; children: ReactNode; role: string; label?: string; id?: string; minWidth?: number }) {
+  const [box, setBox] = useState<DOMRect | null>(() => anchor.current?.getBoundingClientRect() ?? null);
+  useEffect(() => {
+    const place = () => setBox(anchor.current?.getBoundingClientRect() ?? null);
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [anchor]);
+  if (!box) return null;
+  const below = window.innerHeight - box.bottom > 280 || box.top < 280;
+  const style: React.CSSProperties = { right: Math.max(8, window.innerWidth - box.right), minWidth: Math.max(minWidth ?? 0, box.width), ...(below ? { top: box.bottom + 6 } : { bottom: window.innerHeight - box.top + 6 }) };
+  return createPortal(
+    <div className="gs-tokens">
+      <div ref={menu} className="gs-menu gs-float" role={role} aria-label={label} id={id} style={style}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 // ---------------------------------------------------------------- page structure
@@ -205,7 +259,7 @@ export type Opt<T extends string = string> = { value: T; label: string };
 export function Dropdown<T extends string>({ value, options, onChange, label, width = 240, disabled, testId }: { value: T; options: readonly Opt<T>[]; onChange: (v: T) => void; label: string; width?: number | string; disabled?: boolean; testId?: string }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const ref = useDismiss(open, () => setOpen(false));
+  const { ref, menu } = useDismiss(open, () => setOpen(false));
   const listId = useId();
   const current = options.find((o) => o.value === value);
   const pick = (v: T) => {
@@ -250,7 +304,7 @@ export function Dropdown<T extends string>({ value, options, onChange, label, wi
         {chevron}
       </button>
       {open && (
-        <div className="gs-menu" role="listbox" id={listId} aria-label={label}>
+        <FloatMenu anchor={ref} menu={menu} role="listbox" id={listId} label={label}>
           {options.map((o, i) => (
             <button key={o.value} type="button" role="option" aria-selected={o.value === value} className={'gs-opt' + (o.value === value ? ' on' : '') + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(o.value)}>
               <span>{o.label}</span>
@@ -259,7 +313,7 @@ export function Dropdown<T extends string>({ value, options, onChange, label, wi
               </span>
             </button>
           ))}
-        </div>
+        </FloatMenu>
       )}
     </div>
   );
@@ -415,7 +469,7 @@ export type MenuItem = { label: string; onClick: () => void; danger?: boolean; t
 /** The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). */
 export function RowMenu({ label, items, testId }: { label: string; items: MenuItem[]; testId?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useDismiss(open, () => setOpen(false));
+  const { ref, menu } = useDismiss(open, () => setOpen(false));
   if (!items.length) return null;
   return (
     <div className="gs-dd" ref={ref}>
@@ -427,7 +481,7 @@ export function RowMenu({ label, items, testId }: { label: string; items: MenuIt
         </svg>
       </button>
       {open && (
-        <div className="gs-menu" role="menu" style={{ minWidth: 190 }}>
+        <FloatMenu anchor={ref} menu={menu} role="menu" label={label} minWidth={190}>
           {items.map((it) => (
             <button
               key={it.label}
@@ -443,7 +497,7 @@ export function RowMenu({ label, items, testId }: { label: string; items: MenuIt
               {it.label}
             </button>
           ))}
-        </div>
+        </FloatMenu>
       )}
     </div>
   );
@@ -550,23 +604,13 @@ export function Preview({ names, testId }: { names: string[]; testId?: string })
 /** Escape closes; the first field (or button) takes the focus when it opens. */
 function useOverlay(onClose: () => void) {
   const box = useRef<HTMLDivElement>(null);
-  const latest = useRef(onClose);
-  latest.current = onClose;
+  // Escape closes only the top overlay (a confirm over the drawer closes the confirm).
+  useEscape(true, onClose);
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     const first = box.current?.querySelector<HTMLElement>('input:not([disabled]), select, textarea, button:not([disabled])');
     first?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        latest.current();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      before?.focus?.();
-    };
+    return () => before?.focus?.();
   }, []);
   return box;
 }
@@ -630,8 +674,8 @@ export function Confirm({
   const box = useOverlay(onCancel);
   return createPortal(
     <div className="gs-tokens">
-      <div className="gs-scrim" onClick={onCancel} />
-      <div className="gs-dialog-wrap" style={{ paddingTop: 120 }}>
+      <div className="gs-scrim confirm" onClick={onCancel} />
+      <div className="gs-dialog-wrap confirm">
         <div ref={box} className="gs-sheet gs-glass confirm" role="alertdialog" aria-modal="true" aria-label={title} data-testid={testId}>
           <span className="gs-danger-tile" aria-hidden="true">
             <Icon name="lock" size={18} />

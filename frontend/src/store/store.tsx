@@ -2034,8 +2034,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /** Owners and admins change the workspace settings; members see them read-only. */
       canEditWorkspace,
       /**
-       * Edits workspace settings and saves them (one write per field after a pause); each save says
-       * "Saved" in a toast (CD-524), a refusal says why. The bonus trigger is browser-only.
+       * Edits workspace settings and saves them (one write per field after a pause). In Workspace
+       * settings each save says so in a toast, `saved` or "Changes saved" (CD-524); a refusal says
+       * "Could not save. Try again." there and the value goes back. The bonus trigger is browser-only.
        */
       setWorkspace: (patch: Partial<Workspace>, saved?: string) => {
         set((x) => ({ workspace: { ...x.workspace, ...patch } }));

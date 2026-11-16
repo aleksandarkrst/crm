@@ -490,7 +490,7 @@ function BonusesSection() {
           );
         })}
       </Table>
-      <p className="gs-note" style={{ marginTop: -16 }}>
+      <p className="gs-note">
         The rate applies to the net value of each won opportunity; below the minimum the flat amount is paid instead. The minimum and the flat amount are in {s.workspace.currency}; opportunities in another currency earn the rate only.
       </p>
     </Section>

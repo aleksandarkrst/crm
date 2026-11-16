@@ -252,13 +252,20 @@ function PolicyModal({ policy, onClose }: { policy?: ApiTimeOffPolicy; onClose: 
             className="gs-btn text-red"
             data-testid="policy-delete"
             disabled={busy}
-            onClick={() =>
-              void askConfirm({ title: `Delete ${policy.name}?`, message: 'Nobody is on this policy. Its history stays in the audit log.', confirmLabel: 'Delete', danger: true }).then(
-                (ok) => {
-                  if (ok) void run(async () => (await timeOffApi.policies.remove(policy.id), `${policy.name} deleted`));
-                },
-              )
-            }
+            onClick={() => {
+              // The policy's sheet closes first: the confirmation is never inside another overlay.
+              onClose(false);
+              void askConfirm({ title: `Delete ${policy.name}?`, message: 'Nobody is on this policy. Its history stays in the audit log.', confirmLabel: 'Delete', danger: true }).then(async (ok) => {
+                if (!ok) return;
+                try {
+                  await timeOffApi.policies.remove(policy.id);
+                  flash(`${policy.name} deleted`);
+                  onClose(true);
+                } catch (err) {
+                  flash(projectError(err));
+                }
+              });
+            }}
           >
             Delete
           </button>
