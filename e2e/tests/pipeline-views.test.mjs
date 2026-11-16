@@ -113,8 +113,10 @@ describe('pipeline views', () => {
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 3);
   });
 
-  step('the pencil opens the Funnel builder', async () => {
+  step('the pencil opens the funnels in Settings → CRM', async () => {
     await page.click('[data-testid=pipeline-edit-funnel]');
-    await page.waitForFunction(() => location.pathname === '/settings/funnel');
+    // The old funnel builder link lands on Settings → CRM, which starts with the funnels (CD-524).
+    await page.waitForFunction(() => location.pathname === '/settings/crm');
+    await page.waitForSelector('[data-testid=funnel-builder] [data-testid=funnel-choice]');
   });
 });

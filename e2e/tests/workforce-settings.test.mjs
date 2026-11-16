@@ -1,10 +1,10 @@
-// Settings → Workforce (CD-153): Employees (time format, max hours per day, the standard working
-// day), Holidays (add, copy from last year) and Approvals (deadline with its live line, auto
-// submit; the reminders, CD-154), and what they change in the Timesheet: Expected, the hours' format, the holiday row and
-// header, and "Submit by".
+// Workforce settings (CD-153; on the Timesheet, Employees and Time off pages since CD-524): time
+// format and max hours per day, the standard working day, Holidays (add, spans, remove) and the
+// deadline with its live line, auto submit and the reminders (CD-154), and what they change in the
+// Timesheet: Expected, the hours' format, the holiday row and header, and "Submit by".
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, clearPreloadedHolidays, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, chooseOption, clearPreloadedHolidays, click, confirmGlass, eventually, fillField, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -31,6 +31,12 @@ describe('workforce settings', () => {
     await page.waitForFunction(() => !document.querySelector('[data-testid=holiday-add-dates-calendar]'));
   };
   const timesheet = async () => (await api(page, '/workspace')).timesheet;
+  /** Shows a year in Time off → Holidays (a segmented control of last, this and next year). */
+  const showYear = async (year) => {
+    if ((await page.$eval('[data-testid=holidays-year]', (el) => el.textContent)) === String(year)) return;
+    await click(page, `[data-testid=holidays-years] button::-p-text(${year})`);
+    await page.waitForFunction((y) => document.querySelector('[data-testid=holidays-year]')?.textContent === y, {}, String(year));
+  };
 
   step('sets up a task to log time on', async () => {
     page = await browser.person('wanda');
@@ -45,17 +51,25 @@ describe('workforce settings', () => {
     monday = (await api(page, '/timesheet/week')).thisWeek;
   });
 
-  step('General: time format, max hours per day and the standard working day save as you change them', async () => {
-    await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
+  step('Timesheet and Employees: time format, max hours per day and the standard working day save as you change them', async () => {
+    // Time entry is on the Timesheet page; text fields save when they are left (CD-524).
+    await page.goto(BASE_URL + '/settings/timesheet', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=time-format-clock]');
-    await setValue(page, '[data-testid=max-day-hours]', '10');
-    await setValue(page, '[data-testid=day-hours]', '7.5');
+    await fillField(page, '[data-testid=max-day-hours]', '10');
+    assert.ok(await eventually(async () => (await timesheet()).maxDayHours === 10), 'max hours saved');
+    // The standard working day is a summary row on the Employees page; Edit opens its modal.
+    await page.goto(BASE_URL + '/settings/employees', { waitUntil: 'networkidle0' });
+    await click(page, '[data-testid=working-day-summary] button');
+    await page.waitForSelector('[data-testid=working-day-modal]');
+    await fillField(page, '[data-testid=day-hours]', '7.5');
     await click(page, '[data-testid=working-days] [data-day=Sat]');
     const saved = await eventually(async () => {
       const t = await timesheet();
       return t.timeFormat === 'clock' && t.maxDayHours === 10 && t.dayMinutes === 450 && t.workingDays.includes(6) && t;
     });
     assert.ok(saved, 'saved');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => /7\.5 hours a day, .*Mon, Tue, Wed, Thu, Fri, Sat/.test(document.querySelector('[data-testid=working-day-summary]')?.textContent ?? ''));
   });
 
   step('the Timesheet follows them: 7:30 a day Monday to Saturday, hours shown as 7:30', async () => {
@@ -69,9 +83,11 @@ describe('workforce settings', () => {
   });
 
   step('Holidays: add one this week; it shows as a row and lowers Expected', async () => {
-    await page.goto(BASE_URL + '/settings/holidays', { waitUntil: 'networkidle0' });
+    // Holidays are on the Time off page; Add holiday opens a modal (CD-524).
+    await page.goto(BASE_URL + '/settings/timeoff', { waitUntil: 'networkidle0' });
     const wed = addDays(monday, 2);
-    if ((await page.$eval('[data-testid=holidays-year]', (el) => el.textContent)) !== wed.slice(0, 4)) await click(page, wed.slice(0, 4) > String(new Date().getFullYear()) ? '[aria-label="Next year"]' : '[aria-label="Previous year"]');
+    await showYear(wed.slice(0, 4));
+    await click(page, '[data-testid=holiday-add]');
     await pickDates(wed, wed);
     await setValue(page, '[data-testid=holiday-add-name]', 'Statehood Day');
     await click(page, '[data-testid=holiday-add-go]');
@@ -87,46 +103,54 @@ describe('workforce settings', () => {
   });
 
   step('a holiday spans days and repeats every year (CD-318): no Copy from last year', async () => {
-    await page.goto(BASE_URL + '/settings/holidays', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/settings/timeoff', { waitUntil: 'networkidle0' });
     assert.equal(await page.$('[data-testid=holidays-copy]'), null);
     const year = Number(await page.$eval('[data-testid=holidays-year]', (el) => el.textContent));
+    await click(page, '[data-testid=holiday-add]');
     await pickDates(`${year}-12-31`, `${year + 1}-01-01`);
     await setValue(page, '[data-testid=holiday-add-name]', 'New Year');
     await click(page, '[data-testid=holiday-add-go]');
     await page.waitForSelector(`[data-testid=holiday-row][data-date="${year}-12-31"]`);
     assert.match(await page.$eval(`[data-testid=holiday-row][data-date="${year}-12-31"]`, (el) => el.textContent), /31 Dec – .* 1 Jan/);
     await waitForToastToClear(page);
-    await click(page, '[aria-label="Next year"]');
+    await showYear(year + 1);
     await page.waitForSelector(`[data-testid=holiday-row][data-date="${year + 1}-12-31"]`);
     assert.match(await page.$eval(`[data-testid=holiday-row][data-date="${year + 1}-12-31"]`, (el) => el.textContent), new RegExp(`every year since ${year}`));
-    // Delete from the row's ⋯ menu.
-    await click(page, `[data-testid=holiday-row][data-date="${year + 1}-12-31"] [data-testid=holiday-menu]`);
-    await click(page, '[data-testid=holiday-remove]');
-    await click(page, '[data-testid=confirm-ok]');
+    // Deleted with the row's × (CD-524: no ⋯ menu, holidays aren't edited any more).
+    await click(page, `[data-testid=holiday-row][data-date="${year + 1}-12-31"] [data-testid=holiday-remove]`);
+    assert.equal(await confirmGlass(page), 'Delete New Year?');
     await page.waitForFunction((d) => !document.querySelector(`[data-testid=holiday-row][data-date="${d}"]`), {}, `${year + 1}-12-31`);
   });
 
-  step('Approvals: the deadline day and time, the live line, and "Submit by" in the Timesheet', async () => {
-    await page.goto(BASE_URL + '/settings/approvals', { waitUntil: 'networkidle0' });
+  step('Submission and approval: the deadline day and time, the live line, and "Submit by" in the Timesheet', async () => {
+    await page.goto(BASE_URL + '/settings/timesheet', { waitUntil: 'networkidle0' });
+    // The deadline is a summary row; Edit opens its modal (CD-524).
+    await click(page, '[data-testid=deadline-card] button');
+    await page.waitForSelector('[data-testid=deadline-modal]');
     // Sunday 23:30: still ahead whatever day the test runs (a passed deadline shows "Deadline passed", CD-155).
-    await setValue(page, '[data-testid=deadline-day]', '7');
-    await setValue(page, '[data-testid=deadline-time]', '23:30');
-    await eventually(async () => {
-      const t = await timesheet();
-      return t.deadlineWeekday === 7 && t.deadlineTime === '23:30';
-    });
+    await chooseOption(page, '[data-testid=deadline-day]', 'Sunday');
+    await fillField(page, '[data-testid=deadline-time]', '23:30');
+    assert.ok(
+      await eventually(async () => {
+        const t = await timesheet();
+        return t.deadlineWeekday === 7 && t.deadlineTime === '23:30';
+      }),
+      'deadline saved',
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=deadline-modal]'));
     await page.waitForFunction(() => /is due Sun \d+ \w{3}, 23:30\./.test(document.querySelector('[data-testid=deadline-next]')?.textContent ?? ''));
     await click(page, '[data-setting=auto-submit] [role=switch]');
     assert.ok(await eventually(async () => (await timesheet()).autoSubmit === true));
     // Reminders (CD-154): 2 hours before by default; 4 hours, and the after-deadline emails off.
-    assert.equal(await page.$eval('[data-testid=reminder-hours]', (el) => el.value), '2');
-    await setValue(page, '[data-testid=reminder-hours]', '4');
+    assert.equal(await page.$eval('[data-testid=reminder-hours]', (el) => el.dataset.value), '2');
+    await chooseOption(page, '[data-testid=reminder-hours]', '4 hours before');
     await click(page, '[data-setting=after-deadline-emails] [role=switch]');
     assert.ok(await eventually(async () => {
       const t = await timesheet();
       return t.reminderHours === 4 && t.afterDeadlineEmails === false;
     }));
-    await setValue(page, '[data-testid=reminder-hours]', '');
+    await chooseOption(page, '[data-testid=reminder-hours]', 'Off');
     assert.ok(await eventually(async () => (await timesheet()).reminderHours === null));
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
     await page.waitForSelector('.ts-due');

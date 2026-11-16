@@ -39,7 +39,7 @@ describe('contact notes and read-only funnels', () => {
     await signIn(member, email('fixes-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
-    await member.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
+    await member.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
     // Home (CD-288), then the Pipeline itself.
     await member.waitForSelector('[data-testid=home-modules]');
     await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });

@@ -95,32 +95,27 @@ describe('honest UI', () => {
 
   step('templates and funnels can be created, and nothing is made up', async () => {
     // Templates are real now (CD-13): the owner can add one, and no made-up templates are listed.
-    await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
+    // Templates and funnels are sections of Settings → CRM (CD-524).
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
     const newTemplate = await page.waitForSelector('button::-p-text(New template)');
     assert.ok(!(await newTemplate.evaluate((el) => el.disabled)), 'New template is enabled for the owner');
-    await page.waitForFunction(() => document.body.innerText.includes('No templates uploaded yet'));
+    // Only the built-in proposal is listed: no uploaded templates yet.
+    await page.waitForFunction(() => document.querySelector('[data-testid=templates]')?.innerText.includes('Proposal v4'));
+    assert.equal(await page.$('[data-template]'), null, 'no uploaded templates listed');
     const body = await text(page);
     assert.ok(!body.includes('Used 38 times') && !body.includes('owner: Mila'), 'no made-up template usage');
     assert.ok(!body.includes('Services contract') && !body.includes('First invoice'), 'no placeholder templates');
 
-    // Funnels can be created now (CD-10): the builder offers "New funnel" instead of a disabled "New pipeline".
-    await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    const newFunnel = await page.waitForSelector('button::-p-text(New funnel)');
+    // Funnels can be created now (CD-10): the funnels section offers "New funnel" instead of a disabled "New pipeline".
+    const newFunnel = await page.waitForSelector('[data-testid=new-funnel]');
     assert.ok(!(await newFunnel.evaluate((el) => el.disabled)), 'New funnel is enabled for the owner');
     assert.ok(!(await text(page)).includes('New pipeline'), 'no "New pipeline" placeholder');
   });
 
-  step('a custom field is saved, and says so without a "session only" note (CD-15)', async () => {
-    await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
-    await clickButton(page, 'New field');
-    await page.type('input[placeholder="e.g. Contract end date"]', 'Renewal date');
-    await clickButton(page, 'Add field');
-    await page.waitForSelector('.toast');
-    const toast = await page.$eval('.toast', (el) => el.textContent);
-    assert.match(toast, /Renewal date added to opportunities/);
-    assert.ok(!/session only|not saved/.test(toast), 'no "not saved" note');
+  step('a custom field is saved (through the API: Settings has no custom fields since CD-524) (CD-15)', async () => {
+    // Custom fields are hidden in Workspace settings (CD-524), so its toast can't be checked; the field is still saved for real.
+    await api(page, '/crm/custom-fields', { method: 'POST', body: JSON.stringify({ entity: 'deal', label: 'Renewal date', type: 'text' }) });
     assert.ok((await api(page, '/crm/custom-fields')).some((f) => f.label === 'Renewal date'), 'field saved');
-    await waitForToastToClear(page);
   });
 
   step('sending a proposal does not claim an email or a task', async () => {
@@ -136,8 +131,10 @@ describe('honest UI', () => {
         if (!res.ok) throw new Error(`upload → ${res.status} ${await res.text()}`);
       }, id);
     }
-    await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
-    await clickButton(page, 'Preview with an opportunity');
+    // The built-in proposal's preview is in its row's menu in Settings → CRM (CD-524).
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await click(page, 'button[aria-label="Actions for Proposal v4"]');
+    await click(page, '[role=menuitem]::-p-text(Preview with an opportunity)');
     // No approval in this funnel (CD-120): Send proposal only marks it as sent.
     await page.waitForFunction(() => document.querySelector('[data-testid=proposal-send]')?.disabled === false);
     await click(page, '[data-testid=proposal-send]');

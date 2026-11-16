@@ -1,4 +1,4 @@
-// Proposal approval (CD-120): configured once per funnel in Settings → Funnels (one switch, one
+// Proposal approval (CD-120): configured once per funnel in Settings → CRM's funnel drawer (one switch, one
 // approver), then on an opportunity's Documents tab: import its proposal, request approval (a task
 // for the approver), approve it, and only then send it. The Approval status filter follows it.
 import assert from 'node:assert/strict';
@@ -6,7 +6,7 @@ import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, createDealInUi, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, chooseOption, click, createDealInUi, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const SWITCH = 'button[aria-label="Proposals in this funnel need approval before they are sent"]';
 
@@ -23,18 +23,23 @@ describe('proposal approval', () => {
     await newUserWithWorkspace(page, { label: 'proposal-approval', name: 'Petra Approver', workspace: 'Approval Co' });
     me = (await api(page, '/profile')).userId;
     funnelId = (await api(page, '/crm/funnels'))[0].id;
-    await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    // One section for the funnel, below its stages; no stage has its own switch.
+    // Settings → CRM: the funnel opens in the side drawer from its row's ⋯ menu (CD-524).
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await click(page, `[data-testid=funnel-choice][data-funnel="${funnelId}"] [data-testid=funnel-menu]`);
+    await click(page, '[data-testid=funnel-edit]');
+    await page.waitForSelector('[data-testid=funnel-card]');
+    // One setting for the funnel, above its stages (CD-524 drawer); no stage has its own switch.
     const order = await page.evaluate(() => {
       const card = document.querySelector('[data-testid=funnel-card]');
       const els = [...card.querySelectorAll('[data-testid=add-stage], [data-testid=funnel-approval]')];
       return els.map((el) => el.dataset.testid);
     });
-    assert.deepEqual(order, ['add-stage', 'funnel-approval']);
+    assert.deepEqual(order, ['funnel-approval', 'add-stage']);
     assert.equal(await page.$$eval(SWITCH, (els) => els.length), 1);
     await click(page, SWITCH);
     await page.waitForSelector('[data-testid=funnel-approver]');
-    await page.select('[data-testid=funnel-approver]', me);
+    // The approver is a dropdown of member names (CD-524).
+    await chooseOption(page, '[data-testid=funnel-approver]', 'Petra Approver');
     const saved = await eventually(async () => {
       const f = (await api(page, '/crm/funnels')).find((x) => x.id === funnelId);
       return f.proposalApproval && f.approverUserId === me;

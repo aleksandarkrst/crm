@@ -1,7 +1,8 @@
-// More than two funnels (CD-10) and adding and removing stages (CD-9) in the funnel builder.
+// More than two funnels (CD-10) and adding and removing stages (CD-9) in Settings → CRM's funnels
+// table and drawer (CD-524).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew, createReadyCompany, pickDealCompany } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, eventually, fillField, newUserWithWorkspace, steps, text, useBrowser, waitForToastToClear, createNew, createReadyCompany, pickDealCompany } from '../lib/harness.mjs';
 
 describe('funnels and stages', () => {
   const browser = useBrowser();
@@ -11,17 +12,32 @@ describe('funnels and stages', () => {
   let dealId;
 
   const funnelNow = async () => (await api(page, '/crm/funnels')).find((f) => f.id === funnel.id);
+  /** Opens a funnel in the side drawer from its row's ⋯ menu in Settings → CRM (CD-524). */
+  const openFunnel = async (id) => {
+    await click(page, `[data-testid=funnel-choice][data-funnel="${id}"] [data-testid=funnel-menu]`);
+    await click(page, '[data-testid=funnel-edit]');
+    await page.waitForSelector('[data-testid=funnel-card]');
+  };
+  const stageNames = () => page.$$eval('[data-testid=funnel-card] .gs-stage-name', (els) => els.map((el) => el.textContent));
 
-  step('creates a third funnel in the funnel builder', async () => {
+  step('creates a third funnel in the New funnel drawer', async () => {
     page = await browser.person('fern');
     await newUserWithWorkspace(page, { label: 'funnels', name: 'Fern Tester', workspace: 'Funnels Co' });
-    await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    await clickButton(page, 'New funnel');
-    await page.waitForSelector('input[placeholder="e.g. Mid-market — marketing lead decides"]');
-    await page.type('input[placeholder="e.g. Mid-market — marketing lead decides"]', 'Mid-market — CMO');
-    await page.type('textarea[placeholder="Who decides, how long it takes, what slows it down"]', 'Marketing lead decides');
-    await clickButton(page, 'Default stages');
-    await clickButton(page, 'Create funnel');
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    // New funnel opens a draft drawer (CD-524): nothing is created until Create funnel.
+    await click(page, '[data-testid=new-funnel]');
+    await page.waitForSelector('[data-testid=new-funnel-drawer] [data-testid=new-funnel-name]');
+    await click(page, '[data-testid=new-funnel-create]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=new-funnel-drawer]')?.textContent.includes('Give the funnel a name.'));
+    assert.equal((await api(page, '/crm/funnels')).length, 2, 'nothing created yet');
+    await page.type('[data-testid=new-funnel-name]', 'Mid-market — CMO');
+    await page.type('[data-testid=new-funnel-drawer] input[aria-label="How they buy"]', 'Marketing lead decides');
+    await click(page, '[data-testid=new-funnel-drawer] [role=radio]::-p-text(Default stages)');
+    const preview = await page.$$eval('[data-testid=new-funnel-stages] .gs-pst-name', (els) => els.map((el) => el.textContent));
+    assert.deepEqual(preview, ['New opportunity', 'Discovery', 'Proposal', 'Won']);
+    await click(page, '[data-testid=new-funnel-create]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-funnel-drawer]'));
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Mid-market — CMO created'));
     funnel = await eventually(async () => (await api(page, '/crm/funnels')).find((f) => f.label === 'Mid-market — CMO'));
     assert.ok(funnel, 'funnel saved');
     assert.equal((await api(page, '/crm/funnels')).length, 3);
@@ -29,20 +45,19 @@ describe('funnels and stages', () => {
       funnel.stages.map((s) => s.name),
       ['New opportunity', 'Discovery', 'Proposal', 'Won'],
     );
-    // The builder opens the new funnel.
-    await page.waitForFunction(() => [...document.querySelectorAll('input.form-input')].some((i) => i.value === 'Mid-market — CMO'));
+    // The funnels table lists the new funnel (CD-524).
+    await page.waitForSelector(`[data-testid=funnel-choice][data-funnel="${funnel.id}"]`);
   });
 
   step('renames the funnel', async () => {
     await waitForToastToClear(page);
-    const found = await page.evaluate(() => {
-      const input = [...document.querySelectorAll('input.form-input')].find((i) => i.value === 'Mid-market — CMO');
-      input?.setAttribute('data-e2e', 'funnel-name');
-      return !!input;
-    });
-    assert.ok(found);
-    await setValue(page, 'input[data-e2e=funnel-name]', 'Mid-market');
+    await openFunnel(funnel.id);
+    assert.equal(await page.$eval('[data-testid=funnel-card] input[aria-label="Funnel name"]', (el) => el.value), 'Mid-market — CMO');
+    // The name saves when it is left (CD-524).
+    await fillField(page, '[data-testid=funnel-card] input[aria-label="Funnel name"]', 'Mid-market');
     assert.ok(await eventually(async () => (await funnelNow()).label === 'Mid-market'), 'rename saved');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=funnel-card]'));
   });
 
   step('adds an opportunity to the third funnel with the New opportunity dialog', async () => {
@@ -78,31 +93,26 @@ describe('funnels and stages', () => {
     for (const item of first.checklistItems)
       await api(page, `/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', body: JSON.stringify({ stageId: first.id, checklistItemId: item.id, done: true }) });
     await api(page, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[1].id }) });
-    await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    // The builder lists the funnels on the left (CD-318): picking one shows it.
-    await page.waitForSelector('[data-testid=funnel-choice]');
-    await page.evaluate(() => [...document.querySelectorAll('[data-testid=funnel-choice]')].find((b) => b.textContent.includes('Mid-market')).click());
-    await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'Discovery'));
+    // Settings → CRM lists the funnels in a table (CD-524): its ⋯ menu opens one in the drawer.
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await openFunnel(funnel.id);
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=funnel-card] .gs-stage-name')].some((el) => el.textContent === 'Discovery'));
 
-    await clickButton(page, 'New stage');
+    await click(page, '[data-testid=add-stage]');
     const added = await eventually(async () => (await funnelNow()).stages.map((s) => s.name).join(',') === 'New opportunity,Discovery,Proposal,New stage,Won');
     assert.ok(added, 'stage added before Won');
-    await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'New stage'));
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=funnel-card] .gs-stage-name')].some((el) => el.textContent === 'New stage'));
+    assert.deepEqual(await stageNames(), ['New opportunity', 'Discovery', 'Proposal', 'New stage', 'Won']);
     await waitForToastToClear(page);
 
-    // "Remove stage" on the Discovery row.
-    await page.evaluate(() => {
-      const input = [...document.querySelectorAll('input.ghost')].find((i) => i.value === 'Discovery');
-      const row = input.closest('[data-testid=funnel-stage]');
-      row.querySelector('button[aria-label="Remove stage"]').click();
-    });
-    await page.waitForFunction(() => [...document.querySelectorAll('label')].some((l) => l.textContent.includes('Move its 1 opportunity to')));
-    await page.evaluate(() => {
-      const label = [...document.querySelectorAll('label')].find((l) => l.textContent.includes('Move its 1 opportunity to'));
-      label.querySelector('select').setAttribute('data-e2e', 'move-to');
-    });
-    await setValue(page, 'select[data-e2e=move-to]', funnel.stages[2].id);
-    await clickButton(page, 'Remove stage');
+    // Delete in the Discovery stage's ⋯ menu; the confirm asks where its opportunity goes.
+    await click(page, '[data-testid=funnel-card] button[aria-label="Actions for Discovery"]');
+    await click(page, '[data-testid=remove-stage]');
+    await page.waitForSelector('[data-testid=remove-stage-confirm]');
+    assert.match(await page.$eval('[data-testid=remove-stage-confirm]', (el) => el.textContent), /1 opportunity is in this stage/);
+    await click(page, '[data-testid=remove-stage-confirm] [role=radio]::-p-text(Proposal)');
+    await page.waitForSelector('[data-testid=remove-stage-confirm] [role=radio][aria-checked=true]::-p-text(Proposal)');
+    await click(page, '[data-testid=remove-stage-confirm] [data-testid=gs-confirm]');
 
     const after = await eventually(async () => {
       const f = await funnelNow();

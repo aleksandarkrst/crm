@@ -1,7 +1,7 @@
-// CD-32: renaming a checklist item in the funnel builder keeps the tick a deal already has on it.
+// CD-32: renaming a checklist item in the funnel editor keeps the tick a deal already has on it.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 describe('renaming a checklist item', () => {
   const browser = useBrowser();
@@ -30,8 +30,12 @@ describe('renaming a checklist item', () => {
     assert.ok(saved.checklistItemId, 'linked to the checklist item');
   });
 
-  step('renames the item in the funnel builder', async () => {
-    await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
+  step('renames the item in the funnel editor', async () => {
+    // Settings → CRM: the opportunity's funnel opens in the drawer from its row's ⋯ menu (CD-524).
+    const { funnelId } = await api(page, '/crm/deals/' + dealId);
+    await page.goto(BASE_URL + '/settings/crm', { waitUntil: 'networkidle0' });
+    await click(page, `[data-testid=funnel-choice][data-funnel="${funnelId}"] [data-testid=funnel-menu]`);
+    await click(page, '[data-testid=funnel-edit]');
     // Stage details open one at a time (CD-318): open the stages in turn until one shows the to-do.
     await page.waitForSelector('[data-testid=funnel-stage]');
     const count = (await page.$$('[data-testid=funnel-stage]')).length;
