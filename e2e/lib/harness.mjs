@@ -235,14 +235,14 @@ export async function ungateFunnels(page) {
 
 /**
  * The rest of onboarding after the workspace was created or joined (CD-115): keeps the name the
- * sign-in gave on "About you" (or `name`), skips "Invite your team", and waits for the app.
+ * sign-in gave on "About you" (or `name`), skips "Invite your team", and waits for the app (on the pipeline).
  */
 export async function finishOnboarding(page, name = 'Test User') {
   let last = null;
   for (let i = 0; i < 4; i++) {
     const at = await page.waitForFunction(
       (last) => {
-        if (document.querySelector('[data-testid=new-menu]')) return 'app';
+        if (document.querySelector('[data-testid=new-menu], [data-testid=home]')) return 'app';
         const progress = document.querySelector('[data-testid=onboarding-progress]')?.textContent ?? '';
         const step = /About you/.test(progress) ? 'profile' : /Invite your team/.test(progress) ? 'team' : null;
         return step !== last && step;
@@ -251,7 +251,7 @@ export async function finishOnboarding(page, name = 'Test User') {
       last,
     );
     last = await at.jsonValue();
-    if (last === 'app') return;
+    if (last === 'app') break;
     if (last === 'profile') {
       const input = await page.waitForSelector('input[placeholder="e.g. Ana Petrović"]');
       if (!(await input.evaluate((el) => el.value))) await input.type(name);
@@ -260,6 +260,9 @@ export async function finishOnboarding(page, name = 'Test User') {
       await clickButton(page, 'Skip for now');
     }
   }
+  // The app opens on Home (CD-288), whose top bar has no "+": the tests start from the pipeline.
+  await page.waitForSelector('[data-testid=new-menu], [data-testid=home]');
+  if (await page.$('[data-testid=home]')) await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
   await page.waitForSelector('[data-testid=new-menu]');
 }
 
