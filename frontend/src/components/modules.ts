@@ -51,6 +51,10 @@ export interface ModuleDef {
    * off). Settings keeps the sidebar of the module it was opened from, so it owns no screens.
    */
   settings?: boolean;
+  /** More words "Find a module" on Home matches (CD-288), besides the name and the description. */
+  keywords?: string;
+  /** Home's second group, "Planning and management, a few times a year" (CD-288); the rest is daily work. */
+  planning?: boolean;
 }
 
 /** The CRM's pages, in sidebar order. */
@@ -103,18 +107,19 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'crm',
     name: 'CRM',
-    description: 'Pipeline, opportunities, contacts',
+    description: 'Pipeline, opportunities, companies',
     icon: 'crm',
     to: paths.pipeline,
     screens: ['/overview', '/pipeline', '/today', '/calendar', '/meetings', '/visit-plans', '/companies', '/contacts', '/products', '/deals', '/reports'],
     nav: CRM_NAV,
+    keywords: 'sales deals leads clients customers contacts offers proposals',
   },
-  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders', '/workload'], nav: PROJECTS_NAV },
-  { id: 'employees', name: 'Employees', description: 'Team, org structure, who is in today', icon: 'employees', to: paths.org(), screens: ['/team', '/org', '/people', '/team-status'], nav: EMPLOYEES_NAV },
-  { id: 'timesheet', name: 'Timesheet', description: 'Hours and approvals', icon: 'timesheet', to: paths.timesheet(), screens: ['/timesheet', '/approvals'], nav: TIMESHEET_NAV },
-  { id: 'timeoff', name: 'Time off', description: 'Vacation and balances', icon: 'timeoff', to: paths.timeOff(), screens: ['/timeoff'], nav: TIMEOFF_NAV },
-  { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, people and time', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
-  { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },
+  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders', '/workload'], nav: PROJECTS_NAV, keywords: 'jobs work service technicians' },
+  { id: 'employees', name: 'Employees', description: 'Team, org structure, who is in today', icon: 'employees', to: paths.org(), screens: ['/team', '/org', '/people', '/team-status'], nav: EMPLOYEES_NAV, keywords: 'people staff hr members departments' },
+  { id: 'timesheet', name: 'Timesheet', description: 'Hours and approvals', icon: 'timesheet', to: paths.timesheet(), screens: ['/timesheet', '/approvals'], nav: TIMESHEET_NAV, keywords: 'time hours weeks entries' },
+  { id: 'timeoff', name: 'Time off', description: 'Vacation and balances', icon: 'timeoff', to: paths.timeOff(), screens: ['/timeoff'], nav: TIMEOFF_NAV, keywords: 'leave holiday absence sick days' },
+  { id: 'settings', name: 'Workspace settings', description: 'Workspace and members', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true, keywords: 'settings preferences configuration modules' },
+  { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [], planning: true },
   { id: 'finance', name: 'Finance', description: 'Receivables, payables, bank', icon: 'finance', screens: [], nav: [] },
   { id: 'reporting', name: 'Reporting', description: 'Schedule and utilisation', icon: 'reports', screens: [], nav: [] },
 ];
@@ -153,9 +158,10 @@ export function homeModules(role: string, modules?: readonly string[]): ModuleDe
   return [...open.filter((m) => !m.settings), ...open.filter((m) => m.settings)];
 }
 
-/** The first module this person can open in a workspace with these modules (switching workspaces, CD-279). */
-export function firstOpenModule(role: string, modules?: readonly string[]): ModuleDef | undefined {
-  return MODULES.find((m) => !m.settings && !lockReason(m, role, modules));
+/** "Find a module" on Home (CD-288): the query in the module's name, description or keywords ("hours" finds Timesheet). */
+export function moduleMatches(m: ModuleDef, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return !q || `${m.name} ${m.description} ${m.keywords ?? ''}`.toLowerCase().includes(q);
 }
 
 /** The module the screen at `pathname` belongs to (none for settings and the profile). */

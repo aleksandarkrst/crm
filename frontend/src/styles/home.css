@@ -1,0 +1,131 @@
+/*
+ * Home (CD-288, spec in the issue, board S-Home), in the redesign's glass look: the --gs-* tokens
+ * in global.css (CD-524 spec, section 4), which `.gs-tokens` on .home-page brings in. The module gradients are --mod-*, shared with the module
+ * switcher and Workspace settings.
+ */
+.home-page {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--gs-bg);
+  color: var(--gs-ink);
+  font-family: var(--gs-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Three soft blobs behind the glass. */
+.home-blobs { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.home-blob { position: absolute; border-radius: 999px; filter: blur(70px); }
+.home-blob-1 { top: -120px; left: -100px; width: 460px; height: 380px; background: var(--gs-blob-2); }
+.home-blob-2 { top: -80px; right: -120px; width: 420px; height: 340px; background: var(--lime); opacity: 0.35; }
+.home-blob-3 { bottom: -160px; left: 50%; width: 560px; height: 360px; margin-left: -280px; background: var(--gs-blob-3); opacity: 0.45; }
+
+.home-glass {
+  background: var(--gs-glass);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--gs-glass-line);
+  box-shadow: var(--gs-glass-shadow);
+}
+
+/* Top bar: a glass pill with Pultly, the workspace switcher, the bell and the avatar. */
+.home-bar { position: sticky; top: 14px; z-index: 20; display: flex; align-items: center; gap: 12px; margin: 14px 20px 0; padding: 8px 10px 8px 14px; border-radius: 999px; }
+.home-brand { display: inline-flex; align-items: center; gap: 9px; flex: none; }
+.home-brand-tile { width: 32px; height: 32px; border-radius: 9px; background: var(--forest); display: inline-flex; align-items: center; justify-content: center; }
+.home-brand-name { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.home-bar-right { margin-left: auto; display: flex; align-items: center; }
+/* The bell and account menus look as on every other page (the app's font until it all moves to the redesign). */
+.home-bar .header-right { gap: 8px; font-family: var(--font); }
+
+.home-ws { position: relative; min-width: 0; }
+.home-ws-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 34px; padding: 0 10px 0 5px; border: 0; border-radius: 999px; background: var(--gs-chip); color: var(--gs-ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.home-ws-btn:hover { background: var(--gs-chip-2); }
+.home-ws-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-ws-tile { flex: none; width: 24px; height: 24px; border-radius: 7px; background: var(--brand); color: var(--white); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.home-ws-tile-lg { width: 30px; height: 30px; border-radius: 8px; }
+.home-ws-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; width: 280px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 6px; border-radius: 16px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); animation: homePop 0.18s var(--gs-ease); transform-origin: top left; }
+.home-menu-head { padding: 6px 10px 4px; font-size: 12px; font-weight: 600; color: var(--gs-muted); }
+.home-menu-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--gs-ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.home-menu-row:hover, .home-menu-row:focus-visible { background: var(--gs-chip); outline: none; }
+.home-menu-row svg { color: var(--brand); flex: none; }
+.home-menu-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.home-menu-text > span:first-child { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-menu-sub { font-size: 12px; color: var(--gs-text-2); }
+@keyframes homePop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* The content column. */
+.home { width: 100%; max-width: 980px; box-sizing: border-box; margin: 0 auto; padding: 34px 24px 56px; display: flex; flex-direction: column; gap: 26px; }
+.home-hello { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.home-date { font-size: 14px; color: var(--gs-text-2); }
+.home-greeting { margin: 0; font-family: var(--gs-font-display); font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.025em; color: var(--gs-ink); }
+.home-search { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 420px; height: 40px; margin-top: 12px; padding: 0 14px; box-sizing: border-box; border-radius: 999px; color: var(--gs-muted); }
+.home-search:focus-within { box-shadow: var(--gs-glass-shadow), 0 0 0 2px var(--brand); }
+.home-search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 14px; color: var(--gs-ink); outline: none; }
+.home-search input::placeholder { color: var(--gs-muted); }
+
+/* Module tiles: one glass card holding the grid. */
+.home-card { border-radius: 28px; padding: 14px; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.home-tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 10px 18px; border-radius: 20px; color: var(--gs-ink); text-align: center; text-decoration: none; transition: background 0.2s var(--gs-ease), box-shadow 0.2s var(--gs-ease), transform 0.2s var(--gs-ease); }
+.home-tile:hover { background: var(--gs-tile-hover); box-shadow: var(--gs-tile-hover-shadow); }
+.home-tile:active { transform: scale(0.96); }
+.home-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-icon { width: 68px; height: 68px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: var(--white); background: var(--mod-other); box-shadow: var(--shadow-icon); transition: transform 0.2s var(--gs-ease); }
+.home-tile:hover .home-icon { transform: translateY(-3px); }
+.home-icon svg { stroke-width: 1.8; }
+.home-icon-crm { background: var(--mod-crm); }
+.home-icon-projects { background: var(--mod-projects); }
+.home-icon-employees { background: var(--mod-employees); }
+.home-icon-timesheet { background: var(--mod-timesheet); }
+.home-icon-timeoff { background: var(--mod-timeoff); }
+.home-icon-settings { background: var(--mod-settings); }
+.home-name { font-size: 15px; font-weight: 600; }
+.home-line { font-size: 12.5px; line-height: 16px; color: var(--gs-text-2); }
+/* Between the daily modules and the planning ones; only when a planning tile is shown. */
+.home-divider { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin: 4px 6px; font-size: 12px; font-weight: 600; color: var(--gs-muted); }
+.home-divider::before, .home-divider::after { content: ''; flex: 1; height: 1px; background: var(--gs-divider); }
+.home-none { margin: -10px 0 0; text-align: center; font-size: 13px; color: var(--gs-text-2); }
+.home-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 36px 20px; text-align: center; font-size: 14px; color: var(--gs-text-2); }
+
+/* Pill buttons (32px, 13.5px semibold). */
+.home-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--gs-chip); color: var(--gs-ink); font: inherit; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background 0.2s var(--gs-ease); }
+.home-btn:hover { background: var(--gs-chip-2); }
+.home-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-btn-primary { background: var(--brand); color: var(--white); }
+.home-btn-primary:hover { background: var(--forest); }
+
+/* Waiting for you. */
+.home-waiting { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 720px; margin: 6px auto 0; }
+.home-waiting-head { display: flex; align-items: baseline; gap: 12px; padding: 0 4px; }
+.home-waiting-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; color: var(--gs-ink); }
+.home-waiting-head span { font-size: 12.5px; color: var(--gs-text-2); }
+.home-waiting-list { border-radius: 18px; overflow: hidden; }
+.home-waiting-row { display: flex; align-items: center; gap: 12px; min-height: 56px; box-sizing: border-box; padding: 10px 16px; border-top: 1px solid var(--gs-divider); font-size: 14px; }
+.home-waiting-row:first-child { border-top: 0; }
+/* Its colour comes from .home-icon-<module>, set on the same element. */
+.home-mini { flex: none; width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--white); }
+.home-waiting-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-waiting-meta { font-size: 12.5px; color: var(--gs-text-2); }
+.home-waiting-empty { margin: 0; padding: 18px 16px; font-size: 14px; color: var(--gs-text-2); }
+.home-more { align-self: center; border: 0; background: none; padding: 4px 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--brand); cursor: pointer; border-radius: 8px; }
+.home-more:hover { text-decoration: underline; }
+.home-more:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .home-ws-name { max-width: 140px; }
+}
+@media (max-width: 600px) {
+  .home-bar { margin: 10px 12px 0; top: 10px; gap: 8px; }
+  .home-brand-name { display: none; }
+  .home { padding: 24px 16px 40px; }
+  .home-greeting { font-size: 26px; line-height: 32px; }
+  .home-card { padding: 8px; border-radius: 22px; }
+  .home-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .home-tile { padding: 16px 6px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-tile, .home-icon, .home-btn, .home-menu { transition: none; animation: none; }
+}

@@ -9,7 +9,7 @@ const hooks = registerHooks({
     return nextResolve(/^\.\.?\/.*\/[^./]+$/.test(specifier) ? specifier + '.ts' : specifier, context);
   },
 });
-const { WORKSPACE_MODULES, homeModules } = await import('../src/components/modules.ts');
+const { WORKSPACE_MODULES, homeModules, moduleMatches } = await import('../src/components/modules.ts');
 const { paths } = await import('../src/lib/paths.ts');
 hooks.deregister();
 
@@ -36,6 +36,15 @@ describe('Home (CD-288)', () => {
 
   it('opens each module where the switcher does', () => {
     for (const m of homeModules('owner', WORKSPACE_MODULES)) assert.ok(m.to, `${m.id} has a page to open`);
+  });
+
+  it('finds a module by name, description or keyword', () => {
+    const found = (q: string) => homeModules('owner', WORKSPACE_MODULES).filter((m) => moduleMatches(m, q)).map((m) => m.id);
+    assert.deepEqual(found('hours'), ['timesheet']);
+    assert.deepEqual(found('sales'), ['crm']);
+    assert.deepEqual(found('  Time OFF '), ['timeoff']);
+    assert.deepEqual(found('risk'), []);
+    assert.equal(found('').length, 6);
   });
 
   it('is the root path, where sign-in and every unknown URL land', () => {

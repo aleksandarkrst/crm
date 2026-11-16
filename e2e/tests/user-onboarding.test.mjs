@@ -39,7 +39,7 @@ describe('onboarding after sign-up', () => {
   step('inviting the team finishes onboarding and opens the app, with "Invite your team" done', async () => {
     await owner.type('input[aria-label="Email 1"]', colleague);
     await clickButton(owner, 'Send invitation');
-    await owner.waitForSelector('[data-testid=new-menu]', { timeout: 15_000 });
+    await owner.waitForSelector('[data-testid=home]', { timeout: 15_000 });
     // The app opens on Home (CD-288); the checklist is on the CRM pages.
     await owner.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await owner.waitForSelector('[data-testid=getting-started] li[data-step=invite][data-done=true]');
@@ -67,7 +67,7 @@ describe('onboarding after sign-up', () => {
     await clickButton(invited, 'Accept and join');
     await invited.waitForFunction(() => document.querySelector('[data-testid=onboarding-progress]')?.textContent.includes('Step 2 of 2 · About you'));
     await click(invited, 'button[type=submit]');
-    await invited.waitForSelector('[data-testid=new-menu]', { timeout: 15_000 });
+    await invited.waitForSelector('[data-testid=home]', { timeout: 15_000 });
     const me = await api(invited, '/me');
     assert.deepEqual(
       me.tenants.map((t) => t.name),

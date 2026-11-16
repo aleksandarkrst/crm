@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { type ApiTenant } from '../lib/api';
 import { useStore } from '../store/store';
 import { Icon } from './icons';
-import { currentModule, enabledModules, firstOpenModule, LOCK_LABEL, lockReason, type ModuleDef, switcherModules } from './modules';
+import { paths } from '../lib/paths';
+import { currentModule, LOCK_LABEL, lockReason, switcherModules } from './modules';
 import '../styles/header.css';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -22,13 +23,11 @@ const members = (t: ApiTenant) => (t.memberCount === undefined ? null : `${t.mem
  * Arrow keys move between items; Escape, an outside click or a pick closes it.
  *
  * CD-279: Workspace settings is a tile for owners and admins (members don't see it, CD-523), and
- * a module turned off for the workspace is locked "Not in this workspace". Switching workspaces keeps
- * the module you're in; if the other workspace doesn't have it, a toast says so and its first module
- * opens ("Acme has no Projects. Opening CRM…"); with none that opens here, the toast says that and
- * nothing changes.
+ * a module turned off for the workspace is locked "Not in this workspace". Switching workspaces lands
+ * on the other workspace's Home (CD-288).
  */
 export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trigger: RefObject<HTMLElement | null> }) {
-  const { s, session, flash } = useStore();
+  const { s, session } = useStore();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [view, setView] = useState<'modules' | 'workspaces'>('modules');
@@ -38,12 +37,9 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
   const [error, setError] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const onSettings = pathname === '/settings' || pathname.startsWith('/settings/');
-  const onAccount = pathname === '/profile' || pathname.startsWith('/profile/');
   const here = currentModule(pathname, session.userId);
   // On Settings the Workspace settings tile is the current one (the sidebar keeps the last module).
   const currentId = onSettings ? 'settings' : here.id;
-  // This workspace's modules as just saved in Settings; the others' from GET /me.
-  const modulesOf = (t: ApiTenant) => (t.id === session.tenant.id ? s.workspace.modules : enabledModules(t.modules));
   const tenants = [...session.tenants].sort((a, b) => a.name.localeCompare(b.name));
   const several = tenants.length > 1;
 
@@ -98,29 +94,12 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
     items[next]?.focus();
   };
 
-  /** Switches workspace, keeping the module you're in when the other workspace has it (CD-279). */
+  /** Switches workspace and lands on its Home (CD-288 spec; before, CD-279 kept the module you were in). */
   const switchTo = (t: ApiTenant) => {
     onClose();
     if (t.id === session.tenant.id) return;
-    const theirs = modulesOf(t);
-    const stays = onSettings || onAccount || !lockReason(here, t.role, theirs);
-    if (stays) {
-      // A record page (a deal, a project) belongs to this workspace: open the module's start instead.
-      if (!onSettings && !onAccount && here.to) navigate(here.to);
-      session.switchTenant(t.id);
-      return;
-    }
-    const first: ModuleDef | undefined = firstOpenModule(t.role, theirs);
-    if (!first?.to) {
-      flash(`${t.name} has no modules turned on that open here.`);
-      return;
-    }
-    flash(`${t.name} has no ${here.name}. Opening ${first.name}…`);
-    const to = first.to;
-    window.setTimeout(() => {
-      navigate(to);
-      session.switchTenant(t.id);
-    }, 900);
+    navigate(paths.home);
+    session.switchTenant(t.id);
   };
 
   const create = async (e: FormEvent) => {

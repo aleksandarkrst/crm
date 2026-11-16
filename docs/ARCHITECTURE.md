@@ -2619,36 +2619,42 @@ The button under the Pultly mark in the sidebar (it shows the module you're in, 
   with one, its name sits next to "Modules". Either opens the list: each workspace with its member
   count (`memberCount` in GET /me's `tenants`), the current one checked, and "New workspace".
   Switching and creating reuse the session's `switchTenant` / `createTenant`.
-  - **Switching keeps the module** you're in (its start page, since a record belongs to the other
-    workspace; Settings and the profile stay). If the other workspace doesn't have it, the toast
-    "Acme has no Projects. Opening CRM…" shows and its first module that opens here opens after a
-    moment; with none, the toast "Acme has no modules turned on that open here." and nothing
-    changes.
+  - **Switching lands on Home** (CD-288 spec; from here, from "More" on phones and from Home's own
+    switcher). Until CD-288 it kept the module you were in (CD-279).
 - Arrow keys move focus (two columns in the grid), every item has a focus ring, Escape or an
   outside click closes it and focus goes back to the switcher button. On phones it opens from
   "More" as a bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
 
 ### Home (CD-288)
 
-`/` is **Home** (`screens/Home.tsx`, design "Home, all modules"), where everyone lands: after
-sign-in, onboarding, a new workspace, an unknown URL and every "go home" redirect. It replaced the
-per-user start page. The date, "Good morning, <first name>", a "Find a module" search (name and
-description), and one tile per module this person can open (`homeModules(role, modules)` in
-`modules.ts`: turned on in Workspace settings, built, allowed for their role; Workspace settings
-last, for owners and admins only, CD-523). A tile is the module's colour (`--mod-<id>` tokens),
-icon, name and description, and opens the module's start page. No module on: an empty state that
-links owners and admins to Settings → Modules and tells members to ask one. No counts or previews
-on the tiles and no widget boxes. Below them, **Waiting for you** ("From all your modules";
+`/` is **Home** (`screens/Home.tsx`, styles `styles/home.css`; the spec in the issue, board
+S-Home), where everyone lands: after sign-in, onboarding, a new workspace, switching workspace, an
+unknown URL and every "go home" redirect. It replaced the per-user start page. It is in the
+redesign's glass look: its tokens (CD-524 spec, section 4) are set on `.home-page` so nothing else
+changes; the page is #EEF2F0 with three blurred blobs. A glass top bar has Pultly, the **workspace
+switcher** (initials and name; a glass menu of every workspace with the role and a check on the
+current one; picking one loads its Home) and the header's bell and avatar menu (`HeaderRight`).
+Then the date, "Good morning, <first name>", a "Find a module" search (name, description and
+`keywords` in `modules.ts`, so "hours" finds Timesheet; Escape clears; no match: "No module matches
+that."), and one tile per module this person can open (`homeModules(role, modules)` in
+`modules.ts`: turned on in Workspace settings, built, allowed for their role; Settings last, for
+owners and admins only, CD-523) in a glass card. Tiles come in two groups, daily work and
+`planning: true` modules ("Planning and management, a few times a year", the divider only when one
+of those shows). A tile is the module's colour (`--mod-<id>` tokens), icon, name and description
+(the same text as Workspace settings' Modules section), and opens the module's start page. No
+module on: "No modules are on yet." with "Turn on modules" (Settings → Modules) for owners and
+admins; members are told to ask an admin of the workspace. No counts or previews on the tiles and
+no widget boxes. Below them, **Waiting for you** ("From all your modules";
 `useWaiting` in `store/home.ts`, rules in `store/waiting.ts`) lists what needs this person in the
-modules they can open, oldest first: their overdue opportunity tasks (CRM, from the store) and
+modules they can open, late items first, then the newest; five rows, then "Show all N". The rows: their overdue opportunity tasks (CRM, from the store) and
 project tasks (`GET /tasks?assigneeId=me`), the weeks with days waiting that they can approve
 (`GET /timesheet/approvals` for the Approvals week and the one before; managers, Admins and the
 owner), and the time off requests waiting for their decision (`GET /timeoff/approvals`). Each row:
-the module's icon, what it is, the module and when, and Open or Review to where it is acted on.
-Nothing: "Nothing is waiting for you." Home itself has
-no sidebar (nor the phone bar): its tiles are the way in. On every other page the Pultly mark at the
-top of the sidebar opens it; on phones, where the mark isn't shown, Home is first under "More"
-(`HOME` in `Layout.tsx`); ⌘K has "Home" too.
+the module's icon, what it is, the module and when ("Timesheet, Friday"), and Open or Review to where it is acted on.
+Nothing: "Nothing is waiting for you." Home itself has no sidebar (nor the phone bar), as in its
+design: its tiles are the way in. Everywhere else **Home is the rail's first item in every module**
+(`HOME` in `Layout.tsx`), and the Pultly mark opens it too; on phones Home is first under "More";
+⌘K has "Home" too.
 
 ### Modules as separate apps (CD-223)
 

@@ -5,7 +5,7 @@
 // Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
 // short window go under "More"; on phones it is a bottom sheet. CD-279: Workspace settings is a
 // tile (owners and admins; members don't see it, CD-523), modules turned off for a workspace say "Not in this workspace", and
-// switching to a workspace without the current module opens its first one, or says it has none.
+// switching workspace lands on Home (CD-288).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 // Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
@@ -17,11 +17,12 @@ const LOGO = '[data-testid=module-switcher]';
 const MORE = '[data-testid=sidebar-more]';
 const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
-const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
+// Home is the rail's first item in every module (CD-288).
+const CRM_PAGES = ['Home', 'Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
 /** The sidebar's last CRM page, and where it goes. */
 const LAST_PAGE = VISIT_PLANS_ENABLED ? { label: 'Reports', path: '/reports/' } : { label: 'Products', path: '/products' };
 // Workforce split into Employees, Timesheet and Time off (CD-521). The owner also sees Team and Today's status (CD-162).
-const EMPLOYEES_PAGES = ['Team', 'Org structure', "Today's status"];
+const EMPLOYEES_PAGES = ['Home', 'Team', 'Org structure', "Today's status"];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();
@@ -48,6 +49,9 @@ describe('module and workspace switcher', () => {
     }));
   const inModule = (id) => page.waitForFunction((id) => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === id, {}, id);
   const closed = () => page.waitForFunction((sel) => !document.querySelector(sel), {}, POP);
+  /** In this workspace: the sidebar's switcher says so, or Home's workspace switcher (Home has no sidebar, CD-288). */
+  const inWorkspace = (name) =>
+    page.waitForFunction((name) => (document.querySelector('[data-testid=module-switcher]')?.title ?? document.querySelector('[data-testid=home-workspace]')?.textContent ?? '').includes(name), {}, name);
   const focused = () => page.evaluate(() => document.activeElement?.getAttribute('data-module') ?? document.activeElement?.getAttribute('data-testid'));
   const ctrlJ = async () => {
     await page.keyboard.down('Control');
@@ -242,7 +246,7 @@ describe('module and workspace switcher', () => {
     await page.waitForSelector(`${POP} [data-module]`);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, firstWorkspace);
+    await inWorkspace(firstWorkspace);
   });
 
   /** Sets a workspace's modules through the API, as its owner (whichever workspace is open). */
@@ -258,22 +262,22 @@ describe('module and workspace switcher', () => {
       tenantName,
       modules,
     );
-  const toast = (text) => page.waitForFunction((text) => document.querySelector('.toast')?.textContent.includes(text), {}, text);
 
-  step('switching to a workspace without the current module opens its first one (CD-279 TC 4)', async () => {
+  step('switching workspace lands on its Home, whatever module you were in (CD-288)', async () => {
     await setModules(secondWorkspace, ['crm']);
     await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
     await inModule('projects');
     await click(page, LOGO);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${secondWorkspace}"]`);
-    await toast(`${secondWorkspace} has no Projects. Opening CRM…`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, secondWorkspace);
-    await page.waitForFunction(() => location.pathname === '/pipeline');
-    await inModule('crm');
+    await inWorkspace(secondWorkspace);
+    await page.waitForSelector('[data-testid=home-modules]');
+    assert.equal(new URL(page.url()).pathname, '/');
+    assert.deepEqual(await page.$$eval('[data-testid=home-modules] [data-module]', (els) => els.map((el) => el.dataset.module)), ['crm', 'settings']);
   });
 
   step('modules turned off show "Not in this workspace"; Settings → Modules turns them on (CD-318)', async () => {
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, LOGO);
     const rows = await modules();
     assert.deepEqual(
@@ -295,16 +299,24 @@ describe('module and workspace switcher', () => {
     await closed();
   });
 
-  step('a workspace with no module that opens here: a toast, and nothing changes (CD-279 TC 3)', async () => {
+  step("a workspace with no module that opens: its Home says so; Home's own switcher goes back (CD-288)", async () => {
     await setModules(firstWorkspace, ['planning', 'finance']);
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, LOGO);
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
-    await toast(`${firstWorkspace} has no modules turned on that open here.`);
-    assert.ok((await page.$eval(LOGO, (el) => el.title)).includes(secondWorkspace), 'still in the second workspace');
-    assert.equal(new URL(page.url()).pathname, '/pipeline');
+    await inWorkspace(firstWorkspace);
+    await page.waitForSelector('[data-testid=home-empty]');
+    assert.equal(new URL(page.url()).pathname, '/');
+    assert.match(await page.$eval('[data-testid=home-empty]', (el) => el.textContent), /No modules are on yet\.Turn on modules/);
     await setModules(firstWorkspace, ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting']);
+    // Home's workspace switcher: the workspaces, the current one ticked; picking one opens its Home.
+    await click(page, '[data-testid=home-workspace]');
+    const rows = await page.$$eval('.home-menu [role=menuitemradio]', (els) => els.map((el) => [el.querySelector('.home-menu-text span').textContent, el.getAttribute('aria-checked')]));
+    assert.deepEqual(rows, [[firstWorkspace, 'true'], [secondWorkspace, 'false']].sort((a, b) => a[0].localeCompare(b[0])));
+    await click(page, `.home-menu [role=menuitemradio]::-p-text(${secondWorkspace})`);
+    await page.waitForFunction((name) => document.querySelector('[data-testid=home-workspace]')?.textContent.includes(name), {}, secondWorkspace);
+    await page.waitForSelector('[data-testid=home-modules]');
   });
 
   step("a member doesn't see Workspace settings in the switcher or the sidebar (CD-523)", async () => {

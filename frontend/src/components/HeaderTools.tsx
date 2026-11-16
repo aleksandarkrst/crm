@@ -29,8 +29,8 @@ export function HeaderCenter({ create = true }: { create?: boolean }) {
   );
 }
 
-/** Closes a popover on a click outside it or Escape. */
-function usePopover() {
+/** Closes a popover on a click outside it or Escape (also Home's workspace menu, CD-288). */
+export function usePopover() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

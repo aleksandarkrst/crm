@@ -140,13 +140,23 @@ describe('settings and discovery fields', () => {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=home-modules]');
     assert.equal(new URL(page.url()).pathname, '/');
+    // Home has no sidebar, as in its design (CD-288).
     assert.equal(await page.$('.app-sidebar'), null, 'Home has no sidebar');
     assert.match(await page.$eval('[data-testid=home-waiting]', (el) => el.innerText), /Waiting for you[\s\S]*From all your modules/);
-    // A tile opens its module, which has its sidebar again.
+    // "Find a module" finds by keyword, says when nothing matches, and Escape clears it.
+    await page.type('[data-testid=home-search]', 'hours');
+    assert.deepEqual(await page.$$eval('[data-testid=home-modules] [data-module]', (els) => els.map((el) => el.dataset.module)), ['timesheet']);
+    await page.type('[data-testid=home-search]', 'xyz');
+    await page.waitForFunction(() => document.querySelector('.home-none')?.textContent.startsWith('No module matches that.'));
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$eval('[data-testid=home-search]', (el) => el.value), '');
+    // A tile opens its module; Home in the rail and the Pultly mark take them back.
     await click(page, '[data-testid=home-modules] [data-module=crm]');
     await page.waitForFunction(() => location.pathname === '/pipeline');
-    // The Pultly mark takes them back (there is no Home item in the sidebar).
-    assert.equal(await page.$('.app-sidebar a.nav-item[href="/"]'), null, 'no Home item in the sidebar');
+    await click(page, '.app-sidebar nav a.nav-item[href="/"]');
+    await page.waitForSelector('[data-testid=home-modules]');
+    await click(page, '[data-testid=home-modules] [data-module=crm]');
+    await page.waitForFunction(() => location.pathname === '/pipeline');
     await click(page, '.app-sidebar a.ws-logo');
     await page.waitForSelector('[data-testid=home-modules]');
   });
