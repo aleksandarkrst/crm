@@ -44,7 +44,7 @@ export function TechniciansSection() {
       flash('Changes saved');
     } catch {
       setRows(before);
-      flash('Could not save. Try again.');
+      flash('Could not save. Try again.', 4000, true);
     }
   };
 

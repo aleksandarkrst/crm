@@ -262,7 +262,7 @@ function PolicyModal({ policy, onClose }: { policy?: ApiTimeOffPolicy; onClose: 
                   flash(`${policy.name} deleted`);
                   onClose(true);
                 } catch (err) {
-                  flash(projectError(err));
+                  flash(projectError(err), 4000, true);
                 }
               });
             }}
@@ -296,7 +296,7 @@ function DecisionsBlock() {
       set(await timeOffApi.updateSettings(patch));
       flash('Changes saved');
     } catch {
-      flash('Could not save. Try again.');
+      flash('Could not save. Try again.', 4000, true);
     }
   };
   const list = (text: string) =>
@@ -371,7 +371,7 @@ function LeaveSection() {
                     setSettings(next);
                     flash('Changes saved');
                   },
-                  () => flash('Could not save. Try again.'),
+                  () => flash('Could not save. Try again.', 4000, true),
                 )
               }
             />
@@ -420,7 +420,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
       flash(done);
       await reload();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
     }
   };
   const remove = async (r: ApiTimeOffReason) => {
@@ -430,7 +430,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
       flash(`${r.name} deleted`);
       await reload();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
     }
   };
   return (
@@ -506,7 +506,7 @@ function ReasonsBlock({ kind }: { kind: ReasonKind }) {
                 flash(`${r.name} added`);
                 await reload();
               } catch (err) {
-                flash(projectError(err));
+                flash(projectError(err), 4000, true);
               }
             }
           }}
@@ -575,7 +575,7 @@ function HolidaysSection() {
       flash(res.added ? `${res.added} ${res.added === 1 ? 'holiday' : 'holidays'} added` : 'Nothing to add: this year was generated already');
       await reload();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
     }
     setBusy(false);
   };
@@ -586,7 +586,7 @@ function HolidaysSection() {
       flash(`${h.name} deleted`);
       await reload();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
     }
   };
   return (
@@ -677,7 +677,7 @@ function HolidayModal({ year, onClose, onAdded }: { year: number; onClose: () =>
       await onAdded(h);
       onClose();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
       setBusy(false);
     }
   };

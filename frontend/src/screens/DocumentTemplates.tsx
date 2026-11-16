@@ -40,7 +40,7 @@ export function TemplatesSection() {
       title="Document templates"
       desc="Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document."
       action={
-        <button type="button" className="gs-btn primary" onClick={() => (canManage ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates'))}>
+        <button type="button" className="gs-btn primary" onClick={() => (canManage ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates', 4000, true))}>
           New template
         </button>
       }

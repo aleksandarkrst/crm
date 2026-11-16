@@ -296,9 +296,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   }, []);
 
   const flash = useCallback(
-    (msg: string, ms = 2600) => {
+    (msg: string, ms = 2600, error = false) => {
       clearTimeout(toastTimer.current);
-      set({ toast: msg });
+      set({ toast: msg, toastError: error });
       toastTimer.current = setTimeout(() => set({ toast: '' }), ms);
     },
     [set],
@@ -406,7 +406,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       if (failed) {
         // Workspace settings say it the design's way (CD-524); the reload restores the saved value.
-        if (settingsToasts.current) flash('Could not save. Try again.');
+        if (settingsToasts.current) flash('Could not save. Try again.', 4000, true);
         else flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
         await reload();
         return;

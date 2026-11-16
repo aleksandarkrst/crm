@@ -50,7 +50,7 @@ export function useCompanyField() {
     if (next === sendable(key, value(key))) return;
     const refused = await saveCompany({ [key]: next });
     if (refused) {
-      flash(refused.fields?.[key] ?? 'Could not save. Try again.');
+      flash(refused.fields?.[key] ?? 'Could not save. Try again.', 4000, true);
       setRound((r) => r + 1);
     } else flash('Changes saved');
   };

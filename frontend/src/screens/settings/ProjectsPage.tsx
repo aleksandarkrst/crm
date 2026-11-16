@@ -211,7 +211,7 @@ function ProjectTypesSection() {
               setTypes(await projectsApi.deleteType(deleting.id, deleting.projects ? target : undefined));
               flash(`${deleting.name} deleted`);
             } catch (err) {
-              flash(projectError(err));
+              flash(projectError(err), 4000, true);
             }
             setDeleting(null);
           }}
@@ -267,7 +267,7 @@ function TypeModal({ type, types, onClose, onSaved }: { type: ApiProjectType | n
       flash(type ? 'Project type saved' : 'Project type added');
       onClose();
     } catch (err) {
-      flash(projectError(err));
+      flash(projectError(err), 4000, true);
       setBusy(false);
     }
   };

@@ -349,8 +349,8 @@ export function Layout() {
       {s.toast &&
         (settings ? (
           // Settings' toast is the design's dark pill with a green check (CD-524).
-          <div className="toast toast-glass" role="status">
-            <Icon name="check" size={14} />
+          <div className={'toast toast-glass' + (s.toastError ? ' error' : '')} role={s.toastError ? 'alert' : 'status'}>
+            {!s.toastError && <Icon name="check" size={14} />}
             {s.toast}
           </div>
         ) : (
