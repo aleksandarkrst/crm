@@ -68,7 +68,7 @@ export function Profile() {
       title={current.label}
       search={false}
     >
-      <div className="gs-page" data-testid="account-content" data-page={current.k}>
+      <div className="gs-page gs-account" data-testid="account-content" data-page={current.k}>
         <p className="gs-lede">{current.description}</p>
         {current.k === 'profile' && <ProfilePage />}
         {current.k === 'preferences' && <PreferencesPage />}

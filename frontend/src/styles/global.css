@@ -1609,6 +1609,8 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 }
 @media (max-width: 560px) {
   .gs-ro { text-align: left; }
+  /* On a phone the account's fields take the row's width, under their label. */
+  .gs-account .gs-row-control > .gs-field { width: 100% !important; }
 }
 /* The avatar menu on every page (CD-525 spec 1): a 260 px glass menu, who you are, then 32 px items. */
 .gs-menu.account-pop { width: 260px; max-width: calc(100vw - 24px); max-height: none; overflow: visible; font-family: var(--gs-font); color: var(--gs-ink); text-align: left; }
