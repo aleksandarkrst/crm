@@ -18,9 +18,9 @@ const ICONS: Record<FilterIcon | FilterKind, string> = {
 const iconOf = (fd: FilterField<never>) => ICONS[fd.icon ?? fd.kind];
 const ADD = '__add';
 
-function Icon({ d, size = 15 }: { d: string; size?: number }) {
+function Icon({ d, size = 15, className }: { d: string; size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d={d} />
     </svg>
   );
@@ -125,7 +125,8 @@ function Chip({ fd, v, open, onToggle, onClose, text, children }: { fd: FilterFi
   return (
     <>
       <button ref={ref} type="button" className={'fr-chip' + (on ? ' on' : warn ? ' warn' : '')} data-testid={'filter-chip-' + fd.id} aria-expanded={open} onClick={onToggle}>
-        <Icon d={iconOf(fd)} />
+        {/* The glass list pages (CD-530) show chips without the icon. */}
+        <Icon d={iconOf(fd)} className="fr-chip-icon" />
         <span className="fr-chip-label">{chipLabel(fd, v)}</span>
         <span className="fr-chip-val">{text}</span>
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

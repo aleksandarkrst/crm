@@ -1,409 +1,644 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { FilterBar } from '../components/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
+import { Popover } from '../components/Popover';
 import { VisitProgressCard } from '../components/VisitProgressCard';
 import { VISIT_PLANS_ENABLED } from '../lib/features';
 import { paths } from '../lib/paths';
 import { filterPeople, opportunityFields } from '../store/filterFields';
 import { allOpen, applyFilters, type FilterValue, isActive, markSeen, pruneList, valueText, withNewSubs } from '../store/filters';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, funnelOptions, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { initialsOf } from '../store/initials';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
+import { bandShade, bandWidth, dayCount, daysSince, PIPELINE_KEY, pipelineFilters, type PipelineTarget, STALL_DAYS } from '../store/overview';
+import { APPROVAL_LABELS, approvalStatusOf, billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, dealPayments, funnelOptions, memberName, moneyTotal, num, opportunityName, salesPeople, stageOf, stageOwnerId, stagesFor, stageTargetDays, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import { usePageFilters } from '../store/usePageFilters';
-import type { Drill, Lead, SegKey } from '../store/types';
+import type { Drill, Lead, SegKey, Stage } from '../store/types';
 
-const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
-const TIME_SHADES = ['#F2F5F3', '#DFE6E2', '#C3CEC8', '#87968F', '#56665E', '#2E3D36'];
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
-const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 104px 84px';
-const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
+const shadeVar = (i: number, n: number, won: boolean) => {
+  const { shade } = bandShade(i, n, won);
+  return `var(--ov-shade-${shade})`;
+};
 
-/** The Audience select's "all funnels" (the old Overview filter's value). */
-const ALL_FUNNELS = 'Audience';
-
+/**
+ * Overview (CD-531, boards C-Overview and C-Overview-Stage): how sales is doing at a glance. The
+ * filter bar (Pipeline, Salesperson, Closing date, + Filter), four KPI cards, the pipeline funnel
+ * and the funnel by payment due date, then stage conversion and the opportunities late in their
+ * stage. Every number follows the filter bar; the cards open the Pipeline with the same filter.
+ */
 export function Dashboard() {
   const { s, set, refreshHistory, canSeeBonuses, session } = useStore();
-  const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
+  const navigate = useNavigate();
   // The stage history is loaded each time Overview opens, so it includes the latest moves.
   useEffect(() => {
     void refreshHistory();
   }, [refreshHistory]);
   const me = session.userId;
   const [saved, setSaved] = usePageFilters('overview', { order: ['owner', 'close'], f: { owner: { op: 'is', vals: [] }, close: {} } });
-  // The funnel stays the Audience select it was (owner's call, 24 Oct): all funnels, or one. It is kept with
-  // the other filters (not a chip), so Clear filters resets it to all; a funnel deleted since counts as all.
-  const picked = saved.f.audience?.vals?.[0] ?? '';
-  const audience = s.funnels[picked] ? picked : ALL_FUNNELS;
-  // On "Audience" the Status choices are every funnel's stages, so none of them hides another funnel's deals.
-  const fields = useMemo(() => opportunityFields(s, audience === ALL_FUNNELS ? null : audience, ['owner', 'close']), [s, audience]);
+  // The Pipeline choice is kept with the other filters (not a chip of the row), so Clear resets it to
+  // All pipelines; a pipeline deleted since counts as all.
+  const picked = saved.f[PIPELINE_KEY]?.vals?.[0] ?? '';
+  const pipeline: SegKey | null = s.funnels[picked] ? picked : null;
+  // On All pipelines the Status choices are every funnel's stages, so none of them hides another funnel's opportunities.
+  const fields = useMemo(() => opportunityFields(s, pipeline, ['owner', 'close']), [s, pipeline]);
   // A Status chip keeps "Open" across funnels; single stages of another funnel are dropped.
   const filters = withNewSubs(fields, pruneList(fields, saved, 'status'), 'status');
   const setFilters = (v: FilterValue) => setSaved(markSeen(fields, v, 'status'));
-  const inAudience = audience === ALL_FUNNELS ? s.leads : s.leads.filter((l) => l.segment === audience);
+  const pickPipeline = (id: SegKey | null) => {
+    // Another pipeline: a Status chip takes all of its Open stages, keeping Won and Lost.
+    const next = allOpen(filters, 'status');
+    setFilters({ ...next, f: { ...next.f, [PIPELINE_KEY]: { vals: id ? [id] : [] } } });
+  };
+
+  // On All pipelines the funnel cards show the first pipeline, and a small select switches them.
+  const firstSeg = funnelOptions(s)[0]?.value ?? s.segment;
+  const [cardSeg, setCardSeg] = useState<SegKey>(firstSeg);
+  const seg: SegKey = pipeline ?? (s.funnels[cardSeg] ? cardSeg : firstSeg);
+  const funnel = s.funnels[seg]!;
+
+  const inPipeline = pipeline ? s.leads.filter((l) => l.segment === pipeline) : s.leads;
   // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
   const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
   const closeField = fields.find((x) => x.id === 'close')!;
   const closeOn = isActive(closeField, filters.f.close);
-  // Every panel below works on these deals, so the filter chips (including the closing date) apply everywhere.
-  const beforeDates = applyFilters(inAudience, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
+  // Every card below works on these opportunities, so the filter chips (the closing date too) apply everywhere.
+  const beforeDates = applyFilters(inPipeline, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
   const dashLeads = applyFilters(beforeDates, fields, filters, ctx);
   const undatedHidden = closeOn ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
   const closeText = valueText(closeField, filters.f.close, { today: ctx.today });
   const owners = filters.f.owner?.vals ?? [];
   const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
+  /** The Pipeline with Overview's filter (the funnel the cards show), and Status as the card says. */
+  const openPipeline = (target: PipelineTarget) => {
+    if (s.segment !== seg) set({ segment: seg });
+    navigate(paths.pipeline, { state: { filters: pipelineFilters(filters, target) } });
+  };
 
-  // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
+  // Lost opportunities (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
   const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
   const openLeads = dashLeads.filter((l) => l.outcome === 'open');
   const wonLeads = dashLeads.filter((l) => l.outcome === 'won');
-  // Sums are per currency: a deal in another currency than the workspace's is listed next to it, not added in.
-  const openValue = valueTotal(s, openLeads, true);
-  const wonValue = valueTotal(s, wonLeads, true);
+  // Sums are per currency: an opportunity in another currency than the workspace's is listed next to it, not added in.
   const weighted = moneyTotal(s, openLeads.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * num(stageOf(s, l).prob)) / 100 })), true);
-  const stalled = openLeads.filter((l) => l.stall >= 3);
-  const metrics = [
-    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open opportunity', 'open opportunities') + ' in the current filter' },
-    { label: 'Weighted pipeline', value: weighted, note: "Open value × each stage's win probability" },
-    { label: 'Won', value: wonValue, note: plural(wonLeads.length, 'opportunity', 'opportunities') + ' in the won stage' },
-    { label: 'Stalled', value: String(stalled.length), note: 'Open opportunities with no contact for 3+ days' },
+  const stalled = openLeads.filter((l) => l.stall >= STALL_DAYS);
+  const kpis: { label: string; value: string; note: string; target: PipelineTarget }[] = [
+    { label: 'Open pipeline', value: valueTotal(s, openLeads, true), note: plural(openLeads.length, 'open opportunity', 'open opportunities') + ' in the current filter', target: { kind: 'open' } },
+    { label: 'Weighted pipeline', value: weighted, note: "Open value times each stage's win probability", target: { kind: 'open' } },
+    { label: 'Won', value: valueTotal(s, wonLeads, true), note: plural(wonLeads.length, 'opportunity', 'opportunities') + ' in the won stage', target: { kind: 'won' } },
+    { label: 'Stalled', value: String(stalled.length), note: `Open opportunities with no contact for ${STALL_DAYS}+ days`, target: { kind: 'stalled' } },
   ];
 
-  const stages = stagesFor(s, dashSeg);
-  const stageFunnel = stages.map((x, i) => {
-    const rows = liveLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
-    return {
-      name: x.name,
-      ids: rows.map((l) => l.id),
-      meta: plural(rows.length, 'opportunity', 'opportunities') + ' · ' + valueTotal(s, rows),
-      width: 100 - i * (58 / Math.max(1, stages.length - 1)) + '%',
-      bg: STAGE_SHADES[Math.min(i, STAGE_SHADES.length - 1)],
-      fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
-      subFg: i >= 4 ? '#DCEBE4' : '#475750',
-    };
-  });
-
-  // The header counts every opportunity in view; the funnel only the open and won ones of its funnel (CD-478), so it says what it leaves out.
+  // The funnel counts the open and won opportunities of its pipeline (CD-478), so it says what it leaves out.
+  const stages = stagesFor(s, seg);
   const lostInView = dashLeads.length - liveLeads.length;
-  const otherFunnels = liveLeads.filter((l) => l.segment !== dashSeg).length;
-  const funnelLeftOut = [lostInView && `${lostInView} lost`, otherFunnels && `${otherFunnels} in other funnels`].filter(Boolean).join(', ');
+  const otherFunnels = liveLeads.filter((l) => l.segment !== seg).length;
+  const notCounted = [lostInView && `${lostInView} lost`, otherFunnels && `${otherFunnels} in other funnels`].filter(Boolean).join(', ');
+  const inFunnel = liveLeads.filter((l) => l.segment === seg);
+  const [openStage, setOpenStage] = useState<string | null>(null);
+  const bandRefs = useRef(new Map<string, HTMLButtonElement>());
+  const shownStage = openStage && stages.some((st) => st.id === openStage) ? openStage : null;
+  const closeStage = () => {
+    const band = shownStage ? bandRefs.current.get(shownStage) : undefined;
+    setOpenStage(null);
+    band?.focus();
+  };
 
-  const today = new Date();
-  const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
   // Payments without a date (a product without a billing start date, an installment without a
-  // date) can't be placed, so they are left out and their deals counted below. Only Won
+  // date) can't be placed, so they are left out and their opportunities counted below. Only Won
   // opportunities count: money that is contracted, not hoped for (CD-365).
+  const now = new Date();
+  const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
   let undatedDeals = 0;
   for (const l of wonLeads) {
     const { payments: dated, undated } = dealPayments(s, l);
     if (undated) undatedDeals++;
     for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
   }
-  const timeFunnel = TIME_BUCKETS.map((b, i) => {
+  const dueBands = TIME_BUCKETS.map((b, i) => {
     const due = payments.filter((p) => {
-      const diff = (p.when.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
+      const diff = (p.when.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
       return diff > b.range[0] && diff <= b.range[1];
     });
     const ids = [...new Set(due.map((p) => p.leadId))];
     return {
+      i,
       label: b.label,
       ids,
-      value: moneyTotal(s, due),
-      // Per deal, only what falls due in this band (CD-365), not the deal's whole value.
+      short: moneyTotal(s, due, true),
+      full: moneyTotal(s, due),
+      // Per opportunity, only what falls due in this band (CD-365), not its whole value.
       amounts: Object.fromEntries(ids.map((id) => [id, moneyTotal(s, due.filter((p) => p.leadId === id))])),
-      width: 100 - i * 11 + '%',
-      bg: TIME_SHADES[i],
-      fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
-      subFg: i >= 3 ? '#E2E8E4' : '#475750',
     };
   });
 
-  // Sales bonuses (CD-17): owners and admins only, from the rules saved in Settings → Sales bonuses.
-  const trigger = s.bonusTrigger || 'On contract signed';
-  const totalEarned: { currency?: string; amount: number }[] = [];
-  const totalPending: { currency?: string; amount: number }[] = [];
-  const bonusRows = (canSeeBonuses ? salesPeople(s) : [])
-    .filter(({ value: ownerId }) => !owners.length || owners.includes(ownerId))
-    .map(({ value: ownerId, label: owner }) => {
-    const rule = bonusRule(s, ownerId);
-    const mine = liveLeads.filter((l) => l.ownerId === ownerId);
-    const earned: { currency?: string; amount: number }[] = [];
-    const pending: { currency?: string; amount: number }[] = [];
-    const earnedIds: string[] = [];
-    const pendingIds: string[] = [];
-    for (const l of mine) {
-      const bonus = bonusOf(l, rule, s.workspace.currency);
-      const won = l.outcome === 'won';
-      const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
-      if (won && full) {
-        earned.push({ currency: l.currency, amount: bonus });
-        earnedIds.push(l.id);
-      } else {
-        pending.push({ currency: l.currency, amount: bonus });
-        pendingIds.push(l.id);
-      }
-    }
-    totalEarned.push(...earned);
-    totalPending.push(...pending);
-    return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
-  });
-  const ruleText = (v: number | string, suffix = '') => (v === '' ? '—' : String(v) + suffix);
+  const late = openLeads.filter((l) => l.lateDays > 0).sort((a, b) => b.lateDays - a.lateDays);
+  const countLine = `${plural(openLeads.length, 'open opportunity', 'open opportunities')} in view, ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? `, ${undatedHidden} without a closing date hidden` : ''}`;
 
   return (
     <Screen title="Overview">
-      <FilterBar
-        lead={
-          <select
-            aria-label="Funnel"
-            data-testid="overview-funnel"
-            value={audience}
-            // Another funnel: a Status chip takes all of its Open stages, keeping Won and Lost.
-            onChange={(e) => setFilters({ ...allOpen(filters, 'status'), f: { ...allOpen(filters, 'status').f, audience: { vals: e.target.value === ALL_FUNNELS ? [] : [e.target.value] } } })}
-            style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
-          >
-            {[{ value: ALL_FUNNELS, label: 'Audience' }, ...funnelOptions(s)].map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        }
-        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} forceClear={audience !== ALL_FUNNELS} />}
-        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
-      />
+      <div className="ov" data-testid="overview">
+        <div className="ov-fbar">
+          <PipelineChip value={pipeline} onPick={pickPipeline} />
+          <FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} forceClear={pipeline !== null} />
+          <span className="ov-count" data-testid="overview-count">
+            {countLine}
+          </span>
+        </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {s.leads.length === 0 && (
           <EmptyState title="Nothing to measure yet" text="Overview measures your opportunities: open and weighted pipeline, wins, conversion and time in each stage. It fills in as opportunities move." action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }} />
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
-          {metrics.map((m) => (
-            <div key={m.label} className="card" style={{ padding: '16px 17px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <div className="caps">{m.label}</div>
-              <div className="display" style={{ fontSize: 30, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>{m.note}</div>
-            </div>
+
+        <div className="ov-kpis">
+          {kpis.map((k) => (
+            <button key={k.label} type="button" className="gs-glass ov-kpi" data-testid="overview-kpi" onClick={() => openPipeline(k.target)}>
+              <span className="ov-kpi-label">{k.label}</span>
+              <b className="ov-kpi-value">{k.value}</b>
+              <span className="ov-sub">{k.note}</span>
+            </button>
           ))}
         </div>
 
         {/* Its own plan period, independent of the closing-period filter above (CD-135). Switched off for now (CD-522). */}
         {VISIT_PLANS_ENABLED && <VisitProgressCard />}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
-          <div className="card" style={{ padding: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span className="card-title">Pipeline funnel</span>
-                <span className="card-sub" data-testid="funnel-sub">
-                  Opportunities and value by stage{funnelLeftOut ? ` · not counted: ${funnelLeftOut}` : ''}
+        <div className="ov-grid ov-grid-top">
+          <section className="gs-glass ov-card" data-testid="funnel-card">
+            <div className="ov-card-head">
+              <div className="ov-card-titles">
+                <b className="ov-card-title">Pipeline funnel</b>
+                <span className="ov-sub" data-testid="funnel-sub">
+                  {funnel.label}: click a stage to see its opportunities{notCounted ? `, not counted: ${notCounted}` : ''}
                 </span>
               </div>
-              <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
-                {funnelOptions(s).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              {pipeline === null && funnelOptions(s).length > 1 && (
+                <select className="ov-select" aria-label="Funnel shown" data-testid="funnel-card-select" value={seg} onChange={(e) => {
+                    setCardSeg(e.target.value);
+                    setOpenStage(null);
+                  }}
+                >
+                  {funnelOptions(s).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-              {stageFunnel.map((b) => (
-                // A button (CD-502): Tab reaches it, Enter opens the drill, and closing the drill puts focus back here.
-                <button type="button" key={b.name} className="funnel-band" data-testid="funnel-stage-band" onClick={() => drill('Stage', b.name, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.name}</span>
-                  <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.meta}</span>
-                </button>
-              ))}
+            <div className={'ov-bands' + (shownStage ? ' has-on' : '')}>
+              {stages.map((st, i) => {
+                const rows = inFunnel.filter((l) => l.stage === st.id);
+                const on = shownStage === st.id;
+                const dark = bandShade(i, stages.length, !!st.won).dark;
+                return (
+                  // A button (CD-502): Tab reaches it, Enter opens the stage, and closing it puts focus back here.
+                  <button
+                    key={st.id}
+                    ref={(el) => {
+                      if (el) bandRefs.current.set(st.id, el);
+                      else bandRefs.current.delete(st.id);
+                    }}
+                    type="button"
+                    className={'ov-band' + (on ? ' on' : '') + (dark ? ' dark' : '') + (st.won ? ' won' : '')}
+                    data-testid="funnel-stage-band"
+                    aria-pressed={on}
+                    aria-label={`${st.name}: ${plural(rows.length, 'opportunity', 'opportunities')}, ${valueTotal(s, rows)}. Show them`}
+                    title={`${st.name}: ${plural(rows.length, 'opportunity', 'opportunities')}, ${valueTotal(s, rows)}`}
+                    onClick={() => (on ? closeStage() : setOpenStage(st.id))}
+                    style={{ width: bandWidth(i, stages.length), background: shadeVar(i, stages.length, !!st.won) }}
+                  >
+                    <b className="ov-band-name">{st.name}</b>
+                    <span className="ov-band-count">{rows.length}</span>
+                    <b className="ov-band-value">{rows.length ? valueTotal(s, rows, true) : '—'}</b>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+            {inFunnel.length === 0 && <div className="ov-empty">No open or won opportunities in this pipeline for the current filter.</div>}
+          </section>
 
-          <div className="card" style={{ padding: 18 }}>
-            <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>
-              {/* CD-365: the bands are separate periods, not running totals. */}
-              Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, without VAT
-              {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
+          <section className="gs-glass ov-card" data-testid="due-card">
+            <div className="ov-card-titles">
+              <b className="ov-card-title">Funnel by payment due date</b>
+              <span className="ov-sub">
+                {/* CD-365: the bands are separate periods, not running totals. */}
+                Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, without VAT.
+                {undatedDeals ? ` ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out.` : ''}
+              </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-              {timeFunnel.map((b) => (
-                <button type="button" key={b.label} className="funnel-band" data-testid="funnel-due-band" onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.value} due in this period` })} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.label}</span>
-                  <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.value}</span>
+            <div className="ov-bands ov-due">
+              {dueBands.map((b) => (
+                <button
+                  key={b.label}
+                  type="button"
+                  className={'ov-band' + (b.i >= 3 ? ' dark' : '')}
+                  data-testid="funnel-due-band"
+                  disabled={!b.ids.length}
+                  title={b.ids.length ? `${b.label}: ${b.full} due, ${plural(b.ids.length, 'opportunity', 'opportunities')}` : `${b.label}: nothing due`}
+                  onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.full} due in this period` })}
+                  style={{ width: bandWidth(b.i, dueBands.length, 46), background: `var(--ov-due-${b.i})` }}
+                >
+                  <b className="ov-band-name">{b.label}</b>
+                  {b.ids.length ? <b className="ov-band-value">{b.short}</b> : <span className="ov-band-dash" aria-label="Nothing due" />}
                 </button>
               ))}
             </div>
-          </div>
+            {wonLeads.length === 0 && <div className="ov-empty">No won opportunities in view. Payments show here once an opportunity is won.</div>}
+          </section>
         </div>
 
-        {canSeeBonuses && (
-        <div className="card" data-testid="bonus-card" style={{ padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
-            <div>
-              <div className="card-title" style={{ marginBottom: 4 }}>Sales bonuses</div>
-              <div className="card-sub">
-                Rate per salesperson, with a flat amount on opportunities under the minimum · earned {trigger.toLowerCase()} · only owners and admins see this ·{' '}
-                <Link to={paths.settings('bonuses')} style={{ color: 'var(--brand)' }}>
-                  Edit the rules
-                </Link>
-              </div>
+        <div className="ov-grid">
+          <StageConversion leads={dashLeads} seg={seg} />
+
+          <section className="gs-glass ov-card ov-late" data-testid="late-card">
+            <div className="ov-late-head">
+              <h2>Late in their stage</h2>
+              <span className="ov-sub">Past the stage target</span>
             </div>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-              {moneyTotal(s, totalEarned)} earned · {moneyTotal(s, totalPending)} pending
+            {late.length === 0 ? (
+              <div className="ov-empty">Nothing is late. Every opportunity is within its stage target.</div>
+            ) : (
+              late.map((l) => {
+                const owner = memberName(s, stageOwnerId(s, l));
+                const target = stageTargetDays(s, l);
+                return (
+                  <Link key={l.id} to={paths.lead(l.id)} className="ov-row" data-testid="late-row">
+                    <span className="gs-face soft ov-face-sm" title={owner}>
+                      {initialsOf(owner)}
+                    </span>
+                    <span className="ov-row-text">
+                      <b>
+                        {opportunityName(l)}
+                        {l.title?.trim() ? `, ${l.company}` : ''}
+                      </b>
+                      <span className="ov-sub">
+                        {stageOf(s, l).name}, owned by {owner}
+                        {target ? `, target ${dayCount(target)}` : ''}
+                      </span>
+                    </span>
+                    <span className="ov-tag late">{dayCount(l.lateDays)} late</span>
+                  </Link>
+                );
+              })
+            )}
+          </section>
+        </div>
+
+        {canSeeBonuses && <Bonuses leads={liveLeads} owners={owners} drill={drill} />}
+      </div>
+
+      {shownStage && (
+        <StagePanel
+          seg={seg}
+          stageId={shownStage}
+          leads={inFunnel}
+          onClose={closeStage}
+          onPick={setOpenStage}
+          onOpenPipeline={(st) => openPipeline({ kind: 'stage', stageId: st.id, won: !!st.won })}
+        />
+      )}
+    </Screen>
+  );
+}
+
+/** The Pipeline chip (CD-531): All pipelines, or one; one value, so radio rows. */
+function PipelineChip({ value, onPick }: { value: SegKey | null; onPick: (id: SegKey | null) => void }) {
+  const { s } = useStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  const options: { id: SegKey | null; name: string }[] = [{ id: null, name: 'All pipelines' }, ...funnelOptions(s).map((o) => ({ id: o.value, name: o.label }))];
+  return (
+    <>
+      <button ref={ref} type="button" className={'fr-chip' + (value ? ' on' : '')} data-testid="filter-chip-pipeline" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="fr-chip-label">Pipeline</span>
+        <span className="fr-chip-val">{value ? s.funnels[value]?.label : 'All pipelines'}</span>
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M2.5 4.5 6 8l3.5-3.5" />
+        </svg>
+      </button>
+      {open && (
+        <Popover anchor={ref} onClose={() => setOpen(false)} label="Pipeline" className="fr-pop" testId="filter-pop-pipeline" keepOnScroll>
+          <div className="fr-list">
+            {options.map((o) => {
+              const on = o.id === value;
+              return (
+                <button
+                  key={o.id ?? 'all'}
+                  type="button"
+                  className="fr-opt"
+                  data-testid="filter-option"
+                  data-value={o.id ?? ''}
+                  aria-pressed={on}
+                  onClick={() => {
+                    onPick(o.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className={'fr-box radio' + (on ? ' on' : '')}>
+                    {on && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="m5 12.5 4.5 4.5L19 7.5" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="fr-opt-text">{o.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Popover>
+      )}
+    </>
+  );
+}
+
+/**
+ * A funnel stage's opportunities (board C-Overview-Stage): a glass panel on the right with the
+ * stage's numbers, its owner and target, the previous and next stage, the opportunities, and the
+ * stage on the Pipeline. Escape, the scrim, × and the band again close it.
+ */
+function StagePanel({ seg, stageId, leads, onClose, onPick, onOpenPipeline }: { seg: SegKey; stageId: string; leads: Lead[]; onClose: () => void; onPick: (id: string) => void; onOpenPipeline: (st: Stage) => void }) {
+  const { s } = useStore();
+  const closeBtn = useRef<HTMLButtonElement>(null);
+  const stages = stagesFor(s, seg);
+  const i = Math.max(0, stages.findIndex((st) => st.id === stageId));
+  const st = stages[i]!;
+  const rows = leads.filter((l) => l.stage === st.id);
+  const prob = num(st.prob);
+  const target = st.targetDays ?? s.funnels[seg]?.targetDays ?? null;
+  const prev = stages[i - 1];
+  const next = stages[i + 1];
+  useEffect(() => {
+    closeBtn.current?.focus();
+  }, [stageId]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const stats = [
+    { k: 'Opportunities', v: String(rows.length) },
+    { k: 'Value', v: rows.length ? valueTotal(s, rows, true) : '—' },
+    { k: 'Weighted', v: rows.length ? moneyTotal(s, rows.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 })), true) : '—' },
+  ];
+  const stageOwner = st.ownerId ? memberName(s, st.ownerId) : null;
+
+  return createPortal(
+    <div className="gs-tokens ov-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ov-panel" role="dialog" aria-modal="true" aria-label={`${st.name} opportunities`} data-testid="stage-panel">
+        <div className="ov-panel-head">
+          <span className="ov-panel-dot" style={{ background: shadeVar(i, stages.length, !!st.won) }} aria-hidden="true" />
+          <div className="ov-panel-titles">
+            <b>{st.name}</b>
+            <span className="ov-sub">
+              {s.funnels[seg]?.label}, stage {i + 1} of {stages.length}
             </span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 640 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
-                {['Salesperson', 'Rate %', `Minimum (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
-                  <span key={h} className="th">
-                    {h}
-                  </span>
-                ))}
-              </div>
-              {bonusRows.map((r) => (
-                <div key={r.ownerId} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{r.owner}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.rate, '%')}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.floor)}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.fixed)}</span>
-                  <span className="hover-underline" onClick={() => r.earnedIds.length && drill('Bonus earned · ' + r.owner, r.rule.trigger, r.earnedIds)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)', cursor: r.earnedIds.length ? 'pointer' : 'default' }}>
-                    {moneyTotal(s, r.earned)}
-                  </span>
-                  <span className="hover-underline" onClick={() => r.pendingIds.length && drill('Bonus pending · ' + r.owner, r.rule.trigger, r.pendingIds)} style={{ fontSize: 13, color: 'var(--text-2)', cursor: r.pendingIds.length ? 'pointer' : 'default' }}>
-                    {moneyTotal(s, r.pending)}
-                  </span>
-                </div>
-              ))}
+          <button ref={closeBtn} type="button" className="gs-x plain" aria-label="Close" data-testid="stage-panel-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="ov-panel-stats">
+          {stats.map((x) => (
+            <div key={x.k} className="ov-mini">
+              <span className="ov-sub">{x.k}</span>
+              <b>{x.v}</b>
             </div>
-          </div>
+          ))}
         </div>
+        <div className="ov-panel-owner">
+          {stageOwner ? (
+            <>
+              <span className="gs-face soft ov-face-sm">{initialsOf(stageOwner)}</span>
+              <span>
+                Stage owner <b>{stageOwner}</b>, target {target ? dayCount(target) : 'none'}
+              </span>
+            </>
+          ) : (
+            <span>Each opportunity's owner answers for this stage, target {target ? dayCount(target) : 'none'}</span>
+          )}
+        </div>
+        {(prev || next) && (
+          <div className="ov-panel-nav">
+            {prev && (
+              <button type="button" className="gs-btn small" aria-label="Previous stage" onClick={() => onPick(prev.id)}>
+                ← {prev.name}
+              </button>
+            )}
+            {next && (
+              <button type="button" className="gs-btn small" aria-label="Next stage" onClick={() => onPick(next.id)}>
+                {next.name} →
+              </button>
+            )}
+          </div>
         )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
-          <StageConversion leads={dashLeads} initialSeg={dashSeg} />
-
-          <div className="card" style={{ padding: 18 }}>
-            <div className="card-title" style={{ marginBottom: 4 }}>Documents generated</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Proposals, quotes, contracts and invoices</div>
-            <div className="empty-dashed">Document counts appear once generated documents are saved to the workspace.</div>
-          </div>
+        <div className="gs-glass ov-panel-list">
+          {rows.length === 0 && <div className="ov-empty">No opportunities in this stage right now.</div>}
+          {rows.map((l) => {
+            const owner = memberName(s, l.ownerId, l.owner);
+            const approval = approvalStatusOf(s, l);
+            return (
+              <Link key={l.id} to={paths.lead(l.id)} className="ov-row ov-opp" data-testid="stage-panel-row">
+                <span className="gs-face" title={owner}>
+                  {initialsOf(owner)}
+                </span>
+                <span className="ov-row-text">
+                  <b>{opportunityName(l)}</b>
+                  <span className="ov-sub">
+                    {l.company}, {dayCount(daysSince(l.stageSince))} in stage
+                  </span>
+                  {(l.lateDays > 0 || l.qualifiedAt || approval === 'pending' || approval === 'approved') && (
+                    <span className="ov-tags">
+                      {l.lateDays > 0 && <span className="ov-tag late">{dayCount(l.lateDays)} late</span>}
+                      {l.qualifiedAt && <span className="ov-tag ok">Qualified</span>}
+                      {(approval === 'pending' || approval === 'approved') && <span className={'ov-tag ' + (approval === 'pending' ? 'amber' : 'ok')}>{APPROVAL_LABELS[approval]}</span>}
+                    </span>
+                  )}
+                </span>
+                <span className="ov-opp-value">
+                  <b>{valueTotal(s, [l])}</b>
+                  <span className="ov-sub">
+                    {prob}%, {moneyTotal(s, [{ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 }], true)} weighted
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
         </div>
-
-        <StalledLeads rows={stalled.map((l) => ({ id: l.id, company: l.company, stageName: stageOf(s, l).name, next: stageOf(s, l).activity, stall: l.stall }))} />
+        <button type="button" className="gs-btn primary ov-panel-open" data-testid="stage-panel-pipeline" onClick={() => onOpenPipeline(st)}>
+          Open {st.name} in the Pipeline
+        </button>
       </div>
-    </Screen>
+    </div>,
+    document.body,
   );
 }
 
 /**
  * Stage-to-stage conversion, win rate, time in stage and time to proposal (CD-62), computed in the
- * browser from the stage history of the deals in view, so the Overview filters apply as elsewhere.
+ * browser from the stage history of the opportunities in view, for the funnel the funnel card shows.
  */
-function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: SegKey }) {
+function StageConversion({ leads, seg }: { leads: Lead[]; seg: SegKey }) {
   const { s, set } = useStore();
-  const [seg, setSeg] = useState<SegKey>(initialSeg);
   const stages = stagesFor(s, seg);
   const inFunnel = leads.filter((l) => l.segment === seg);
   const m = s.stageHistory ? conversionMetrics(stages, inFunnel, s.stageHistory) : null;
   const drill = (title: string, leadIds: string[]) => leadIds.length && set({ drill: { kicker: 'Stage conversion', title, leadIds } });
   const stats = m && [
-    { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won · ${m.lost} lost` : 'No won or lost opportunities yet' },
+    { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won, ${m.lost} lost` : 'No won or lost opportunities yet' },
     {
       label: m.proposal ? `To ${m.proposal.name.toLowerCase()}` : 'To proposal',
       value: daysLabel(m.toProposalDays),
-      note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name.toLowerCase()}, ${plural(m.toProposalDeals, 'opportunity', 'opportunities')}` : 'No opportunity has reached it yet',
+      note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name}, ${plural(m.toProposalDeals, 'opportunity', 'opportunities')}` : 'No opportunity has reached it yet',
     },
     { label: 'Opportunities that moved', value: String(m.moved), note: `of ${plural(inFunnel.length, 'opportunity', 'opportunities')} in view` },
   ];
 
   return (
-    <div className="card" style={{ padding: 18 }} data-testid="stage-conversion">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 auto', minWidth: 0 }}>
-          <span className="card-title">Stage conversion</span>
-          <span className="card-sub">Share of opportunities that reached a stage and moved on to a later one</span>
-        </div>
-        <select value={seg} onChange={(e) => setSeg(e.target.value)} style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '55%', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
-          {funnelOptions(s).map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+    <section className="gs-glass ov-card" data-testid="stage-conversion">
+      <div className="ov-card-titles">
+        <b className="ov-card-title">Stage conversion</b>
+        <span className="ov-sub">{s.funnels[seg]?.label}: share of opportunities that reached a stage and moved on to a later one</span>
       </div>
       {!m ? (
-        <div className="empty-dashed">Loading the stage history…</div>
+        <div className="ov-empty">Loading the stage history…</div>
       ) : m.moved < MIN_MOVED_DEALS ? (
-        <div className="empty-dashed">
+        <div className="ov-empty">
           Conversion rates appear once at least {MIN_MOVED_DEALS} opportunities in view have moved between stages ({m.moved} so far).
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
+        <>
+          <div className="ov-minis">
             {stats!.map((x) => (
-              <div key={x.label} style={{ border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-                <span className="caps">{x.label}</span>
-                <span style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 22, lineHeight: 1 }}>{x.value}</span>
-                <span style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.35 }}>{x.note}</span>
+              <div key={x.label} className="ov-mini">
+                <span className="ov-kpi-label small">{x.label}</span>
+                <b className="ov-mini-value">{x.value}</b>
+                <span className="ov-sub">{x.note}</span>
               </div>
             ))}
           </div>
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: CONV_COLS, gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)' }}>
-              {['Stage', 'Moved on', '', 'Opportunities', 'Avg in stage'].map((h, i) => (
-                <span key={i} className="th" style={{ textAlign: i >= 2 ? 'right' : undefined }}>
-                  {h}
-                </span>
+          {/* Narrow screens: the table scrolls inside its card (CD-530). */}
+          <div className="ov-conv-wrap">
+          <table className="ov-conv">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Moved on</th>
+                <th aria-label="Share" />
+                <th className="num">Count</th>
+                <th className="num">Avg in stage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {m.stages.map((r) => (
+                <tr key={r.stage.id} data-stage={r.stage.name}>
+                  <td className="ov-conv-stage">
+                    <button type="button" className="ov-linkbtn" disabled={!r.reached.length} title={r.stage.name} onClick={() => drill(`Reached ${r.stage.name}`, r.reached)}>
+                      {r.stage.name}
+                    </button>
+                  </td>
+                  <td>
+                    <span className="ov-bar">
+                      <span style={{ width: (r.rate ?? 0) * 100 + '%' }} />
+                    </span>
+                  </td>
+                  <td className="num strong">{pct(r.rate)}</td>
+                  <td className="num ov-sub">
+                    {r.advanced.length}/{r.reached.length}
+                  </td>
+                  <td className="num ov-sub">{daysLabel(r.avgDays)}</td>
+                </tr>
               ))}
-            </div>
-            {m.stages.map((r) => (
-              <div
-                key={r.stage.id}
-                data-stage={r.stage.name}
-                onClick={() => drill(`Reached ${r.stage.name}`, r.reached)}
-                style={{ display: 'grid', gridTemplateColumns: CONV_COLS, gap: 10, padding: '8px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center', cursor: r.reached.length ? 'pointer' : 'default' }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.stage.name}</span>
-                <span style={{ height: 6, borderRadius: 3, background: 'var(--chip)', overflow: 'hidden' }}>
-                  <span style={{ display: 'block', height: '100%', width: (r.rate ?? 0) * 100 + '%', background: 'var(--brand)' }} />
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>{pct(r.rate)}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>
-                  {r.advanced.length}/{r.reached.length}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>{daysLabel(r.avgDays)}</span>
-              </div>
-            ))}
+            </tbody>
+          </table>
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </section>
   );
 }
 
-function StalledLeads({ rows }: { rows: { id: string; company: string; stageName: string; next: string; stall: number }[] }) {
-  const { openLead } = useStore();
+/** Sales bonuses (CD-17): owners and admins only, from the rules saved in Settings, Sales bonuses. */
+function Bonuses({ leads, owners, drill }: { leads: Lead[]; owners: string[]; drill: (kicker: string, title: string, leadIds: string[]) => void }) {
+  const { s } = useStore();
+  const trigger = s.bonusTrigger || 'On contract signed';
+  const totalEarned: { currency?: string; amount: number }[] = [];
+  const totalPending: { currency?: string; amount: number }[] = [];
+  const rows = salesPeople(s)
+    .filter(({ value: ownerId }) => !owners.length || owners.includes(ownerId))
+    .map(({ value: ownerId, label: owner }) => {
+      const rule = bonusRule(s, ownerId);
+      const earned: { currency?: string; amount: number }[] = [];
+      const pending: { currency?: string; amount: number }[] = [];
+      const earnedIds: string[] = [];
+      const pendingIds: string[] = [];
+      for (const l of leads.filter((x) => x.ownerId === ownerId)) {
+        const bonus = bonusOf(l, rule, s.workspace.currency);
+        const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
+        if (l.outcome === 'won' && full) {
+          earned.push({ currency: l.currency, amount: bonus });
+          earnedIds.push(l.id);
+        } else {
+          pending.push({ currency: l.currency, amount: bonus });
+          pendingIds.push(l.id);
+        }
+      }
+      totalEarned.push(...earned);
+      totalPending.push(...pending);
+      return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
+    });
+  const ruleText = (v: number | string, suffix = '') => (v === '' ? '—' : String(v) + suffix);
+
   return (
-    <div className="card" style={{ padding: 18 }}>
-      <div className="card-title" style={{ marginBottom: 14 }}>Stalled opportunities — no contact for 3+ days</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {rows.length === 0 && <div className="empty-dashed">No stalled opportunities in the current filter.</div>}
-        {rows.map((r) => (
-          <div key={r.id} onClick={() => openLead(r.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: 'pointer', border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 13px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r.company}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {r.stageName} · {r.next}
-              </span>
-            </div>
-            <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{r.stall} days silent</span>
-          </div>
-        ))}
+    <section className="gs-glass ov-card" data-testid="bonus-card">
+      <div className="ov-card-head">
+        <div className="ov-card-titles">
+          <b className="ov-card-title">Sales bonuses</b>
+          <span className="ov-sub">
+            Rate per salesperson, with a flat amount on opportunities under the minimum, earned {trigger.toLowerCase()}. Only owners and admins see this.{' '}
+            <Link to={paths.settings('bonuses')}>Edit the rules</Link>
+          </span>
+        </div>
+        <span className="ov-sub">
+          {moneyTotal(s, totalEarned)} earned, {moneyTotal(s, totalPending)} pending
+        </span>
       </div>
-    </div>
+      <div className="ov-scroll">
+        <div style={{ minWidth: 760 }}>
+          <div className="ov-bonus-row head" style={{ gridTemplateColumns: BONUS_COLS }}>
+            {['Salesperson', 'Rate %', `Minimum (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
+              <span key={h}>{h}</span>
+            ))}
+          </div>
+          {rows.map((r) => (
+            <div key={r.ownerId} className="ov-bonus-row" style={{ gridTemplateColumns: BONUS_COLS }}>
+              <b>{r.owner}</b>
+              <span className="ov-sub">{ruleText(r.rule.rate, '%')}</span>
+              <span className="ov-sub">{ruleText(r.rule.floor)}</span>
+              <span className="ov-sub">{ruleText(r.rule.fixed)}</span>
+              <button type="button" className="ov-linkbtn strong" disabled={!r.earnedIds.length} onClick={() => drill('Bonus earned, ' + r.owner, r.rule.trigger, r.earnedIds)}>
+                {moneyTotal(s, r.earned)}
+              </button>
+              <button type="button" className="ov-linkbtn" disabled={!r.pendingIds.length} onClick={() => drill('Bonus pending, ' + r.owner, r.rule.trigger, r.pendingIds)}>
+                {moneyTotal(s, r.pending)}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

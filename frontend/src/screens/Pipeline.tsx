@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Board, BOARD_CARD, BoardColumn, ViewToggle } from '../components/Board';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
@@ -20,13 +20,15 @@ export function Pipeline() {
   const store = useStore();
   const { s, set, session, canEditWorkspace } = store;
   const navigate = useNavigate();
+  // A card on Overview (CD-531) opens the Pipeline with Overview's filters, for this visit only.
+  const linked = (useLocation().state as { filters?: FilterValue } | null)?.filters;
   const [view, setView] = useBoardView('crm.pipelineView');
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const me = session.userId;
   // The funnel is the select next to the view toggle (owner's call, 24 Oct), not a chip.
   const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']), [s, seg]);
-  const [saved, setSaved] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } });
+  const [saved, setSaved] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } }, linked);
   // "Open" is saved as the whole group, so it follows the funnel's stages; single stages of another
   // funnel are dropped ("Open, Won" if nothing is left), and stages added since are ticked.
   const filters = withNewSubs(fields, pruneList(fields, saved, 'status', openAndWon()), 'status');

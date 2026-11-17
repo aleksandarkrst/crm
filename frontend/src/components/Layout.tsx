@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
@@ -13,7 +13,7 @@ import { HeaderCenter, HeaderRight } from './HeaderTools';
 import { Icon } from './icons';
 import { Logo } from './Logo';
 import { ICONS } from './commands';
-import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
+import { currentModule, MODULES, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
 /** Home (CD-288): the rail's first item in every module (and the Pultly mark); on phones, first under "More". */
@@ -323,6 +323,91 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
   );
 }
 
+/** Whether a screen is inside the CRM's glass shell (CD-530): Screen then draws the glass top bar. */
+const GlassCrm = createContext(false);
+export const useGlassCrm = () => useContext(GlassCrm);
+
+/**
+ * The CRM's glass shell (CD-530 "Shared shell", built with CD-531): the glass sidebar (the logo tile
+ * back to Home, "CRM" and the workspace, the CRM's pages, the current one a white pill) and the page
+ * beside it; each screen's Screen draws the glass top bar. The settings areas' `.gs` styles, so
+ * below 900 px the sidebar is a row of icons above the page.
+ */
+function CrmShell() {
+  const { s, session } = useStore();
+  const { pathname } = useLocation();
+  const module = MODULES.find((m) => m.id === 'crm')!;
+  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam);
+  const overdue = overdueTasks(s, session.userId).length;
+  useEffect(() => rememberModule(session.userId, module), [session.userId, module]);
+  // ⌘J / Ctrl J still opens the module switcher (CD-214); the avatar menu has All modules too.
+  const [switcher, setSwitcher] = useState(false);
+  const none = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setSwitcher((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return (
+    <GlassCrm.Provider value={true}>
+      <div className="gs crm-gs">
+        <span className="gs-blob" aria-hidden="true" style={{ width: 560, height: 560, left: -160, top: -200, background: 'var(--gs-blob-2)', opacity: 0.6 }} />
+        <span className="gs-blob" aria-hidden="true" style={{ width: 440, height: 440, right: -100, top: 40, background: 'var(--lime)', opacity: 0.3 }} />
+        <span className="gs-blob" aria-hidden="true" style={{ width: 520, height: 380, left: '35%', bottom: -200, background: 'var(--gs-blob-3)', opacity: 0.4 }} />
+        <aside className="gs-side gs-glass" aria-label="CRM" data-testid="crm-sidebar">
+          <div className="gs-side-head">
+            <Link className="gs-home" to={paths.home} aria-label="Back to Home" title="Home">
+              <span className="mark" aria-hidden="true">
+                <Logo height={14} onDark wordmark={false} />
+              </span>
+              <span className="back" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M11 6l-6 6 6 6" />
+                </svg>
+              </span>
+            </Link>
+            <div className="gs-side-who">
+              <b>CRM</b>
+              <span>{session.tenant.name}</span>
+            </div>
+          </div>
+          <nav className="gs-nav" aria-label="CRM pages">
+            {items.map((n) => {
+              // An opportunity is under Pipeline, a meeting under Meetings.
+              const on = onPage(pathname, n.to) || (n.to === paths.pipeline && onPage(pathname, '/deals')) || (n.to === paths.calendar() && onPage(pathname, '/meetings'));
+              const badge = n.to === paths.today ? overdue : 0;
+              return (
+                <Link key={n.to} to={n.to} className={'gs-nav-row' + (on ? ' on' : '')} aria-current={on ? 'page' : undefined} title={n.label}>
+                  <span className="ic">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={n.icon} />
+                    </svg>
+                  </span>
+                  <span className="label">{n.label}</span>
+                  {badge > 0 && (
+                    <span className="crm-nav-badge" data-testid="nav-badge" title={`${badge} of your tasks overdue`}>
+                      {badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+        <div className="gs-main crm-main">
+          <Outlet />
+        </div>
+        {switcher && <ModuleSwitcher onClose={() => setSwitcher(false)} trigger={none} />}
+      </div>
+    </GlassCrm.Provider>
+  );
+}
+
 export function Layout() {
   const { s, set } = useStore();
   const { pathname } = useLocation();
@@ -331,7 +416,10 @@ export function Layout() {
   // Workspace settings is an area of its own with its own sidebar (CD-524, design G-Settings).
   // Profile settings (CD-525) is the same kind of area, in the same glass shell.
   const settings = pathname.startsWith('/settings/') || pathname === paths.profile || pathname.startsWith(paths.profile + '/');
+  // The CRM's pages are in the glass shell (CD-530).
+  const crm = !home && !settings && routeModule(pathname)?.id === 'crm';
   const full = home || settings;
+  const glass = settings || crm;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -345,16 +433,22 @@ export function Layout() {
   }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
-      {!full && <Sidebar />}
-      <main className={'app-main' + (full ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        {!settings && <GettingStarted />}
-        <Outlet />
+      {!full && !crm && <Sidebar />}
+      <main className={'app-main' + (full || crm ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {crm ? (
+          <CrmShell />
+        ) : (
+          <>
+            {!settings && <GettingStarted />}
+            <Outlet />
+          </>
+        )}
       </main>
       <Modals />
       {s.paletteOpen && <CommandPalette />}
       {s.toast &&
-        (settings ? (
-          // The settings areas' toast is the design's dark pill with a green check (CD-524, CD-525).
+        (glass ? (
+          // The glass areas' toast is the design's dark pill with a green check (CD-524, CD-525, CD-530).
           <div className={'toast toast-glass' + (s.toastError ? ' error' : '')} role={s.toastError ? 'alert' : 'status'}>
             {!s.toastError && <Icon name="check" size={14} />}
             {s.toast}
@@ -373,6 +467,7 @@ export function Layout() {
  * account menu on the right. Records show their own name in the page, not in the header.
  */
 export function Screen({ title, parent, children }: { title: string; parent?: { label: string; to: string }; children: ReactNode }) {
+  const glass = useGlassCrm();
   const header = useRef<HTMLElement>(null);
   // The header sticks to the top of the window; what sticks below it (the minutes toolbar, CD-378)
   // reads its height from --screen-header-h, which changes on phones and when the header wraps.
@@ -389,6 +484,21 @@ export function Screen({ title, parent, children }: { title: string; parent?: { 
       root.style.removeProperty('--screen-header-h');
     };
   }, []);
+  if (glass)
+    // The CRM's glass top bar (CD-530): the page title (on a record page the list's name), the search
+    // and + in the middle, the bell and the avatar on the right.
+    return (
+      <>
+        <header ref={header} className="gs-topbar gs-glass crm-topbar">
+          <h1>{parent ? parent.label : title}</h1>
+          <HeaderCenter />
+          <HeaderRight />
+        </header>
+        {/* The Get started checklist (CD-115) under the top bar, as the glass pages have it. */}
+        <GettingStarted />
+        <div className="screen-content crm-content">{children}</div>
+      </>
+    );
   return (
     <>
       <header ref={header} className="screen-header">
