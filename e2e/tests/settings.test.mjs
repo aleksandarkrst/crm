@@ -1,18 +1,11 @@
 // Workspace settings and profile settings are saved and survive a reload; a deal's discovery notes reach the proposal.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, email, eventually, fillField, newUserWithWorkspace, chooseOption, RUN, setByLabel, setValue, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, email, eventually, fillField, newUserWithWorkspace, chooseOption, RUN, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
-/** The value of the input/select/textarea next to a label (like setByLabel, for reading). */
-const valueByLabel = (page, label, tag = 'input') =>
-  page.evaluate(
-    (label, tag) => {
-      const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
-      return (span?.closest('.account-row') ?? span?.parentElement)?.querySelector(tag)?.value ?? null;
-    },
-    label,
-    tag,
-  );
+/** The glass toast says `words` (Workspace and Profile settings, CD-524, CD-525). */
+const toastSays = (page, words) => page.waitForFunction((words) => document.querySelector('.toast.toast-glass')?.textContent.includes(words), {}, words);
+const valueOf = (page, testId) => page.$eval(`[data-testid=${testId}]`, (el) => el.value);
 
 describe('settings and discovery fields', () => {
   const browser = useBrowser();
@@ -87,25 +80,39 @@ describe('settings and discovery fields', () => {
     assert.equal(await page.$$eval('span', (els) => els.filter((el) => el.textContent.trim() === 'Language').length), 0, 'no language');
     const funnels = await api(page, '/crm/funnels');
     const ent = funnels.find((f) => f.key === 'ent');
-    assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
-    // A save says so in a toast (CD-525).
-    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Your name saved'));
-    // Leaving the name empty isn't saved: a toast says why and the saved name comes back (CD-525 QA).
-    await page.$eval('input[aria-label="Full name"]', (el) => (el.focus(), el.select()));
-    await page.keyboard.press('Backspace');
-    await page.click('h2.settings-title');
-    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes("your name can't be empty"));
-    assert.equal(await page.$eval('input[aria-label="Full name"]', (el) => el.value), 'Olga Renamed');
-    assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
-    assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
+    // The page's first line is its description (CD-525 spec 2); the sign-in email is read-only.
+    assert.equal(await page.$eval('[data-testid=account-content] .gs-lede', (el) => el.textContent), 'How you show up for the people you work with.');
+    assert.match(await page.$eval('[data-testid=profile-email]', (el) => el.textContent), /\S+@\S+/);
+    // Text fields save when they are left, and each save says so in the glass toast (CD-525 spec 5).
+    await fillField(page, '[data-testid=profile-name]', 'Olga Renamed');
+    await toastSays(page, 'Your name saved');
+    // An empty name shows why under the field and isn't saved; the sidebar keeps the saved name.
+    await fillField(page, '[data-testid=profile-name]', '');
+    await page.waitForFunction(() => document.querySelector('[data-testid=profile-name-error]')?.textContent === 'Enter your name.');
+    assert.equal(await page.$eval('[data-testid=profile-name]', (el) => el.getAttribute('aria-invalid')), 'true');
+    assert.equal(await page.$eval('[data-testid=account-name]', (el) => el.textContent), 'Olga Renamed');
+    await fillField(page, '[data-testid=profile-title]', 'Head of sales');
+    await toastSays(page, 'Your job title saved');
+    // A phone takes digits, spaces, parentheses and a leading +; a dash is refused on purpose.
+    await fillField(page, '[data-testid=profile-phone]', '060-123-456');
+    await page.waitForFunction(() => document.querySelector('[data-testid=profile-phone-error]')?.textContent === 'Use digits and spaces, with a + for the country code.');
+    await fillField(page, '[data-testid=profile-phone]', '+381 60 123 456');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=profile-phone-error]'));
+    await toastSays(page, 'Your phone saved');
     // Preferences and Notifications are pages of the account (CD-525).
     await click(page, '[data-testid=account-nav] [data-section=preferences]');
     await page.waitForFunction(() => location.pathname === '/profile/preferences');
-    await page.waitForSelector('select[aria-label="Default funnel"]');
-    await setValue(page, 'select[aria-label="Default funnel"]', ent.id);
+    await chooseOption(page, '[data-testid=default-funnel]', ent.label);
+    await toastSays(page, 'Default funnel saved');
     await click(page, '[data-testid=account-nav] [data-section=notifications]');
-    await page.waitForSelector('[data-notification=digest] .switch');
-    await page.click('[data-notification=digest] .switch');
+    await page.waitForSelector('[data-notification=digest] [role=switch]');
+    // The daily digest comes first.
+    assert.equal(await page.$eval('[data-testid=notifications-card] [data-notification]', (el) => el.dataset.notification), 'digest');
+    await page.click('[data-notification=digest] [role=switch]');
+    await toastSays(page, 'Your notification settings saved');
+    // Leaving the page put the saved name back in the field.
+    await click(page, '[data-testid=account-nav] [data-section=profile]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=profile-name]')?.value === 'Olga Renamed');
     const saved = await eventually(async () => {
       const p = await api(page, '/profile');
       return (
@@ -122,17 +129,37 @@ describe('settings and discovery fields', () => {
 
   step('shows the saved profile after a reload', async () => {
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-notification=digest] .switch');
-    assert.equal(await page.$eval('[data-notification=digest] .switch', (el) => el.classList.contains('on')), false);
-    assert.match(await page.$eval('[data-testid=notifications-card] + .account-foot', (el) => el.textContent), /^Emails go to \S+@\S+\./);
+    await page.goto(`${BASE_URL}/profile/notifications`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-notification=digest] [role=switch]');
+    assert.equal(await page.$eval('[data-notification=digest] [role=switch]', (el) => el.getAttribute('aria-checked')), 'false');
+    assert.match(await page.$eval('[data-testid=notifications-foot]', (el) => el.textContent), /^Emails go to \S+@\S+\. These settings are yours and do not change what others get\.$/);
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=account-content]');
-    assert.equal(await valueByLabel(page, 'Full name'), 'Olga Renamed');
-    assert.equal(await valueByLabel(page, 'Job title'), 'Head of sales');
-    assert.equal(await valueByLabel(page, 'Phone'), '+381 60 123 456');
+    await page.waitForSelector('[data-testid=profile-name]');
+    assert.equal(await valueOf(page, 'profile-name'), 'Olga Renamed');
+    assert.equal(await valueOf(page, 'profile-title'), 'Head of sales');
+    assert.equal(await valueOf(page, 'profile-phone'), '+381 60 123 456');
     await page.goto(`${BASE_URL}/profile/preferences`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=account-content]');
+    await page.waitForSelector('[data-testid=default-funnel]');
     assert.ok(!(await page.evaluate(() => document.body.innerText)).includes('Start page'), 'no Start page: everyone starts on Home (CD-288)');
+  });
+
+  step('with a module off, its settings in your account stay visible but disabled (CD-525)', async () => {
+    const modules = (await api(page, '/workspace')).modules ?? ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'];
+    const without = (m) => modules.filter((x) => x !== m);
+    await api(page, '/workspace', { method: 'PATCH', body: JSON.stringify({ modules: without('crm') }) });
+    try {
+      await page.goto(`${BASE_URL}/profile/preferences`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('[data-testid=default-funnel]');
+      assert.equal(await page.$eval('[data-testid=default-funnel]', (el) => el.disabled), true, 'the default funnel is disabled');
+      assert.ok((await text(page)).includes('CRM is off in this workspace'));
+      await page.goto(`${BASE_URL}/profile/notifications`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('[data-notification=digest] [role=switch]');
+      const off = await page.$$eval('[data-notification][data-off] [role=switch]:disabled', (els) => els.map((el) => el.closest('[data-notification]').dataset.notification).sort());
+      assert.deepEqual(off, ['assigned', 'meetings', 'proposal-approvals']);
+      assert.equal(await page.$eval('[data-notification=digest] [role=switch]', (el) => el.disabled), false, 'the digest stays on');
+    } finally {
+      await api(page, '/workspace', { method: 'PATCH', body: JSON.stringify({ modules }) });
+    }
   });
 
   step('opens Home, even with a start page saved before CD-288', async () => {
@@ -206,7 +233,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
     await click(member, '[data-testid=account-menu]');
-    const items = await member.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    const items = await member.$$eval('[data-testid=account-pop] [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(items, ['Profile settings', 'Sign out']);
     await member.keyboard.press('Escape');
     await member.click('h1');

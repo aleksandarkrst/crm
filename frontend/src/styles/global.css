@@ -1593,37 +1593,32 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 }
 
 /* ---------------------------------------------------------------- your account (CD-525, design G-Profile) */
-/* The account's sidebar is the settings nav with a head (who you are). */
-.account-nav .settings-nav-item { display: flex; align-items: center; gap: 9px; }
-.account-nav-head { display: flex; flex-direction: column; gap: 1px; padding: 0 10px; min-width: 0; }
-.account-nav-head b { font-size: 14px; font-weight: 600; color: var(--ink); }
-.account-nav-head span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-content { max-width: 880px; }
-.account-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
-.account-section { font-size: 13px; font-weight: 600; color: var(--ink); margin: 22px 0 8px; }
-.account-rows { display: flex; flex-direction: column; overflow: hidden; }
-.account-row { display: flex; align-items: center; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--divider); }
-.account-row:last-child { border-bottom: 0; }
-.account-row-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 0; }
-.account-row-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.account-row-hint { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-.account-row-control { flex: 0 1 300px; min-width: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
-.account-row.with-switch .account-row-control { flex: 0 0 auto; }
-.account-row-control > .form-input { width: 100%; }
-.account-row-value { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; text-align: right; }
-.account-foot { font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin-top: 12px; }
-@media (max-width: 800px) {
-  .account-nav { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
-  .account-nav .settings-nav-group { flex-direction: row; flex-wrap: wrap; gap: 4px; }
-  .account-nav .settings-nav-label { display: none; }
+/* Profile settings uses the Workspace settings shell (`.gs-*` above); these are its own pieces. */
+/* The sidebar's head: "Your account" over your name. */
+.gs-side-who { min-width: 0; margin: -4px 8px 0 0; display: flex; flex-direction: column; gap: 1px; }
+.gs-side-who b { font-size: 14px; font-weight: 600; color: var(--gs-ink); }
+.gs-side-who span { font-size: 12px; color: var(--gs-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* No search box in the top bar: the title on the left, the bell and the avatar on the right. */
+.gs-topbar.no-search { grid-template-columns: 1fr auto; }
+/* The page's description, its first line (14 px secondary), close to the card under it. */
+.gs-lede { margin: 0 4px -14px; font-size: 14px; line-height: 20px; color: var(--gs-text-2); }
+/* A read-only value on the right of a row (the sign-in email). */
+.gs-ro { font-size: 14px; color: var(--gs-text-2); overflow-wrap: anywhere; text-align: right; }
+@media (max-width: 899px) {
+  .gs-side-who { display: none; }
 }
 @media (max-width: 560px) {
-  .account-row { flex-wrap: wrap; gap: 8px; }
-  .account-row-control { flex: 1 1 100%; justify-content: flex-start; }
-  .account-row.with-switch { flex-wrap: nowrap; }
-  .account-row.with-switch .account-row-control { flex: 0 0 auto; }
-  .account-row-value { text-align: left; }
+  .gs-ro { text-align: left; }
 }
+/* The avatar menu on every page (CD-525 spec 1): a 260 px glass menu, who you are, then 32 px items. */
+.gs-menu.account-pop { width: 260px; max-width: calc(100vw - 24px); max-height: none; overflow: visible; font-family: var(--gs-font); color: var(--gs-ink); text-align: left; }
+.account-pop-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--gs-divider); }
+.account-pop-face { flex: none; width: 32px; height: 32px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand); font-size: 12px; font-weight: 600; }
+.account-pop-who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.account-pop-who b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-pop-who span { font-size: 12.5px; color: var(--gs-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-pop .gs-opt { min-height: 32px; }
+.account-pop .gs-opt:focus-visible { outline: 2px solid var(--gs-green); outline-offset: -2px; }
 
 /* ---------------------------------------------------------------- project team (CD-271) */
 .team-table-inner { min-width: 760px; }
