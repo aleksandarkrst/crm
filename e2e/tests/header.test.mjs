@@ -167,17 +167,27 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForSelector('[data-testid=notifications-pop]');
     assert.match(await page.$eval('[data-testid=notifications-pop]', (el) => el.innerText), /Nothing overdue or due today|Overdue|Today/);
     await page.keyboard.press('Escape');
-    // The avatar's menu: Profile settings and Sign out (CD-525).
+    // The avatar's glass menu: who you are (name and sign-in email), Profile settings and Sign out (CD-525).
     await click(page, '[data-testid=account-menu]');
-    const items = await page.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    await page.waitForSelector('[data-testid=account-pop]');
+    const items = await page.$$eval('[data-testid=account-pop] [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(items, ['Profile settings', 'Sign out']);
+    assert.match(await page.$eval('[data-testid=account-pop] .account-pop-who', (el) => el.innerText), /\S+@\S+/, 'the menu shows the sign-in email');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=account-pop]'));
+    await click(page, '[data-testid=account-menu]');
     await clickButton(page, 'Profile settings');
     await page.waitForFunction(() => location.pathname === '/profile');
-    // Profile, Preferences, Notifications; no Security.
+    // Profile, Preferences, Notifications in the glass shell; no Security, no search box.
     await page.waitForSelector('[data-testid=account-nav]');
-    const pages = await page.$$eval('[data-testid=account-nav] .settings-nav-item', (els) => els.map((el) => el.textContent.trim()));
+    const pages = await page.$$eval('[data-testid=account-nav] .gs-nav-row .label', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(pages, ['Profile', 'Preferences', 'Notifications']);
     assert.equal(await page.$eval('[data-testid=account-nav] [aria-current=page]', (el) => el.dataset.section), 'profile');
+    assert.equal(await page.$('.gs-topbar [data-testid=global-search]'), null, 'no search box in Profile settings');
+    // The same avatar menu opens in Profile settings.
+    await click(page, '.gs-topbar [data-testid=account-menu]');
+    await page.waitForSelector('[data-testid=account-pop]');
+    await page.keyboard.press('Escape');
   });
 
   step('opens the New opportunity dialog from the Contacts screen', async () => {

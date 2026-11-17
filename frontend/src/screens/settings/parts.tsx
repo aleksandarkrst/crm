@@ -348,7 +348,7 @@ export function TextField({
   maxLength?: number;
   disabled?: boolean;
   testId?: string;
-  type?: 'text' | 'time' | 'number';
+  type?: 'text' | 'time' | 'number' | 'tel';
   small?: boolean;
 }) {
   const [draft, setDraft] = useState(value);

@@ -1,6 +1,6 @@
 // The module and workspace switcher (CD-214) and modules as separate apps (CD-223): the button under
 // the Pultly mark shows the module you're in and opens the switcher (also with Ctrl+J); each module
-// has its own sidebar (Workspace settings has none since CD-524), the profile keeps the last one;
+// has its own sidebar (Workspace settings has none since CD-524, Profile settings since CD-525);
 // picking navigates, locked modules do nothing;
 // Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
 // short window go under "More"; on phones it is a bottom sheet. CD-279: Workspace settings is a
@@ -109,7 +109,7 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
   });
 
-  step('an employee card is Employees; Settings has no module sidebar and the profile keeps the last module', async () => {
+  step('an employee card is Employees; Workspace and Profile settings have no module sidebar', async () => {
     const { employeeId } = await api(page, '/people/access');
     assert.ok(employeeId, 'the owner has an employee card');
     await page.goto(`${BASE_URL}/people/${employeeId}`, { waitUntil: 'networkidle0' });
@@ -119,16 +119,11 @@ describe('module and workspace switcher', () => {
     // Workspace settings is an area of its own, without a module sidebar (CD-524).
     await page.waitForSelector('[data-testid=settings-nav]');
     assert.equal(await page.$('.app-sidebar'), null, 'no module sidebar on Settings');
-    // The profile keeps the last module, remembered in this browser: still Employees after a reload.
+    // So is Profile settings, in the same glass shell (CD-525).
     await page.goto(BASE_URL + '/profile', { waitUntil: 'networkidle0' });
-    await inModule('employees');
-    assert.deepEqual(await sidebar(), { module: 'employees', pages: EMPLOYEES_PAGES });
-    await page.reload({ waitUntil: 'networkidle0' });
-    await inModule('employees');
-    // Back in the CRM, the profile shows the CRM.
+    await page.waitForSelector('[data-testid=account-nav]');
+    assert.equal(await page.$('.app-sidebar'), null, 'no module sidebar on Profile settings');
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
-    await inModule('crm');
-    await page.goto(BASE_URL + '/profile', { waitUntil: 'networkidle0' });
     await inModule('crm');
     assert.deepEqual((await sidebar()).pages, CRM_PAGES);
   });
@@ -137,7 +132,7 @@ describe('module and workspace switcher', () => {
     await click(page, LOGO);
     await click(page, `${POP} [data-module=planning]`);
     assert.ok(await page.$(POP), 'still open');
-    assert.equal(new URL(page.url()).pathname, '/profile', 'still on the profile');
+    assert.equal(new URL(page.url()).pathname, '/today', 'still on Today');
   });
 
   step('Escape closes it and gives focus back to the switcher button; an outside click closes it', async () => {
@@ -149,7 +144,7 @@ describe('module and workspace switcher', () => {
     // The popover covers the header's title: click the empty part of the sidebar, below its pages.
     await page.mouse.click(48, 950);
     await closed();
-    assert.equal(new URL(page.url()).pathname, '/profile');
+    assert.equal(new URL(page.url()).pathname, '/today');
   });
 
   step('Ctrl+J opens it; arrow keys move between the modules', async () => {

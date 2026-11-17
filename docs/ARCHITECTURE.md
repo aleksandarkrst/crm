@@ -2490,12 +2490,21 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   it while the menu is open (D deal, P contact, O company, T task, R product). On a deal's screen a
   new task or contact is for that deal.
 - **Notifications**: the bell lists your own open tasks that are overdue or due today (nothing
-  else is made up). The avatar's menu has Profile settings and Sign out. Profile settings
-  (`screens/Profile.tsx`, CD-525) are Profile, Preferences and Notifications, each its own page
-  (`/profile`, `/profile/preferences`, `/profile/notifications`; the old `/profile#notifications`
-  redirects) in a sidebar like Settings'. Workspaces are switched in the rail's module switcher, not
-  here. The avatar is not in the sidebar; Settings
-  is back at its bottom (CD-223; on phones both are under "More").
+  else is made up). The avatar opens a glass menu on every page (CD-525): your name and sign-in
+  email, Profile settings and Sign out. Profile settings (`screens/Profile.tsx`, CD-525) are
+  Profile, Preferences and Notifications, each its own page (`/profile`, `/profile/preferences`,
+  `/profile/notifications`; the old `/profile#notifications` redirects). They use Workspace
+  settings' glass shell (`screens/settings/Shell.tsx`, shared with `Settings.tsx`) and its parts,
+  without the search box and without a module rail; workspaces are switched from Home or a
+  module's rail, not here. Text fields save on blur or Enter; an empty name ("Enter your name.")
+  and a phone with anything but digits, spaces, parentheses and a leading + ("Use digits and
+  spaces, with a + for the country code.", dashes included) show why under the field and aren't
+  saved (`lib/account.ts`, on the page only: the API takes any phone). Every save shows the
+  settings toast ("Your name saved", "Default funnel saved", "Your notification settings saved";
+  a failure "Could not save. Try again." and the saved value comes back). With CRM off in the
+  workspace the default funnel is disabled ("CRM is off in this workspace"), and a notification
+  whose module is off (`NOTIFICATION_MODULE`) keeps its switch, disabled. The avatar is not in
+  the sidebar; Settings is back at its bottom (CD-223; on phones both are under "More").
 - **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
   which opens the New deal dialog with this company or contact, and a menu with Delete for owners
   and admins), on the left Summary and Details with icons, Deals (open ones, won and lost with

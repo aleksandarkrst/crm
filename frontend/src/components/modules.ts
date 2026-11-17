@@ -100,8 +100,8 @@ const TIMEOFF_NAV: NavDef[] = [{ to: paths.timeOff(), label: 'Time off', icon: '
  * The modules in the switcher (CD-214, CD-223, CD-279), in the design's grid order. Each is its own
  * app with its own sidebar. Employees goes to the Org structure page (milestone 13, CD-137), which
  * everyone may open; its employee cards (/people/…) belong to it too. Timesheet and Time off were
- * part of Workforce until CD-521. Workspace settings opens Settings, which (like the
- * profile) belongs to no module: it keeps the last one's sidebar.
+ * part of Workforce until CD-521. Workspace settings opens Settings, which (like Profile settings)
+ * belongs to no module and has its own sidebar (CD-524, CD-525).
  */
 export const MODULES: ModuleDef[] = [
   {

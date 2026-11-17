@@ -132,32 +132,55 @@ function NavButton({ to, label, onDone }: { to: string; label: string; onDone: (
   );
 }
 
-/** Your avatar: your profile settings (Profile, Preferences, Notifications, CD-525) and signing out. */
+/**
+ * Your avatar: a glass menu on every page (CD-525 spec 1) with who you are (name and sign-in
+ * email), your profile settings (Profile, Preferences, Notifications) and signing out.
+ */
 function AccountMenu() {
   const { s, session } = useStore();
+  const navigate = useNavigate();
   const pop = usePopover();
   const name = s.profile.name || session.userName;
   const close = () => pop.setOpen(false);
+  const button = useRef<HTMLButtonElement>(null);
   return (
     <div ref={pop.ref} className="new-menu">
-      <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
+      <button ref={button} type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
         {initialsOf(name)}
       </button>
       {pop.open && (
-        <div className="menu-pop" role="menu" style={{ right: 0, width: 250 }}>
-          <div className="caps-muted menu-label">{name}</div>
-          <NavButton to={paths.profile} label="Profile settings" onDone={close} />
-          <div className="menu-divider" />
+        // Escape from inside the menu closes it (usePopover) and puts the focus back on the avatar.
+        <div className="gs-tokens gs-menu account-pop" role="menu" aria-label="Your account" data-testid="account-pop" onKeyDown={(e) => e.key === 'Escape' && button.current?.focus()}>
+          <div className="account-pop-head" role="presentation">
+            <span className="account-pop-face" aria-hidden="true">
+              {initialsOf(name)}
+            </span>
+            <span className="account-pop-who">
+              <b title={name}>{name}</b>
+              {s.profile.email && <span title={s.profile.email}>{s.profile.email}</span>}
+            </span>
+          </div>
           <button
             type="button"
             role="menuitem"
-            className="menu-item"
+            className="gs-opt"
+            onClick={() => {
+              close();
+              navigate(paths.profile);
+            }}
+          >
+            Profile settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="gs-opt"
             onClick={() => {
               close();
               session.signOut();
             }}
           >
-            <span className="menu-item-title">Sign out</span>
+            Sign out
           </button>
         </div>
       )}

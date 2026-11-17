@@ -329,7 +329,8 @@ export function Layout() {
   // Home has no sidebar (CD-288, as in its design): its tiles are the way into the modules.
   const home = pathname === paths.home;
   // Workspace settings is an area of its own with its own sidebar (CD-524, design G-Settings).
-  const settings = pathname.startsWith('/settings/');
+  // Profile settings (CD-525) is the same kind of area, in the same glass shell.
+  const settings = pathname.startsWith('/settings/') || pathname === paths.profile || pathname.startsWith(paths.profile + '/');
   const full = home || settings;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
@@ -353,7 +354,7 @@ export function Layout() {
       {s.paletteOpen && <CommandPalette />}
       {s.toast &&
         (settings ? (
-          // Settings' toast is the design's dark pill with a green check (CD-524).
+          // The settings areas' toast is the design's dark pill with a green check (CD-524, CD-525).
           <div className={'toast toast-glass' + (s.toastError ? ' error' : '')} role={s.toastError ? 'alert' : 'status'}>
             {!s.toastError && <Icon name="check" size={14} />}
             {s.toast}

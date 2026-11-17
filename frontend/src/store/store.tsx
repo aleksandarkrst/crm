@@ -2158,13 +2158,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           const field = PROFILE_FIELDS[k as keyof Profile];
           if (!field) continue;
           const value = field === 'defaultFunnelId' ? v || null : typeof v === 'string' ? v.trim() : v;
-          // An empty name isn't saved, and neither is what was typed before it ("B" while clearing
-          // "Brand"): leaving the field empty puts the saved name back (leaveProfileName).
+          // An empty name is never saved (Profile settings says so under the field, CD-525).
           if (field === 'displayName' && !value) {
             dropSave('profile:displayName');
             continue;
           }
           const what = PROFILE_WORDS[k as keyof Profile] ?? 'your notification settings';
+          // "Your name saved", "Default funnel saved", "Your notification settings saved" (CD-525 spec 5).
+          const saved = field === 'defaultFunnelId' ? 'Default funnel saved' : what.charAt(0).toUpperCase() + what.slice(1) + ' saved';
           saveLater(
             'profile:' + field,
             async () => {
@@ -2173,20 +2174,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
               if (field === 'displayName' && p.displayName) session.renameUser(p.displayName);
             },
             what,
-            () => flash(what.charAt(0).toUpperCase() + what.slice(1) + ' saved'),
+            // Profile settings shows `saved` in its own toast; elsewhere (the Pipeline's funnel) the plain one.
+            () => !settingsToasts.current && flash(saved),
+            saved,
           );
         }
-      },
-      /** On leaving the Full name field: an empty name is refused and the saved one comes back (CD-525). */
-      leaveProfileName: () => {
-        if (cur().profile.name.trim()) return;
-        const name = session.userName;
-        set((x) => ({
-          profile: { ...x.profile, name },
-          // patchProfile copied each keystroke into your own team entry ("B" while clearing "Brand").
-          team: x.team.map((m) => (m.status === 'Active' && m.id === session.userId ? { ...m, name } : m)),
-        }));
-        flash("Not saved: your name can't be empty. It was reset to the saved value.", 7000);
       },
     };
   }, [set, flash, navigate, session]);

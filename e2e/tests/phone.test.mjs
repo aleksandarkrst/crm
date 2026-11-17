@@ -24,7 +24,7 @@ describe('phones and tablets', () => {
     await api(page, '/onboarding/sample-data', { method: 'POST' });
     const deals = await api(page, '/crm/deals');
     deal = deals.find((d) => d.deal.title.startsWith('Kestrel')).deal;
-    screens = ['/overview', '/pipeline', '/today', '/companies', '/contacts', '/products', '/settings/general', '/settings/crm', '/settings/timeoff', '/profile', `/deals/${deal.id}`, `/contacts/${deal.primaryContactId}`, `/companies/${deal.companyId}`];
+    screens = ['/overview', '/pipeline', '/today', '/companies', '/contacts', '/products', '/settings/general', '/settings/crm', '/settings/timeoff', '/profile', '/profile/preferences', '/profile/notifications', `/deals/${deal.id}`, `/contacts/${deal.primaryContactId}`, `/companies/${deal.companyId}`];
   });
 
   for (const [label, viewport] of [
@@ -35,8 +35,8 @@ describe('phones and tablets', () => {
       await page.setViewport(viewport);
       for (const path of screens) {
         await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
-        // Workspace settings has its own top bar (CD-524).
-        await page.waitForSelector(path.startsWith('/settings/') ? '.gs-topbar' : '.screen-header');
+        // Workspace and Profile settings have their own top bar (CD-524, CD-525).
+        await page.waitForSelector(path.startsWith('/settings/') || path.startsWith('/profile') ? '.gs-topbar' : '.screen-header');
         assert.ok((await sideways()) <= 0, `${label} ${path} scrolls sideways by ${await sideways()}px`);
       }
     });

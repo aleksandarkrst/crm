@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { HeaderCenter, HeaderRight } from '../components/HeaderTools';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Icon, type IconName } from '../components/icons';
-import { Logo } from '../components/Logo';
 import { MODULES, WORKSPACE_MODULES, enabledModules, type WorkspaceModule } from '../components/modules';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
@@ -13,6 +11,7 @@ import { ProjectsPage } from './settings/ProjectsPage';
 import { TimeOffPage } from './settings/TimeOffPage';
 import { TimesheetPage } from './settings/TimesheetPage';
 import { Card, Confirm, Disabled, GlassConfirmHost, Row, Switch } from './settings/parts';
+import { GlassShell, NavRow } from './settings/Shell';
 
 type PageKey = 'general' | 'crm' | 'projects' | 'employees' | 'timesheet' | 'timeoff';
 
@@ -110,80 +109,51 @@ export function Settings() {
   const off = page.module !== null && !modules.includes(page.module);
 
   return (
-    <div className="gs">
-      <span className="gs-blob" aria-hidden="true" style={{ width: 560, height: 560, left: -160, top: -200, background: 'var(--gs-blob-1)', opacity: 0.45 }} />
-      <span className="gs-blob" aria-hidden="true" style={{ width: 440, height: 440, right: -100, top: 40, background: 'var(--gs-blob-2)', opacity: 0.5 }} />
-      <span className="gs-blob" aria-hidden="true" style={{ width: 520, height: 380, left: '35%', bottom: -200, background: 'var(--gs-blob-3)', opacity: 0.45 }} />
-      <aside className="gs-side gs-glass" aria-label="Settings" data-testid="settings-nav">
-        <div className="gs-side-head">
-          <Link className="gs-home" to={paths.home} aria-label="Back to all modules" title="All modules">
-            <span className="mark" aria-hidden="true">
-              <Logo height={14} onDark wordmark={false} />
-            </span>
-            <span className="back" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M11 6l-6 6 6 6" />
-              </svg>
-            </span>
-          </Link>
-          <span className="gs-side-ws" title={s.workspace.name} data-testid="settings-workspace-name">
-            {s.workspace.name}
-          </span>
-        </div>
-        <nav className="gs-nav">
-          {PAGES.map((p) => {
-            const isOff = p.module !== null && !modules.includes(p.module);
-            return (
-              <button key={p.k} type="button" className={'gs-nav-row' + (p.k === page.k ? ' on' : '')} aria-current={p.k === page.k ? 'page' : undefined} data-section={p.k} onClick={() => navigate(paths.settings(p.k))}>
-                <span className="ic">
-                  <Icon name={p.icon} size={17} />
-                </span>
-                <span className="label">{p.label}</span>
-                {isOff && <span className="gs-off-pill">Off</span>}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-      <div className="gs-main">
-        <header className="gs-topbar gs-glass">
-          <h1>{page.label}</h1>
-          <HeaderCenter create={false} />
-          <HeaderRight />
-        </header>
-        <div className="gs-page" data-testid="settings-content" data-section={page.k}>
-          {page.module && (
-            <div className={'gs-modcard' + (off ? ' off' : '')} data-testid="module-switch-card">
-              <Card>
-                <Row
-                  label={`${moduleName(page.module)} module`}
-                  desc={off ? `Off for everyone. These settings are kept, but nothing below applies until you turn ${moduleName(page.module)} on.` : `On for everyone in ${s.workspace.name}.`}
-                  icon={
-                    <span className="gs-tile" aria-hidden="true" style={MODULE_TILE[page.module] ? { background: MODULE_TILE[page.module] } : undefined}>
-                      <Icon name={page.icon} size={17} />
-                    </span>
-                  }
-                  switchRow
-                >
-                  <Switch on={!off} label={`${moduleName(page.module)} in this workspace`} onChange={() => sw.flip(page.module!)} />
-                </Row>
-              </Card>
-            </div>
-          )}
-          <Disabled off={off}>
-            <div className="gs-page" style={{ padding: 0 }}>
-              {page.k === 'general' && <GeneralPage />}
-              {page.k === 'crm' && <CrmPage />}
-              {page.k === 'projects' && <ProjectsPage />}
-              {page.k === 'employees' && <EmployeesPage />}
-              {page.k === 'timesheet' && <TimesheetPage />}
-              {page.k === 'timeoff' && <TimeOffPage />}
-            </div>
-          </Disabled>
-          <GlassConfirmHost />
-        </div>
+    <GlassShell
+      label="Settings"
+      testId="settings-nav"
+      head={
+        <span className="gs-side-ws" title={s.workspace.name} data-testid="settings-workspace-name">
+          {s.workspace.name}
+        </span>
+      }
+      nav={PAGES.map((p) => (
+        <NavRow key={p.k} k={p.k} label={p.label} icon={p.icon} on={p.k === page.k} pill={p.module !== null && !modules.includes(p.module) && <span className="gs-off-pill">Off</span>} onClick={() => navigate(paths.settings(p.k))} />
+      ))}
+      title={page.label}
+      after={sw.dialog}
+    >
+      <div className="gs-page" data-testid="settings-content" data-section={page.k}>
+        {page.module && (
+          <div className={'gs-modcard' + (off ? ' off' : '')} data-testid="module-switch-card">
+            <Card>
+              <Row
+                label={`${moduleName(page.module)} module`}
+                desc={off ? `Off for everyone. These settings are kept, but nothing below applies until you turn ${moduleName(page.module)} on.` : `On for everyone in ${s.workspace.name}.`}
+                icon={
+                  <span className="gs-tile" aria-hidden="true" style={MODULE_TILE[page.module] ? { background: MODULE_TILE[page.module] } : undefined}>
+                    <Icon name={page.icon} size={17} />
+                  </span>
+                }
+                switchRow
+              >
+                <Switch on={!off} label={`${moduleName(page.module)} in this workspace`} onChange={() => sw.flip(page.module!)} />
+              </Row>
+            </Card>
+          </div>
+        )}
+        <Disabled off={off}>
+          <div className="gs-page" style={{ padding: 0 }}>
+            {page.k === 'general' && <GeneralPage />}
+            {page.k === 'crm' && <CrmPage />}
+            {page.k === 'projects' && <ProjectsPage />}
+            {page.k === 'employees' && <EmployeesPage />}
+            {page.k === 'timesheet' && <TimesheetPage />}
+            {page.k === 'timeoff' && <TimeOffPage />}
+          </div>
+        </Disabled>
+        <GlassConfirmHost />
       </div>
-      {sw.dialog}
-    </div>
+    </GlassShell>
   );
 }

@@ -23,7 +23,7 @@ const clickInInvite = (page, address, label) =>
     label,
   );
 
-const isOn = (page, id) => page.$eval(`[data-notification="${id}"] .switch`, (el) => el.getAttribute('aria-checked') === 'true');
+const isOn = (page, id) => page.$eval(`[data-notification="${id}"] [role=switch]`, (el) => el.getAttribute('aria-checked') === 'true');
 
 describe('emails: invitations and notification settings', () => {
   const browser = useBrowser();
@@ -91,7 +91,7 @@ describe('emails: invitations and notification settings', () => {
     await page.goto(BASE_URL + '/settings/notifications', { waitUntil: 'networkidle0' });
     // The old Settings URL lands on your account's Notifications page, for owners too (CD-489).
     await page.waitForFunction(() => location.pathname === '/profile/notifications');
-    await page.waitForSelector('[data-notification="digest"] .switch');
+    await page.waitForSelector('[data-notification="digest"] [role=switch]');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), true, id);
     const body = await text(page);
     for (const label of ['Daily digest email', 'Opportunity assigned to you', 'Meeting invitations', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : [])]) assert.ok(body.includes(label), label);
@@ -101,20 +101,20 @@ describe('emails: invitations and notification settings', () => {
   });
 
   step('switching them off saves, and survives a reload', async () => {
-    for (const id of SETTINGS) await page.click(`[data-notification="${id}"] .switch`);
+    for (const id of SETTINGS) await page.click(`[data-notification="${id}"] [role=switch]`);
     const saved = await eventually(async () => {
       const p = await api(page, '/profile');
       return p.notifyDealAssigned === false && p.dailyDigest === false && p.notifyMeetingInvites === false && (!VISIT_PLANS_ENABLED || p.notifyVisitPlans === false) && p;
     });
     assert.ok(saved, 'saved to the profile');
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-notification="digest"] .switch');
+    await page.waitForSelector('[data-notification="digest"] [role=switch]');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), false, id);
   });
 
   step('your account shows the same settings (CD-525)', async () => {
     await page.goto(BASE_URL + '/profile/notifications', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-notification="digest"] .switch');
+    await page.waitForSelector('[data-notification="digest"] [role=switch]');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), false, id);
   });
 });
