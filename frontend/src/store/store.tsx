@@ -2078,8 +2078,13 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
               if (field === 'name') session.renameTenant(ws.name);
             },
             undefined,
-            // Outside Settings (the org chart's Set CEO, …) a save still says so; Settings shows its own toast.
-            () => !settingsToasts.current && flash('Saved'),
+            () => {
+              // A new CEO (CD-519) changes the directory on the server: the CEO's "No manager" issue goes
+              // and reporting lines may move. When no manager changes there is no live hint, so read it here.
+              if (field === 'ceoEmployeeId') people.refresh(0);
+              // Outside Settings (the org chart's Set CEO, …) a save still says so; Settings shows its own toast.
+              if (!settingsToasts.current) flash('Saved');
+            },
             saved,
           );
         }
