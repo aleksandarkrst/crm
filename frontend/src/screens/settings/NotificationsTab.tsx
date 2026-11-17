@@ -1,5 +1,5 @@
-import { enabledModules } from '../../components/modules';
-import { notificationOff } from '../../lib/account';
+import { MODULES, enabledModules } from '../../components/modules';
+import { NOTIFICATION_MODULE, notificationOff } from '../../lib/account';
 import { VISIT_PLANS_ENABLED } from '../../lib/features';
 import { useStore } from '../../store/store';
 import { Card, Note, Row, Switch } from './parts';
@@ -64,8 +64,10 @@ export function NotificationsTab() {
       <Card testId="notifications-card">
         {rows.map((n) => {
           const off = notificationOff(n.id, modules);
+          // With its module off, the row says why its switch can't be used (as Preferences does for CRM).
+          const module = MODULES.find((m) => m.id === NOTIFICATION_MODULE[n.id]);
           return (
-            <Row key={n.id} label={n.label} desc={n.desc} dim={off} switchRow data={{ 'data-notification': n.id, ...(off ? { 'data-off': 'true' } : {}) }}>
+            <Row key={n.id} label={n.label} desc={off && module ? `${module.name} is off in this workspace.` : n.desc} dim={off} switchRow data={{ 'data-notification': n.id, ...(off ? { 'data-off': 'true' } : {}) }}>
               <Switch on={n.on} onChange={n.toggle} label={n.label} disabled={off} />
             </Row>
           );

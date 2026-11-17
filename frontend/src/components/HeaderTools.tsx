@@ -142,14 +142,16 @@ function AccountMenu() {
   const pop = usePopover();
   const name = s.profile.name || session.userName;
   const close = () => pop.setOpen(false);
+  const button = useRef<HTMLButtonElement>(null);
   return (
     <div ref={pop.ref} className="new-menu">
-      <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
+      <button ref={button} type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
         {initialsOf(name)}
       </button>
       {pop.open && (
-        <div className="gs-tokens gs-menu account-pop" role="menu" aria-label="Your account" data-testid="account-pop">
-          <div className="account-pop-head">
+        // Escape from inside the menu closes it (usePopover) and puts the focus back on the avatar.
+        <div className="gs-tokens gs-menu account-pop" role="menu" aria-label="Your account" data-testid="account-pop" onKeyDown={(e) => e.key === 'Escape' && button.current?.focus()}>
+          <div className="account-pop-head" role="presentation">
             <span className="account-pop-face" aria-hidden="true">
               {initialsOf(name)}
             </span>

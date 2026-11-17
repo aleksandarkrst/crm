@@ -95,9 +95,9 @@ function ProfilePage() {
         <TextField label="Job title" value={p.title} onSave={(v) => patchProfile({ title: v })} placeholder="e.g. Sales lead" width={280} testId="profile-title" />
       </Row>
       <Row label="Phone">
-        <TextField label="Phone" value={p.phone} validate={phoneProblem} onSave={(v) => patchProfile({ phone: v })} placeholder="+381 60 123 4567" width={280} testId="profile-phone" />
+        <TextField label="Phone" value={p.phone} validate={phoneProblem} onSave={(v) => patchProfile({ phone: v })} placeholder="+381 60 123 4567" type="tel" width={280} testId="profile-phone" />
       </Row>
-      <Row label="Sign-in email" desc="Used to sign in and for every email Pultly sends you">
+      <Row label="Sign-in email" desc="Used to sign in and for every email Pultly sends you.">
         <span className="gs-ro" data-testid="profile-email">
           {p.email || '—'}
         </span>
@@ -117,7 +117,7 @@ function PreferencesPage() {
   const funnelChoices = [{ value: '', label: `First funnel${funnels[0] ? ` (${funnels[0].label})` : ''}` }, ...funnels];
   return (
     <Card testId="preferences-card">
-      <Row label="Default funnel" desc={crmOff ? 'CRM is off in this workspace' : 'The funnel new opportunities start in when you create them'} dim={crmOff} data={crmOff ? { 'data-off': 'true' } : undefined}>
+      <Row label="Default funnel" desc={crmOff ? 'CRM is off in this workspace.' : 'The funnel new opportunities start in when you create them.'} dim={crmOff} data={crmOff ? { 'data-off': 'true' } : undefined}>
         <Dropdown label="Default funnel" value={defaultFunnel} options={funnelChoices} onChange={(v) => patchProfile({ defaultFunnelId: v })} width={260} disabled={crmOff} testId="default-funnel" />
       </Row>
     </Card>
