@@ -102,7 +102,7 @@ export function PersonBox({
       <Avatar initials={initialsOfEmployee(e)} size={26} font={10} />
       <span className="org-person-text">
         <span className="org-person-name">
-          {e.fullName}
+          <span className="org-person-label">{e.fullName}</span>
           {badge && <span className={'org-badge' + (tone ? ` is-${tone}` : '')}>{badge}</span>}
         </span>
         {(e.jobTitle || sub) && <span className="org-person-sub">{[e.jobTitle, sub].filter(Boolean).join(' · ')}</span>}
