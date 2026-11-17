@@ -315,6 +315,9 @@ export async function newUserWithWorkspace(page, { label, name, workspace, curre
 
 /** Opens a "Create" dialog from the header's "+" menu (CD-80): deal, contact, company, task or product. */
 export async function createNew(page, kind) {
+  // Home, Workspace settings and Profile settings have no "+" (CD-288, CD-524, CD-525): create from the pipeline.
+  await page.waitForSelector('[data-testid=new-menu], [data-testid=home], .gs-topbar');
+  if (!(await page.$('[data-testid=new-menu]'))) await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
   await click(page, '[data-testid=new-menu]');
   await click(page, `[data-testid=new-${kind}]`);
 }
