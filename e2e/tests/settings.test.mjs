@@ -65,9 +65,13 @@ describe('settings and discovery fields', () => {
     assert.equal(await page.$eval('[data-testid="workspace-timezone"]', (el) => el.dataset.zone), 'Europe/London');
     assert.equal(await page.$eval('[data-testid=workspace-fiscal-month]', (el) => el.dataset.value), '4');
     assert.equal(await page.$eval('[data-testid=customer-email-language] button[aria-pressed=true]', (el) => el.textContent), 'Srpski');
-    // The session has the new name: the module switcher names the workspace.
-    await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
+    // The session has the new name: the module switcher in a module's rail names the workspace.
+    await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, workspaceName);
+    // Profile settings is an area of its own, like Workspace settings: no module rail (CD-525).
+    await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=account-nav]');
+    assert.equal(await page.$('[data-testid=module-switcher]'), null, 'no module rail in Profile settings');
   });
 
   step('saves the profile settings, without password fields or fake toasts', async () => {
