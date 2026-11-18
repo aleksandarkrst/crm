@@ -3051,7 +3051,9 @@ with its own version `external_updated_at` / `external_updated_by_user_id`), sen
 `meeting_minutes_sends` keeps every send (an exact copy of subject, body and the chrome language,
 the sender's name and email); `meeting_minutes_recipients` one row per person (`to`: a contact,
 `cc`: a member; name and address used; `status` queued → sent | failed with `error`, `sent_at`).
-A meeting with sends can't be deleted (no cascade). RLS, the contact foreign key
+The foreign key has no cascade: deleting a meeting (owners and admins) deletes its sends first, in the
+service, and their PDFs after the commit; while a send is still queued the delete is refused (409,
+CD-518). RLS, the contact foreign key
 (`ON DELETE SET NULL (contact_id)`) and the live-update hints (type `meeting`, the meeting's id,
 on every send and every status change) are in `drizzle/0036_meeting_minutes_sends_rls.sql`.
 Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-email.ts`.

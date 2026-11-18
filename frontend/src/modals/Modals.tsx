@@ -245,7 +245,8 @@ function NewDealModal() {
       </div>
       <CustomFieldInputs entity="deal" values={custom} onChange={setCustom} />
       <div className="hint-box">
-        Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
+        {/* Counted as Settings and the Pipeline show it to people: the stages before Won (CD-518). */}
+        Assigns the {funnel.stages.filter((st) => !st.won).length}-stage funnel, then Won. First task: {funnel.stages[0]?.activity}.
       </div>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={close}>

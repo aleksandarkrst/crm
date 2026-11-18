@@ -293,6 +293,26 @@ export function contactsForLead(s: State, leadId: string): Person[] {
   return allPeople(s).filter((p) => p.leadId === leadId || links.includes(p.id));
 }
 
+/**
+ * A company's people (CD-518): its own contacts and everyone on its opportunities, once each. The
+ * company page lists them, and the Companies list and its CSV count them, so the two agree.
+ */
+export function companyPeople(s: State, companyId: string, leads: Lead[]): Person[] {
+  const people: Person[] = [];
+  const seen = new Set<string>();
+  const add = (p: Person) => {
+    const key = p.contactId || p.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    people.push(p);
+  };
+  allPeople(s)
+    .filter((p) => p.companyId === companyId)
+    .forEach(add);
+  leads.forEach((l) => contactsForLead(s, l.id).forEach(add));
+  return people;
+}
+
 /** What an opportunity is called on the Pipeline (CD-477): its own name, or its company's while it has none. */
 export const opportunityName = (l: Pick<Lead, 'title' | 'company'>): string => l.title?.trim() || l.company;
 
@@ -344,8 +364,6 @@ export function companyRecords(s: State): CompanyRecord[] {
   const extras = new Map(s.extraCompanies.map((c) => [c.id, c]));
   return [...map.values()].map((r) => {
     const extra = extras.get(r.id);
-    const ids = new Set<string>();
-    r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));
     const open = r.leads.filter((l) => l.outcome === 'open');
     const won = r.leads.filter((l) => l.outcome === 'won');
     const sum = (leads: Lead[]) => leads.reduce((a, l) => a + valueNum(l.value), 0);
@@ -357,7 +375,7 @@ export function companyRecords(s: State): CompanyRecord[] {
       ownership: OWNERSHIP_LABELS[extra?.ownershipType ?? ''] ?? '',
       status: COMPANY_STATUS_LABELS[extra?.status ?? 'lead'],
       statusRank: COMPANY_STATUS_RANK[extra?.status ?? 'lead'],
-      contactCount: ids.size,
+      contactCount: companyPeople(s, r.id, r.leads).length,
       oppCount: r.leads.length,
       value: sum(open),
       valueLabel: valueTotal(s, open),

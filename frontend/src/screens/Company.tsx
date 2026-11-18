@@ -13,9 +13,9 @@ import { checkActivityCode, checkMb, checkPib, checkPostalCode } from '../lib/se
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyReadiness, companyRecords, pipelineBlocked, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyPeople, companyReadiness, companyRecords, pipelineBlocked, curOf, initialsOf, timelineFor } from '../store/selectors';
 import { type CompanyFieldKey, useStore } from '../store/store';
-import type { CompanyStatus, LogEntry, Person } from '../store/types';
+import type { CompanyStatus, LogEntry } from '../store/types';
 import { askConfirm } from '../components/ConfirmDialog';
 
 /** The website of a domain such as "acme.com" (or a full http(s) address); '' when it isn't one. */
@@ -64,18 +64,8 @@ export function Company() {
   const lower = (Object.keys(COMPANY_STATUS_RANK) as CompanyStatus[]).filter((st) => COMPANY_STATUS_RANK[st] < COMPANY_STATUS_RANK[status]);
 
   // Its own contacts and everyone on its deals.
-  const people: Person[] = [];
-  const seen = new Set<string>();
-  const add = (p: Person) => {
-    const key = p.contactId || p.id;
-    if (seen.has(key)) return;
-    seen.add(key);
-    people.push(p);
-  };
-  allPeople(s)
-    .filter((p) => p.companyId === rec.id)
-    .forEach(add);
-  rec.leads.forEach((l) => contactsForLead(s, l.id).forEach(add));
+  const people = companyPeople(s, rec.id, rec.leads);
+  const seen = new Set(people.map((p) => p.contactId || p.id));
   // By name (CD-361), the way people look for someone.
   people.sort((a, b) => a.name.localeCompare(b.name));
   const q = picker.search.toLowerCase().trim();

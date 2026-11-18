@@ -3,7 +3,8 @@
  * internal minutes", saving with conflicts, who may send and when (held only), recipients (external
  * participants with an email; members as CC; nothing typed), the email the worker sends (from the
  * sender's name, reply-to the sender), per-recipient failure and retry, the deal timeline, undo held
- * and delete refused after a send, the internal minutes never in the email, and Serbian chrome.
+ * refused after a send while an owner can still delete the meeting with its send log (CD-518), the
+ * internal minutes never in the email, and Serbian chrome.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
@@ -315,20 +316,41 @@ describe('sending', () => {
     expect((await sends(m.id)).map((s: Json) => s.subject)).toEqual([`Fine now ${RUN}`, `All refused ${RUN}`, subject]);
   });
 
-  it('keeps a sent meeting held and undeletable; the text stays editable and says when it changed', async () => {
+  it('keeps a sent meeting held; the text stays editable and says when it changed', async () => {
     const m = await meeting('Kept meeting');
     await ok('PUT', ext(m.id), { ...as(owner), body: { subject: 'Kept', body: 'Version 1' } });
     await send(owner, m.id, { subject: 'Kept', body: 'Version 1' });
     const undo = await call('POST', `/crm/meetings/${m.id}/undo-held`, as(owner));
     expect(undo.status).toBe(409);
     expect(undo.body.message).toBe('Minutes were sent to the customer, so this meeting stays held.');
-    const del = await call('DELETE', `/crm/meetings/${m.id}`, as(owner));
-    expect(del.status).toBe(409);
     expect((await ok('GET', `/crm/meetings/${m.id}`, as(owner))).status).toBe('held');
 
     expect((await ok('GET', ext(m.id), as(owner))).changedSinceLastSend).toBe(false);
     await ok('PUT', ext(m.id), { ...as(owner), body: { body: 'Version 2' } });
     expect((await ok('GET', ext(m.id), as(owner))).changedSinceLastSend).toBe(true);
+  });
+
+  it('lets an owner delete a meeting whose minutes were sent, with its send log, and then its opportunity and company (CD-518)', async () => {
+    const company = (await readyCompany(owner, tenant, `Sent minutes Co ${RUN}`)).id;
+    const deal = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Sent minutes deal', funnelId: funnel.id, companyId: company } })).id;
+    const contact = await ok('POST', '/crm/contacts', { ...as(owner), body: { fullName: 'Sent Person', companyId: company, email: `sent-${RUN}@customer.example.test` } });
+    const m = await ok('POST', '/crm/meetings', {
+      ...as(owner),
+      body: { title: 'Sent minutes meeting', type: 'visit', startsAt: iso(Date.now() - 2 * HOUR), endsAt: iso(Date.now() - HOUR), companyId: company, dealId: deal, internalUserIds: [ana.userId], externalContactIds: [contact.id] },
+    });
+    await ok('POST', `/crm/meetings/${m.id}/held`, as(owner), 200);
+    expect((await send(owner, m.id, { subject: `Sent ${RUN}`, toContactIds: [contact.id] })).status).toBe(202);
+    expect((await settled(m.id)).status).toBe('sent');
+
+    // Members still can't delete a meeting; the owner can.
+    expect((await call('DELETE', `/crm/meetings/${m.id}`, as(ana))).status).toBe(403);
+    expect((await call('DELETE', `/crm/meetings/${m.id}`, as(owner))).status).toBe(204);
+    expect((await call('GET', `/crm/meetings/${m.id}`, as(owner))).status).toBe(404);
+    expect((await call('GET', `/crm/meetings/${m.id}/minutes/sends`, as(owner))).status).toBe(404);
+
+    // Nothing holds the opportunity and its company any more.
+    expect((await call('DELETE', `/crm/deals/${deal}`, as(owner))).status).toBe(204);
+    expect((await call('DELETE', `/crm/companies/${company}`, as(owner))).status).toBe(204);
   });
 });
 

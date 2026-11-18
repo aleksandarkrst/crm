@@ -59,6 +59,18 @@ export function ProposalDoc() {
   // Discovery notes are no longer merged into the proposal (CD-362): the cover shows the opportunity title.
   const headline = lead.title || lead.company;
 
+  // Scope is the opportunity's products, once each, with the line's or the product's description (CD-518).
+  // With no products there is no scope to show, so the section is left out and the others renumber.
+  const scope: { item: string; text: string }[] = [];
+  for (const ln of lines) {
+    const it = itemById(s, ln.itemId);
+    if (scope.some((x) => x.item === it.name)) continue;
+    scope.push({ item: it.name, text: ln.description.trim() || it.description.trim() || 'Delivered by a named lead from our team, with a fixed review cadence and one point of contact.' });
+  }
+  const sections = [...(scope.length ? ['Scope'] : []), 'Timeline', 'Investment', 'Billing schedule'];
+  const heading = (name: string) => `${String(sections.indexOf(name) + 1).padStart(2, '0')} — ${name}`;
+  const billingSection = heading('Billing schedule').slice(0, 2);
+
   return (
     <div className="overlay" style={{ zIndex: 50, alignItems: 'flex-start', overflowY: 'auto', padding: 0 }}>
       <div style={{ background: 'var(--bg-soft)', width: '100%', maxWidth: 1080, minHeight: '100vh', animation: 'dcFade .25s ease-out both', margin: '0 auto' }}>
@@ -96,24 +108,26 @@ export function ProposalDoc() {
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>01 — Scope</span>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
-                {lead.lines.map(([item]) => (
-                  <div key={item} style={{ borderTop: '2px solid #0F1B16', paddingTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600 }}>{item}</span>
-                    <span style={{ fontSize: 13.5, color: '#475750', lineHeight: 1.6 }}>Delivered by a named lead from our team, with a fixed review cadence and one point of contact.</span>
-                  </div>
-                ))}
+            {scope.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} data-testid="proposal-scope">
+                <span style={eyebrow}>{heading('Scope')}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
+                  {scope.map((x) => (
+                    <div key={x.item} style={{ borderTop: '2px solid #0F1B16', paddingTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                      <span style={{ fontSize: 15, fontWeight: 600 }}>{x.item}</span>
+                      <span style={{ fontSize: 13.5, color: '#475750', lineHeight: 1.6 }}>{x.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>02 — Timeline</span>
+              <span style={eyebrow}>{heading('Timeline')}</span>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {[
                   { when: 'Week 1–2', what: 'Immersion: interviews, audit, and a written point of view on the gap.' },
-                  { when: 'Week 3–5', what: 'Build: ' + (lead.lines[0]?.[0] || 'scope').toLowerCase() + ' developed and reviewed with you.' },
+                  { when: 'Week 3–5', what: 'Build: ' + (scope[0]?.item || 'the scope').toLowerCase() + ' developed and reviewed with you.' },
                   { when: 'Week 6–8', what: 'Rollout: remaining workstreams delivered and handed over.' },
                   { when: 'Week 9', what: 'Readout against the goals agreed in discovery.' },
                 ].map((t) => (
@@ -126,7 +140,7 @@ export function ProposalDoc() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>03 — Investment</span>
+              <span style={eyebrow}>{heading('Investment')}</span>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {docLines.map((l, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: '13px 0', borderBottom: '1px solid #EBF0ED' }}>
@@ -147,7 +161,7 @@ export function ProposalDoc() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>04 — Billing schedule</span>
+              <span style={eyebrow}>{heading('Billing schedule')}</span>
               {billing.length === 0 && <span style={{ fontSize: 14, color: '#475750' }}>Billing is set once products and services are added to the opportunity.</span>}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {billing.map((b, i) => (
@@ -163,7 +177,7 @@ export function ProposalDoc() {
 
             <div style={{ background: '#F5F7F6', borderLeft: '3px solid #14503C', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>Next step</span>
-              <span style={{ fontSize: 14, color: '#475750', lineHeight: 1.65, maxWidth: 620 }}>A 20-minute walkthrough of section 04 with {first}. Approve the scope and we hold the team's start date for 14 days.</span>
+              <span style={{ fontSize: 14, color: '#475750', lineHeight: 1.65, maxWidth: 620 }}>A 20-minute walkthrough of section {billingSection} with {first}. Approve the scope and we hold the team's start date for 14 days.</span>
             </div>
           </div>
         </div>

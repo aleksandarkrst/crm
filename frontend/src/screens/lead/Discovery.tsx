@@ -1,10 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Popover } from '../../components/Popover';
 import { Chevron, FieldRow, GhostSelect, Switch } from '../../components/ui';
 import { QUALIFICATION_STEPS } from '../../store/seed';
 import { allPeople, isoInZone, memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
+
+/** How long after an outside change a click on the Qualified switch is held back (CD-518). */
+const SETTLE_MS = 1500;
 
 /**
  * Qualification (CD-362): who backs the deal at the customer, what hurts and how we fix it, what
@@ -26,6 +29,23 @@ export function Discovery({ lead }: { lead: Lead }) {
   for (const id of [lead.sponsorContactId, lead.powerSponsorContactId]) if (id && !byContact.has(id)) byContact.set(id, 'Former contact');
   const contactOptions = [{ value: '', label: 'Pick a contact' }, ...[...byContact].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))];
   const qualified = !!lead.qualifiedAt;
+
+  // A click right after the switch was flipped from elsewhere (another tab or person, shown by a
+  // refresh) was meant for the value the screen showed a moment ago, and would undo that change.
+  // So it is ignored and the screen says why (CD-518). Flips this tab made itself don't count.
+  const flip = useRef({ value: qualified, at: 0, mine: false });
+  useEffect(() => {
+    const f = flip.current;
+    if (f.value !== qualified) flip.current = { value: qualified, at: f.mine ? 0 : Date.now(), mine: false };
+  }, [qualified]);
+  const toggleQualified = () => {
+    if (Date.now() - flip.current.at < SETTLE_MS) {
+      store.flash(`Qualified was just turned ${qualified ? 'on' : 'off'} elsewhere. Nothing was changed.`);
+      return;
+    }
+    flip.current.mine = true;
+    store.setQualified(lead.id, !qualified);
+  };
 
   return (
     <div className="card card-pad" data-testid="qualification">
@@ -51,7 +71,7 @@ export function Discovery({ lead }: { lead: Lead }) {
         </FieldRow>
         <FieldRow label="Qualified">
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 9px', minWidth: 0 }}>
-            <Switch on={qualified} label="Qualified" onClick={() => store.setQualified(lead.id, !qualified)} />
+            <Switch on={qualified} label="Qualified" onClick={toggleQualified} />
             {qualified && (
               <span data-testid="qualified-by" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
                 {dayLabel(isoInZone(new Date(lead.qualifiedAt!), s.workspace.timezone))} · {memberName(s, lead.qualifiedBy)}

@@ -81,7 +81,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   const canEdit = meetings.canEdit(m);
   // Every field is edited in place (CD-212); a cancelled meeting is read-only until restored.
   const editable = canEdit && m.status !== 'cancelled';
-  // Minutes went to the customer (CD-133): the meeting stays held and can't be deleted.
+  // Minutes went to the customer (CD-133): the meeting stays held; owners and admins can still delete it (CD-518).
   const sent = m.externalDelivery !== 'not_sent';
   const startMs = Date.parse(m.startsAt);
   const [tick, setTick] = useState(0);
@@ -101,7 +101,11 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   };
   const onDelete = async () => {
     setMenu(false);
-    if (!(await askConfirm({ title: `Delete the meeting "${m.title}"?`, message: "This can't be undone. To keep a record of it, cancel it instead.", confirmLabel: 'Delete', danger: true }))) return;
+    // Minutes already went to the customer (CD-518): the email stays sent, the record of it goes with the meeting.
+    const message = sent
+      ? "Its minutes were already emailed to the customer. The meeting, its minutes and the record of what was sent are deleted. This can't be undone."
+      : "This can't be undone. To keep a record of it, cancel it instead.";
+    if (!(await askConfirm({ title: `Delete the meeting "${m.title}"?`, message, confirmLabel: 'Delete', danger: true }))) return;
     if (await meetings.remove(m.id)) navigate(paths.calendar(), { replace: true });
   };
 
@@ -144,7 +148,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
                 Restore
               </button>
             )}
-            {meetings.canDelete && !sent && (
+            {meetings.canDelete && (
               <div ref={menuRef} style={{ position: 'relative' }}>
                 <button type="button" className="btn btn-secondary" aria-label="More actions" data-testid="meeting-menu" aria-expanded={menu} onClick={() => setMenu((x) => !x)} style={{ padding: '10px 12px' }}>
                   ⋯

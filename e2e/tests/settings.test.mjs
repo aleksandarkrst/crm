@@ -217,7 +217,8 @@ describe('settings and discovery fields', () => {
     await page.goto(`${BASE_URL}/settings/crm`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="Actions for Proposal v4"]');
     await click(page, '[role=menuitem]::-p-text(Preview with an opportunity)');
-    await page.waitForFunction(() => document.body.textContent.includes('01 — Scope'));
+    // Scope is shown only when the opportunity has products (CD-518); Investment always is.
+    await page.waitForFunction(() => document.body.textContent.includes('— Investment'));
     const doc = await text(page);
     for (const note of ['What you told us', 'One story across six markets', '3 September 2026', 'a repositioning across six markets', 'procurement requires three approvals', 'the CMO with CFO sign-off']) {
       assert.ok(!doc.includes(note), `"${note}" is not in the proposal`);
