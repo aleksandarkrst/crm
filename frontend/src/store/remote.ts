@@ -246,6 +246,16 @@ export function rememberProfile(profile: ApiProfile) {
 }
 
 /**
+ * The same for the workspace settings (CD-519): a refresh that re-reads other lists would otherwise
+ * put back the settings as they were at the last load (a new CEO switched back to the old one).
+ * Each save passes the workspace the API answered with. Returns it, for chaining.
+ */
+export function rememberWorkspace(workspace: ApiWorkspace): ApiWorkspace {
+  if (lastRaw) lastRaw = { ...lastRaw, workspace };
+  return workspace;
+}
+
+/**
  * The lists a live update can re-read row by row (CD-98): `fetch` gets the rows named by a change
  * hint (by id, or for lines and to-dos by deal), `key` says which hinted id a row belongs to, and
  * `order` sorts the merged list the way the API does where screens show it in list order.

@@ -7,7 +7,7 @@ import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
-import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, rememberProfile, type WorkspaceData } from './remote';
+import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, rememberProfile, rememberWorkspace, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, initialState, SYSTEM_CHANNEL } from './seed';
 import {
   advanceBlockers,
@@ -2074,7 +2074,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           saveLater(
             'workspace:' + field,
             async () => {
-              const ws = await crmApi.updateWorkspace({ [field]: value });
+              const ws = rememberWorkspace(await crmApi.updateWorkspace({ [field]: value }));
               if (field === 'name') session.renameTenant(ws.name);
             },
             undefined,
@@ -2099,7 +2099,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        */
       saveTerms: async (terms: WorkspaceTerms): Promise<Partial<Record<keyof WorkspaceTerms, string>> | null> => {
         try {
-          const ws = await crmApi.updateWorkspace({ terms });
+          const ws = rememberWorkspace(await crmApi.updateWorkspace({ terms }));
           set((x) => ({ workspace: { ...x.workspace, terms: ws.terms } }));
           return null;
         } catch (err) {
@@ -2117,7 +2117,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /** Sets or replaces the logo (owners and admins); returns the API's reason when it refuses the file, else null. */
       setLogo: async (file: File): Promise<string | null> => {
         try {
-          const ws = await crmApi.setWorkspaceLogo(file);
+          const ws = rememberWorkspace(await crmApi.setWorkspaceLogo(file));
           set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: ws.logoUpdatedAt ?? null } }));
           return null;
         } catch (err) {
@@ -2127,7 +2127,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /** Removes the logo; returns the API's reason when that fails, else null. */
       removeLogo: async (): Promise<string | null> => {
         try {
-          await crmApi.removeWorkspaceLogo();
+          rememberWorkspace(await crmApi.removeWorkspaceLogo());
           set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: null } }));
           return null;
         } catch (err) {
@@ -2140,7 +2140,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        */
       saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<{ fields: Partial<Record<keyof ApiCompanyDetails, string>>; message: string | null } | null> => {
         try {
-          const ws = await crmApi.updateWorkspace({ company });
+          const ws = rememberWorkspace(await crmApi.updateWorkspace({ company }));
           set((x) => ({ workspace: { ...x.workspace, company: ws.company } }));
           return null;
         } catch (err) {
