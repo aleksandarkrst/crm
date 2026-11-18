@@ -105,6 +105,8 @@ describe('org structure', () => {
       if (!saved) await new Promise((r) => setTimeout(r, 200));
     }
     assert.ok(saved, 'ceoEmployeeId saved');
+    // Without a reload (CD-519): the CEO's "No manager" warning goes from the chart once the save is in.
+    await page.waitForFunction((ana) => !document.querySelector(`[data-testid=org-person][data-id="${ana}"] [data-testid=org-issue]`), { timeout: 5000 }, id.ana);
     // Setting the CEO fills in missing managers (CD-228): Petar, alone in Service (no lead), now reports to the CEO.
     assert.equal((await card(id.petar)).managerId, id.ana);
     assert.ok(!(await card(id.ana)).hr.dataIssues.includes('no_manager'));
