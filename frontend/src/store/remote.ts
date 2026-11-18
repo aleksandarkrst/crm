@@ -5,6 +5,7 @@
  */
 import { type ApiActivity, type ApiApprovalState, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiRole, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
+import { lastLoadStore } from './lastLoad';
 import { sortPlans } from './visitPlans';
 import { SYSTEM_CHANNEL } from './seed';
 import type { BonusRule, CatalogItem, CompanyExtra, ContactExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
@@ -235,14 +236,24 @@ const PARTS = {
 export type Part = keyof typeof PARTS;
 type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
 /** The lists the last load read, so a live update (CD-20) re-reads only the ones that changed. */
-let lastRaw: Raw | null = null;
+const lastLoad = lastLoadStore<Raw>();
 
 /**
  * Keeps the last load's profile as saved: no live hint re-reads your own profile, so a refresh
  * would otherwise put back the profile as it was when the workspace loaded.
  */
 export function rememberProfile(profile: ApiProfile) {
-  if (lastRaw) lastRaw = { ...lastRaw, profile };
+  lastLoad.remember('profile', profile);
+}
+
+/**
+ * The same for the workspace settings (CD-519): a refresh that re-reads other lists would otherwise
+ * put back the settings as they were at the last load (a new CEO switched back to the old one).
+ * Each save passes the workspace the API answered with. Returns it, for chaining.
+ */
+export function rememberWorkspace(workspace: ApiWorkspace): ApiWorkspace {
+  lastLoad.remember('workspace', workspace);
+  return workspace;
 }
 
 /**
@@ -308,20 +319,28 @@ function merge(prev: unknown[], fresh: unknown[], ids: ReadonlySet<string>, key:
  */
 export async function loadWorkspace(role: ApiRole, only?: ReadonlySet<Part>, changed: Changed = {}): Promise<WorkspaceData> {
   const admin = role !== 'member';
-  const prev = only ? lastRaw : null;
-  const keys = (Object.keys(PARTS) as Part[]).filter((k) => !prev || only!.has(k));
-  const partial = (k: Part) => (prev && BY_ID[k] && changed[k] && changed[k].size <= MAX_IDS ? [...changed[k]] : null);
-  const fetched = await Promise.all(keys.map((k) => (partial(k) ? BY_ID[k]!.fetch(partial(k)!) : PARTS[k](admin))));
-  const raw = { ...prev } as Record<Part, unknown>;
-  keys.forEach((k, i) => {
-    const ids = partial(k);
-    raw[k] = ids && prev ? merge(prev[k] as unknown[], fetched[i] as unknown[], new Set(ids), BY_ID[k]!.key) : fetched[i];
-  });
-  for (const k of keys) {
-    const order = BY_ID[k]?.order;
-    if (order && partial(k)) raw[k] = order(raw[k] as unknown[], raw as Raw);
-  }
-  lastRaw = raw as Raw;
+  // A save during the fetch (CD-519) is kept: the merge is onto the lists as they are after it.
+  const lastRaw = await lastLoad.load(
+    !!only,
+    async (before) => {
+      const keys = (Object.keys(PARTS) as Part[]).filter((k) => !before || only!.has(k));
+      const ids = keys.map((k) => (before && BY_ID[k] && changed[k] && changed[k].size <= MAX_IDS ? [...changed[k]] : null));
+      const fetched = await Promise.all(keys.map((k, i) => (ids[i] ? BY_ID[k]!.fetch(ids[i]) : PARTS[k](admin))));
+      return { keys, ids, fetched };
+    },
+    ({ keys, ids, fetched }, prev) => {
+      const raw = { ...prev } as Record<Part, unknown>;
+      keys.forEach((k, i) => {
+        const rows = ids[i];
+        raw[k] = rows && prev ? merge(prev[k] as unknown[], fetched[i] as unknown[], new Set(rows), BY_ID[k]!.key) : fetched[i];
+      });
+      keys.forEach((k, i) => {
+        const order = BY_ID[k]?.order;
+        if (order && ids[i]) raw[k] = order(raw[k] as unknown[], raw as Raw);
+      });
+      return raw as Raw;
+    },
+  );
   const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding, visitPlans, visitScope } = lastRaw;
 
   const team = mapTeam(apiTeam);
