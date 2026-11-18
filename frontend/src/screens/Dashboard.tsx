@@ -448,12 +448,12 @@ function SidePanel({ panelKey, label, color, title, subtitle, stats, note, prev,
         {(prev || next) && (
           <div className="ov-panel-nav">
             {prev && (
-              <button type="button" className="gs-btn small" aria-label="Previous" onClick={onPrev}>
+              <button type="button" className="gs-btn small" onClick={onPrev}>
                 ← {prev}
               </button>
             )}
             {next && (
-              <button type="button" className="gs-btn small" aria-label="Next" onClick={onNext}>
+              <button type="button" className="gs-btn small" onClick={onNext}>
                 {next} →
               </button>
             )}

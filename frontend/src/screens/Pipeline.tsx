@@ -20,7 +20,8 @@ export function Pipeline() {
   const store = useStore();
   const { s, set, session, canEditWorkspace } = store;
   const navigate = useNavigate();
-  // A card on Overview (CD-531) opens the Pipeline with Overview's filters, for this visit only.
+  // A card on Overview (CD-531) opens the Pipeline with Overview's filters. They are not saved until
+  // the person changes one; that change becomes their saved Pipeline filter.
   const linked = (useLocation().state as { filters?: FilterValue } | null)?.filters;
   const [view, setView] = useBoardView('crm.pipelineView');
   const seg = s.segment;

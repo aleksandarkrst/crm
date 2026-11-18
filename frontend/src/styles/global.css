@@ -1369,7 +1369,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .gs-tile { flex: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--white); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.25), 0 3px 8px rgba(0, 0, 0, 0.12); background: var(--mod-other); }
 .gs-unit { font-size: 14px; color: var(--gs-text-2); white-space: nowrap; }
 /* Buttons: pills. */
-.gs-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12); font: inherit; font-size: 13px; font-weight: 600; color: var(--gs-ink); cursor: pointer; white-space: nowrap; transition: transform 0.1s ease-out, background 0.15s ease; }
+.gs-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; font-size: 13px; font-weight: 600; color: var(--gs-ink); cursor: pointer; white-space: nowrap; transition: transform 0.1s ease-out, background 0.15s ease; }
 .gs-btn:hover { background: var(--white); }
 .gs-btn:active { transform: scale(0.97); }
 .gs-btn.primary { background: var(--gs-green); color: var(--white); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 12px rgba(20, 80, 60, 0.25); }
@@ -2123,14 +2123,18 @@ a.task-card-project:hover { color: var(--brand); }
  * sidebar with the CRM's pages and the glass top bar. Pages not redesigned yet keep their content.
  */
 .crm-gs, .gs-tokens {
-  /* The funnel bands, light green to green 700, and the won stage (boards C-Overview). */
+  /* The funnel bands, light green to green 700 (boards C-Overview). The won band is a deeper lime than
+     --lime so its dark label keeps 4.5:1 contrast. */
   --ov-shade-0: #CFE5DB; --ov-shade-1: #A3CFC0; --ov-shade-2: #7DBBA5; --ov-shade-3: #5FA88B;
-  --ov-shade-4: #3F8E70; --ov-shade-5: #2F7A5E; --ov-shade-6: #1F6A4E; --ov-shade-7: #14503C; --ov-shade-won: #8BC34A;
-  /* The payment-due bands, furthest (lightest) to nearest (darkest). */
-  --ov-due-0: #CFE5DB; --ov-due-1: #A3CFC0; --ov-due-2: #7DBBA5; --ov-due-3: #3F8E70; --ov-due-4: #1F6A4E; --ov-due-5: #14503C;
+  --ov-shade-4: #3F8E70; --ov-shade-5: var(--gs-green-500); --ov-shade-6: #1F6A4E; --ov-shade-7: var(--gs-green); --ov-shade-won: #8BC34A;
+  /* The payment-due bands, furthest (lightest) to nearest (darkest), from the same scale. */
+  --ov-due-0: var(--ov-shade-0); --ov-due-1: var(--ov-shade-1); --ov-due-2: var(--ov-shade-2); --ov-due-3: var(--ov-shade-4); --ov-due-4: var(--ov-shade-6); --ov-due-5: var(--ov-shade-7);
+  /* Pills, mini cards and the panel list sit on glass, so they need a fill a step whiter than --gs-glass. */
+  --ov-fill: rgba(255, 255, 255, 0.75);
+  /* The side panel leaves the page readable behind it, so its scrim is lighter than --gs-scrim. */
+  --ov-scrim: rgba(13, 36, 28, 0.06);
 }
 .crm-gs { display: block; }
-.crm-gs .gs-side-who b { font-size: 14px; }
 .crm-main { min-height: 100vh; }
 .crm-content { padding: 0; min-width: 0; }
 /* Ctrl+J's module switcher opens beside the sidebar (.mod-pop sits 10 px right of its container). */
@@ -2138,12 +2142,12 @@ a.task-card-project:hover { color: var(--brand); }
 .crm-nav-badge { flex: none; min-width: 18px; height: 18px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--gs-danger); color: var(--white); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
 /* The top bar: the search (36 px pill) and + centred together. */
 .crm-topbar .header-center { justify-self: stretch; }
-.crm-topbar .search-trigger { flex: 1 1 auto; width: auto; height: 36px; box-sizing: border-box; border: 0; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12); color: var(--gs-text-2); }
+.crm-topbar .search-trigger { flex: 1 1 auto; width: auto; height: 36px; box-sizing: border-box; border: 0; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); color: var(--gs-text-2); }
 .crm-topbar .search-trigger:hover { background: var(--white); }
-.crm-topbar .round-btn, .crm-topbar .icon-round { border: 0; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12); }
+.crm-topbar .round-btn, .crm-topbar .icon-round { border: 0; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); }
 /* Filter chips in the glass (CD-530 list pattern): 40 px pills; a set value is ink. */
 .gs .fr-chip, .gs .fr-add { height: 40px; padding: 0 14px; border: 0; border-radius: 999px; font-size: 13px; }
-.gs .fr-chip { background: rgba(255, 255, 255, 0.6); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.1); color: var(--gs-ink); transition: background 0.15s ease; }
+.gs .fr-chip { background: var(--gs-glass); box-shadow: inset 0 0 0 1px var(--gs-outline); color: var(--gs-ink); transition: background 0.15s ease; }
 .gs .fr-chip:hover, .gs .fr-chip[aria-expanded='true'] { background: var(--white); }
 .gs .fr-chip-icon { display: none; }
 .gs .fr-chip-val { color: var(--gs-muted); }
@@ -2183,7 +2187,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-card-titles { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ov-card > .ov-card-titles { flex: none; }
 .ov-card-title { font-size: 15px; font-weight: 600; }
-.ov-select { max-width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--gs-ink); cursor: pointer; }
+.ov-select { max-width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--gs-ink); cursor: pointer; }
 .ov-empty { padding: 12px 4px 0; font-size: 13px; line-height: 19px; color: var(--gs-muted); text-align: center; }
 /* Funnel bands: centred, narrowing; light bands have green text, dark ones white. */
 .ov-bands { display: flex; flex-direction: column; gap: 4px; }
@@ -2191,7 +2195,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-band { box-sizing: border-box; max-width: 100%; min-width: min(100%, 230px); min-height: 36px; margin: 0 auto; padding: 0 14px; border: 0; border-radius: 10px; display: flex; align-items: center; gap: 8px; font: inherit; font-size: 12.5px; color: var(--gs-green); text-align: left; cursor: pointer; transition: transform 0.12s ease-out, box-shadow 0.15s ease, filter 0.15s ease, opacity 0.15s ease; }
 .ov-band.dark { color: var(--white); }
 .ov-band.won { color: var(--gs-green-dark); }
-.ov-band:hover:not(:disabled) { filter: brightness(1.04); box-shadow: 0 4px 14px rgba(13, 36, 28, 0.18); }
+.ov-band:hover { filter: brightness(1.04); box-shadow: var(--gs-tile-hover-shadow); }
 .ov-band:active:not(:disabled) { transform: scale(0.99); }
 .ov-band.on { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--gs-green); }
 .ov-bands.has-on .ov-band:not(.on) { opacity: 0.45; }
@@ -2201,7 +2205,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-band-dash { flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.45; }
 /* Stage conversion. */
 .ov-minis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.ov-mini { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.75); box-shadow: inset 0 0 0 1px var(--gs-divider); }
+.ov-mini { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 14px; border-radius: 14px; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-divider); }
 .ov-mini-value { font-family: var(--gs-font-display); font-size: 22px; line-height: 28px; letter-spacing: -0.02em; white-space: nowrap; }
 .ov-conv-wrap { overflow-x: auto; }
 .ov-conv { width: 100%; min-width: 420px; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
@@ -2217,7 +2221,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-conv .strong { font-weight: 700; }
 .ov-conv-stage { overflow: hidden; }
 .ov-conv-stage .ov-linkbtn { font-weight: 600; }
-.ov-bar { display: block; height: 6px; border-radius: 999px; background: rgba(120, 120, 128, 0.14); overflow: hidden; }
+.ov-bar { display: block; height: 6px; border-radius: 999px; background: var(--gs-chip); overflow: hidden; }
 .ov-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--gs-green); }
 .ov-linkbtn { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .ov-linkbtn:hover:not(:disabled) { color: var(--gs-green); text-decoration: underline; }
@@ -2230,7 +2234,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-late .ov-empty { padding: 26px 16px; }
 .gs a.ov-row, .ov-scrim a.ov-row { color: var(--gs-ink); text-decoration: none; }
 .ov-row { display: flex; align-items: center; gap: 10px 16px; min-height: 60px; box-sizing: border-box; padding: 12px 18px; border-top: 1px solid var(--gs-divider); transition: background 0.12s ease; }
-.ov-row:hover { background: rgba(255, 255, 255, 0.5); }
+.ov-row:hover { background: var(--gs-tile-hover); }
 .ov-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ov-row-text > b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-face-sm { width: 22px; height: 22px; font-size: 9.5px; }
@@ -2240,20 +2244,20 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-tag.ok { background: var(--gs-green-soft); color: var(--gs-green); }
 .ov-tag.amber { background: var(--gs-amber-bg); color: var(--gs-amber); }
 /* The stage panel (board C-Overview-Stage): glass on the right over a faint scrim. */
-.ov-scrim { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; align-items: stretch; padding: 12px; box-sizing: border-box; background: rgba(13, 36, 28, 0.06); font-family: var(--gs-font); color: var(--gs-ink); -webkit-font-smoothing: antialiased; animation: gsFade 0.2s ease-out; }
-.ov-panel { width: 460px; max-width: 100%; box-sizing: border-box; padding: 22px; border-radius: 24px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; background: rgba(255, 255, 255, 0.86); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: 1px solid var(--gs-glass-line); box-shadow: var(--gs-glass-shadow), 0 24px 60px rgba(13, 36, 28, 0.16); animation: gsSlide 0.28s var(--gs-ease); }
+.ov-scrim { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; align-items: stretch; padding: 12px; box-sizing: border-box; background: var(--ov-scrim); font-family: var(--gs-font); color: var(--gs-ink); -webkit-font-smoothing: antialiased; animation: gsFade 0.2s ease-out; }
+.ov-panel { width: 460px; max-width: 100%; box-sizing: border-box; padding: 22px; border-radius: 24px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; background: var(--gs-field); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: 1px solid var(--gs-glass-line); box-shadow: var(--gs-pop-shadow); animation: gsSlide 0.28s var(--gs-ease); }
 .ov-panel :focus-visible { outline: 2px solid var(--gs-green); outline-offset: 2px; }
 .ov-panel-head { display: flex; align-items: flex-start; gap: 10px; }
 .ov-panel-dot { flex: none; width: 12px; height: 12px; margin-top: 7px; border-radius: 4px; }
 .ov-panel-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ov-panel-titles b { font-size: 19px; letter-spacing: -0.01em; }
 .ov-panel-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.ov-panel-stats .ov-mini { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.8); }
+.ov-panel-stats .ov-mini { padding: 10px 12px; border-radius: 12px; background: var(--gs-field); }
 .ov-panel-stats .ov-mini .ov-sub { font-size: 11.5px; }
 .ov-panel-stats .ov-mini b { font-size: 16px; }
 .ov-panel-owner { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .ov-panel-nav { display: flex; flex-wrap: wrap; gap: 4px; }
-.ov-panel-list { flex: none; border-radius: 18px; background: rgba(255, 255, 255, 0.7); overflow: hidden; }
+.ov-panel-list { flex: none; border-radius: 18px; background: var(--ov-fill); overflow: hidden; }
 .ov-panel-list .ov-row:first-child { border-top: 0; }
 .ov-panel-list .ov-empty { padding: 26px 16px; }
 .ov-opp { align-items: flex-start; min-height: 64px; }
