@@ -130,7 +130,8 @@ describe('workspace currency, fiscal year and counters', () => {
     await page.reload({ waitUntil: 'networkidle0' });
     await pickFilterOption(page, 'close', 'quarter');
     await closePopover(page);
-    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view · closing this quarter'));
+    // Overview's count line (CD-531): the open opportunities in view.
+    await page.waitForFunction(() => document.querySelector('[data-testid=overview-count]')?.textContent.startsWith('1 open opportunity in view, closing this quarter'));
   });
 
   it('throws no uncaught errors in the page', () => {

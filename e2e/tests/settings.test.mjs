@@ -65,8 +65,11 @@ describe('settings and discovery fields', () => {
     assert.equal(await page.$eval('[data-testid="workspace-timezone"]', (el) => el.dataset.zone), 'Europe/London');
     assert.equal(await page.$eval('[data-testid=workspace-fiscal-month]', (el) => el.dataset.value), '4');
     assert.equal(await page.$eval('[data-testid=customer-email-language] button[aria-pressed=true]', (el) => el.textContent), 'Srpski');
-    // The session has the new name: the module switcher in a module's rail names the workspace.
+    // The session has the new name: the CRM's glass sidebar (CD-530) and the module switcher in
+    // another module's rail name the workspace.
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction((name) => document.querySelector('[data-testid=crm-sidebar] .gs-side-who')?.textContent.includes(name), {}, workspaceName);
+    await page.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle0' });
     await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, workspaceName);
     // Profile settings is an area of its own, like Workspace settings: no module rail (CD-525).
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
@@ -181,13 +184,18 @@ describe('settings and discovery fields', () => {
     await page.waitForFunction(() => document.querySelector('.home-none')?.textContent.startsWith('No module matches that.'));
     await page.keyboard.press('Escape');
     assert.equal(await page.$eval('[data-testid=home-search]', (el) => el.value), '');
-    // A tile opens its module; Home in the rail and the Pultly mark take them back.
+    // A tile opens its module; the CRM glass sidebar's mark (CD-530), and in another module Home in
+    // the rail and the Pultly mark, take them back.
     await click(page, '[data-testid=home-modules] [data-module=crm]');
     await page.waitForFunction(() => location.pathname === '/pipeline');
+    await click(page, '[data-testid=crm-sidebar] a.gs-home');
+    await page.waitForSelector('[data-testid=home-modules]');
+    await click(page, '[data-testid=home-modules] [data-module=projects]');
+    await page.waitForFunction(() => location.pathname === '/projects');
     await click(page, '.app-sidebar nav a.nav-item[href="/"]');
     await page.waitForSelector('[data-testid=home-modules]');
-    await click(page, '[data-testid=home-modules] [data-module=crm]');
-    await page.waitForFunction(() => location.pathname === '/pipeline');
+    await click(page, '[data-testid=home-modules] [data-module=projects]');
+    await page.waitForFunction(() => location.pathname === '/projects');
     await click(page, '.app-sidebar a.ws-logo');
     await page.waitForSelector('[data-testid=home-modules]');
   });
@@ -232,9 +240,12 @@ describe('settings and discovery fields', () => {
     }
     // Home has no Workspace settings tile for them either.
     assert.equal(await member.$('[data-testid=home-modules] [data-module=settings]'), null, 'no Settings tile on Home');
-    await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    // Not in the sidebar, the account menu, the Pipeline's funnel or the command search.
+    // Not in a module's sidebar (the CRM's glass one has no Settings link at all, CD-530), the account
+    // menu, the Pipeline's funnel or the command search.
+    await member.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
+    await member.waitForSelector('.app-sidebar');
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
+    await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
     await click(member, '[data-testid=account-menu]');
     const items = await member.$$eval('[data-testid=account-pop] [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
@@ -269,9 +280,10 @@ describe('settings and discovery fields', () => {
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await member.waitForFunction((name) => document.querySelector('[data-testid="workspace-info-name"]')?.value === name, {}, workspaceName);
     assert.equal(await member.$eval('[data-testid=workspace-currency]', (el) => el.dataset.value), 'RSD');
-    // Settings has no module sidebar (CD-524): the link is in a module's sidebar.
-    await member.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
-    assert.ok(await member.$('.app-sidebar a[href="/settings"]'), 'Settings in the sidebar');
+    // Settings has no module sidebar (CD-524): the link is in a module's sidebar (not the CRM's
+    // glass one, CD-530, where the avatar menu has Workspace settings).
+    await member.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle0' });
+    await member.waitForSelector('.app-sidebar a[href="/settings"]');
     await member.goto(`${BASE_URL}/settings/general`, { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=settings-nav]');
 

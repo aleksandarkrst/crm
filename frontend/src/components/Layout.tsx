@@ -402,7 +402,12 @@ function CrmShell() {
         <div className="gs-main crm-main">
           <Outlet />
         </div>
-        {switcher && <ModuleSwitcher onClose={() => setSwitcher(false)} trigger={none} />}
+        {/* Anchored to the sidebar, so the switcher opens beside it as it does in the other modules. */}
+        {switcher && (
+          <div className="crm-switcher">
+            <ModuleSwitcher onClose={() => setSwitcher(false)} trigger={none} />
+          </div>
+        )}
       </div>
     </GlassCrm.Provider>
   );

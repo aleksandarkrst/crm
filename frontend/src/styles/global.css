@@ -2131,6 +2131,8 @@ a.task-card-project:hover { color: var(--brand); }
 .crm-gs .gs-side-who b { font-size: 14px; }
 .crm-main { min-height: 100vh; }
 .crm-content { padding: 0; min-width: 0; }
+/* Ctrl+J's module switcher opens beside the sidebar (.mod-pop sits 10 px right of its container). */
+.crm-switcher { position: fixed; top: 12px; left: 12px; width: 248px; height: 0; z-index: 45; }
 .crm-nav-badge { flex: none; min-width: 18px; height: 18px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--gs-danger); color: var(--white); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
 /* The top bar: the search (36 px pill) and + centred together. */
 .crm-topbar .header-center { justify-self: stretch; }

@@ -55,6 +55,8 @@ describe('stage conversion on Overview', () => {
 
   step('shows conversion, win rate and time to proposal', async () => {
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
+    // On All pipelines the cards show one funnel, switched with the funnel card's select (CD-531).
+    await page.select('[data-testid=funnel-card-select]', funnels.find((f) => f.key === 'smb').id);
     await page.waitForSelector('[data-testid=stage-conversion] [data-stage]');
     // 6 deals entered New opportunity and 5 moved on; 5 → 4 → 3 → 1 → 1 after that.
     assert.deepEqual(await row(page, 'New opportunity'), ['83%', '5/6']);
@@ -63,20 +65,23 @@ describe('stage conversion on Overview', () => {
     assert.deepEqual(await row(page, 'Proposal'), ['33%', '1/3']);
     assert.deepEqual(await row(page, 'Negotiation'), ['100%', '1/1']);
     const text = await card(page);
-    assert.match(text, /Win rate\s+50%\s+1 won · 1 lost/i);
+    assert.match(text, /Win rate\s+50%\s+1 won, 1 lost/i);
     assert.match(text, /To proposal[\s\S]*3 opportunities/i);
     assert.match(text, /Opportunities that moved\s+5\s+of 6 opportunities in view/i);
   });
 
-  step('respects the Overview filters: Audience, Salesperson and Closing date together; Clear filters resets them', async () => {
+  step('respects the Overview filters: Pipeline, Salesperson and Closing date together; Clear filters resets them', async () => {
     const ent = funnels.find((f) => f.key === 'ent');
     const smb = funnels.find((f) => f.key === 'smb');
+    assert.equal(await chipText(page, 'pipeline'), 'Pipeline All pipelines');
     assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
-    // The funnel is the Audience select it was (CD-366), not a chip.
-    await page.select('[data-testid=overview-funnel]', ent.id);
+    // The funnel is the Pipeline chip (CD-531, was the Audience select): stage conversion follows it.
+    await pickOption(page, 'pipeline', ent.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
-    await page.select('[data-testid=overview-funnel]', smb.id);
+    assert.equal(await chipText(page, 'pipeline'), `Pipeline ${ent.label}`);
+    assert.equal(await page.$('[data-testid=funnel-card-select]'), null, 'no funnel select once a pipeline is picked');
+    await pickOption(page, 'pipeline', smb.id);
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'back on the SMB funnel');
     // Me (first in the list), then a closing date before today: the Won one closed today (winning sets
     // the closing date, CD-477) and the others have none, so none match.
@@ -89,7 +94,7 @@ describe('stage conversion on Overview', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
     assert.match(await text(page), /5 without a closing date hidden/);
     await clearFilters(page);
-    assert.equal(await page.$eval('[data-testid=overview-funnel]', (el) => el.value), 'Audience');
+    assert.equal(await chipText(page, 'pipeline'), 'Pipeline All pipelines');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'numbers are back once the filters are cleared');
   });

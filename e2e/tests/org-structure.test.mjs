@@ -57,9 +57,11 @@ describe('org structure', () => {
   step('Employees opens "Org structure", its sidebar page (CD-521); the chart shows everyone by unit', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     // Each module has its own sidebar (CD-223): Org structure is in Employees'.
-    assert.equal(await page.$('.app-sidebar a[href="/org"]'), null, 'not in the CRM sidebar');
-    await click(page, '[data-testid=module-switcher]');
-    await click(page, '[data-testid=module-switcher-pop] [data-module=employees]');
+    await page.waitForSelector('[data-testid=crm-sidebar] .gs-nav-row');
+    assert.equal(await page.$('[data-testid=crm-sidebar] a[href="/org"]'), null, 'not in the CRM sidebar');
+    // The CRM's glass sidebar has no switcher button (CD-530): its mark goes Home, whose Employees tile opens it.
+    await click(page, '[data-testid=crm-sidebar] a.gs-home');
+    await click(page, '[data-testid=home-modules] [data-module=employees]');
     await page.waitForFunction(() => location.pathname === '/org');
     await page.waitForSelector('.app-sidebar a[href="/org"].active');
     await page.waitForSelector('[data-testid=org-chart-units]');

@@ -128,7 +128,10 @@ describe('roles and permissions', () => {
         await page.goto(BASE_URL + url, { waitUntil: 'networkidle0' });
         await page.waitForFunction(() => location.pathname === '/overview');
       }
-      const links = await page.$$eval('.app-sidebar a', (els) => els.map((a) => a.textContent.trim()));
+      // The CRM's glass sidebar (CD-530).
+      await page.waitForSelector('[data-testid=crm-sidebar] .gs-nav-row');
+      const links = await page.$$eval('[data-testid=crm-sidebar] .gs-nav-row .label', (els) => els.map((el) => el.textContent.trim()));
+      assert.ok(links.includes('Overview'), JSON.stringify(links));
       assert.ok(!links.some((l) => l === 'Visit plans' || l === 'Reports'), JSON.stringify(links));
       assert.equal(await page.$('[data-testid=visit-progress-card]'), null, 'no Visit-plan progress on Overview');
     }
