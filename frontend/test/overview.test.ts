@@ -19,10 +19,8 @@ describe('Overview cards open the Pipeline with the same filter (CD-531)', () =>
     assert.equal(v.f.audience, undefined, 'the Pipeline choice is not a Pipeline filter');
   });
 
-  it('Won picks the won outcome; a stage picks that stage (the won stage: Won)', () => {
+  it('Won picks the won outcome', () => {
     assert.deepEqual(pipelineFilters(overview, { kind: 'won' }).f.status, { op: 'is', vals: ['__won'] });
-    assert.deepEqual(pipelineFilters(overview, { kind: 'stage', stageId: 's3', won: false }).f.status, { op: 'is', vals: ['s3'] });
-    assert.deepEqual(pipelineFilters(overview, { kind: 'stage', stageId: 's9', won: true }).f.status, { op: 'is', vals: ['__won'] });
   });
 
   it('Stalled adds no contact for 3+ days', () => {

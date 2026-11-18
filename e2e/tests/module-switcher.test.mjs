@@ -310,9 +310,7 @@ describe('module and workspace switcher', () => {
       rows.filter((m) => m.locked && m.sub === 'Not in this workspace').map((m) => m.id),
       ['projects', 'employees', 'timesheet', 'timeoff', 'planning', 'finance', 'reporting'],
     );
-    // With the keyboard: the switcher opened by Ctrl+J in the CRM is off screen (see the last step).
-    await page.focus(`${POP} [data-module=settings]`);
-    await page.keyboard.press('Enter');
+    await click(page, `${POP} [data-module=settings]`);
     await page.waitForFunction(() => location.pathname.startsWith('/settings'));
     // Modules is a section of General (CD-524); turning one on needs no confirm.
     await click(page, '[data-testid=settings-nav] [data-section=general]');

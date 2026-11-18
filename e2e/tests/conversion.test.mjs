@@ -99,6 +99,30 @@ describe('stage conversion on Overview', () => {
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'numbers are back once the filters are cleared');
   });
 
+  step('a funnel band opens its opportunities in a side panel; a KPI card opens the Pipeline with its filter (CD-531)', async () => {
+    await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
+    await page.select('[data-testid=funnel-card-select]', funnels.find((f) => f.key === 'smb').id);
+    // On All pipelines the cards add up every pipeline but open one: the page says which.
+    assert.match(await page.$eval('[data-testid=kpi-pipeline-note]', (el) => el.textContent), /opens .+ in the Pipeline/);
+    const band = (name) => page.evaluateHandle((n) => [...document.querySelectorAll('[data-testid=funnel-stage-band]')].find((b) => b.querySelector('.ov-band-name')?.textContent === n), name);
+    await (await band('First touch')).click();
+    await page.waitForSelector('[data-testid=stage-panel]');
+    assert.equal(await (await band('First touch')).evaluate((b) => b.getAttribute('aria-pressed')), 'true');
+    assert.match(await page.$eval('[data-testid=stage-panel]', (el) => el.innerText), /At first touch/);
+    // Next stage, then Escape: the panel closes and focus goes back to the band it shows.
+    await page.$$eval('[data-testid=stage-panel] .ov-panel-nav button', (els) => els.find((b) => b.textContent.includes('Discovery call')).click());
+    await page.waitForFunction(() => document.querySelector('[data-testid=stage-panel]')?.innerText.includes('At discovery'));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=stage-panel]'));
+    assert.equal(await page.evaluate(() => document.activeElement?.querySelector('.ov-band-name')?.textContent), 'Discovery call');
+    // Stalled opens the Pipeline with "Days since contact" added to the filters.
+    const kpis = await page.$$('[data-testid=overview-kpi]');
+    await kpis[3].click();
+    await page.waitForFunction(() => location.pathname === '/pipeline');
+    await page.waitForSelector('[data-testid=filter-chip-stall]');
+    assert.match(await chipText(page, 'stall'), /^Days since contact/);
+  });
+
   it('throws no uncaught errors in the page', () => {
     assert.deepEqual(browser.errors, []);
   });

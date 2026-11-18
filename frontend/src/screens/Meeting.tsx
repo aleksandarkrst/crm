@@ -31,7 +31,7 @@ export function Meeting() {
   const { id = '' } = useParams();
   const m = useMeeting(id);
   return (
-    <Screen title="Meeting" parent={{ label: 'Calendar', to: paths.calendar() }}>
+    <Screen title="Meeting" parent={{ label: 'Meetings', to: paths.calendar() }}>
       {m === undefined ? (
         <div className="empty-state">Loading the meeting…</div>
       ) : m === 'error' ? (

@@ -22,7 +22,7 @@ export function NewMeeting() {
     else navigate(to, { replace: true });
   };
   return (
-    <Screen title="New meeting" parent={{ label: 'Calendar', to: paths.calendar() }}>
+    <Screen title="New meeting" parent={{ label: 'Meetings', to: paths.calendar() }}>
       <div className="card mf-card" data-testid="new-meeting">
         <MeetingForm key={location.key} variant="page" seed={seed} onClose={() => back(paths.calendar())} onDone={(m) => back(paths.meeting(m.id))} />
       </div>

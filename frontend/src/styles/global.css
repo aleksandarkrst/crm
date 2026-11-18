@@ -2176,6 +2176,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-count { margin-left: auto; font-size: 13.5px; color: var(--gs-text-2); }
 .ov-sub { font-size: 12.5px; line-height: 18px; color: var(--gs-text-2); }
 .ov-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.ov-kpi-hint { margin: -6px 0 0 4px; font-size: 12.5px; }
 .ov-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 16px 18px; border-radius: 20px; font: inherit; color: var(--gs-ink); text-align: left; cursor: pointer; transition: transform 0.12s ease-out, box-shadow 0.2s ease; }
 .ov-kpi:hover { transform: translateY(-2px); }
 .ov-kpi-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gs-ink-3); }

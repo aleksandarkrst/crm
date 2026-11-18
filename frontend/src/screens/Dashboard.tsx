@@ -175,13 +175,19 @@ export function Dashboard() {
 
         <div className="ov-kpis">
           {kpis.map((k) => (
-            <button key={k.label} type="button" className="gs-glass ov-kpi" data-testid="overview-kpi" onClick={() => openPipeline(k.target)}>
+            <button key={k.label} type="button" className="gs-glass ov-kpi" data-testid="overview-kpi" title={`Open ${funnel.label} in the Pipeline`} onClick={() => openPipeline(k.target)}>
               <span className="ov-kpi-label">{k.label}</span>
               <b className="ov-kpi-value">{k.value}</b>
               <span className="ov-sub">{k.note}</span>
             </button>
           ))}
         </div>
+        {/* The Pipeline shows one funnel, so on All pipelines a card's total and the Pipeline it opens differ: say which one. */}
+        {pipeline === null && funnelOptions(s).length > 1 && (
+          <p className="ov-sub ov-kpi-hint" data-testid="kpi-pipeline-note">
+            The cards add up every pipeline. A card opens {funnel.label} in the Pipeline, the funnel shown below.
+          </p>
+        )}
 
         {/* Its own plan period, independent of the closing-period filter above (CD-135). Switched off for now (CD-522). */}
         {VISIT_PLANS_ENABLED && <VisitProgressCard />}
@@ -600,7 +606,7 @@ function StageConversion({ leads, seg }: { leads: Lead[]; seg: SegKey }) {
   const stats = m && [
     { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won, ${m.lost} lost` : 'No won or lost opportunities yet' },
     {
-      label: m.proposal ? `To ${m.proposal.name.toLowerCase()}` : 'To proposal',
+      label: m.proposal ? `To ${m.proposal.name}` : 'To proposal',
       value: daysLabel(m.toProposalDays),
       note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name}, ${plural(m.toProposalDeals, 'opportunity', 'opportunities')}` : 'No opportunity has reached it yet',
     },

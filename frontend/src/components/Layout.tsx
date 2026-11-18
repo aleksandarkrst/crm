@@ -340,14 +340,26 @@ function CrmShell() {
   const items = navFor(module, session.tenant.role, s.visitScope.seesTeam);
   const overdue = overdueTasks(s, session.userId).length;
   useEffect(() => rememberModule(session.userId, module), [session.userId, module]);
-  // ⌘J / Ctrl J still opens the module switcher (CD-214); the avatar menu has All modules too.
+  // ⌘J / Ctrl J opens the module switcher (CD-214); Home's tiles and Ctrl K reach the other modules too.
   const [switcher, setSwitcher] = useState(false);
-  const none = useRef<HTMLElement>(null);
+  // The CRM has no switcher button, so there is no trigger to leave out of "click outside closes it".
+  const noTrigger = useRef<HTMLElement>(null);
+  // Closing it puts focus back where it was when Ctrl J opened it, as the button does elsewhere.
+  const before = useRef<HTMLElement | null>(null);
+  const closeSwitcher = useCallback(() => {
+    setSwitcher(false);
+    const el = before.current;
+    before.current = null;
+    if (el?.isConnected) el.focus();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        setSwitcher((open) => !open);
+        setSwitcher((open) => {
+          if (!open) before.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          return !open;
+        });
       }
     };
     window.addEventListener('keydown', onKey);
@@ -405,7 +417,7 @@ function CrmShell() {
         {/* Anchored to the sidebar, so the switcher opens beside it as it does in the other modules. */}
         {switcher && (
           <div className="crm-switcher">
-            <ModuleSwitcher onClose={() => setSwitcher(false)} trigger={none} />
+            <ModuleSwitcher onClose={closeSwitcher} trigger={noTrigger} />
           </div>
         )}
       </div>
@@ -480,7 +492,8 @@ export function Screen({ title, parent, children }: { title: string; parent?: { 
     const el = header.current;
     if (!el) return;
     const root = document.documentElement;
-    const publish = () => root.style.setProperty('--screen-header-h', `${el.offsetHeight}px`);
+    // Its sticky offset counts too: the CRM's glass bar sticks 12 px below the top (CD-531).
+    const publish = () => root.style.setProperty('--screen-header-h', `${el.offsetHeight + (parseFloat(getComputedStyle(el).top) || 0)}px`);
     publish();
     const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(publish);
     watch?.observe(el);

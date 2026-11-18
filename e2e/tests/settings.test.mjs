@@ -280,8 +280,8 @@ describe('settings and discovery fields', () => {
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await member.waitForFunction((name) => document.querySelector('[data-testid="workspace-info-name"]')?.value === name, {}, workspaceName);
     assert.equal(await member.$eval('[data-testid=workspace-currency]', (el) => el.dataset.value), 'RSD');
-    // Settings has no module sidebar (CD-524): the link is in a module's sidebar (not the CRM's
-    // glass one, CD-530, where the avatar menu has Workspace settings).
+    // Settings has no module sidebar (CD-524): the link is in a module's sidebar. The CRM's glass
+    // sidebar (CD-530) has none; for now Workspace settings is reached there through Home or Ctrl+K.
     await member.goto(`${BASE_URL}/projects`, { waitUntil: 'networkidle0' });
     await member.waitForSelector('.app-sidebar a[href="/settings"]');
     await member.goto(`${BASE_URL}/settings/general`, { waitUntil: 'networkidle0' });

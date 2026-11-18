@@ -10,8 +10,8 @@ export const PIPELINE_KEY = 'audience';
 /** The Status filter's value for the won outcome (filterFields.ts WON). */
 const WON = '__won';
 
-/** What a card opens on the Pipeline: open opportunities, the won ones, or one stage. */
-export type PipelineTarget = { kind: 'open' } | { kind: 'won' } | { kind: 'stage'; stageId: string; won: boolean } | { kind: 'stalled' };
+/** What a KPI card opens on the Pipeline: the open opportunities, the won ones, or the stalled ones. */
+export type PipelineTarget = { kind: 'open' } | { kind: 'won' } | { kind: 'stalled' };
 
 /** A Stalled opportunity has had no contact for this many days or more. */
 export const STALL_DAYS = 3;
@@ -23,7 +23,7 @@ export const STALL_DAYS = 3;
  * the Pipeline shows one funnel, picked with its own select.
  */
 export function pipelineFilters(overview: FilterValue, target: PipelineTarget): FilterValue {
-  const status: FieldFilter = { op: 'is', vals: target.kind === 'won' ? [WON] : target.kind === 'stage' ? [target.won ? WON : target.stageId] : [GROUP] };
+  const status: FieldFilter = { op: 'is', vals: [target.kind === 'won' ? WON : GROUP] };
   const rest = overview.order.filter((id) => id !== 'owner' && id !== 'status' && id !== PIPELINE_KEY && id !== 'stall');
   const f: Record<string, FieldFilter> = { owner: overview.f.owner ?? { op: 'is', vals: [] }, status };
   for (const id of rest) if (overview.f[id]) f[id] = overview.f[id]!;
