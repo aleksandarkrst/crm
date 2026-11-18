@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
@@ -16,7 +16,7 @@ import { bandShade, bandWidth, dayCount, daysSince, PIPELINE_KEY, pipelineFilter
 import { APPROVAL_LABELS, approvalStatusOf, billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, dealPayments, funnelOptions, memberName, moneyTotal, num, opportunityName, salesPeople, stageOf, stageOwnerId, stagesFor, stageTargetDays, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import { usePageFilters } from '../store/usePageFilters';
-import type { Drill, Lead, SegKey, Stage } from '../store/types';
+import type { Drill, Lead, SegKey } from '../store/types';
 
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -120,7 +120,7 @@ export function Dashboard() {
     if (undated) undatedDeals++;
     for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
   }
-  const dueBands = TIME_BUCKETS.map((b, i) => {
+  const dueBands: DueBand[] = TIME_BUCKETS.map((b, i) => {
     const due = payments.filter((p) => {
       const diff = (p.when.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
       return diff > b.range[0] && diff <= b.range[1];
@@ -132,10 +132,28 @@ export function Dashboard() {
       ids,
       short: moneyTotal(s, due, true),
       full: moneyTotal(s, due),
+      count: due.length,
       // Per opportunity, only what falls due in this band (CD-365), not its whole value.
       amounts: Object.fromEntries(ids.map((id) => [id, moneyTotal(s, due.filter((p) => p.leadId === id))])),
+      counts: Object.fromEntries(ids.map((id) => [id, due.filter((p) => p.leadId === id).length])),
     };
   });
+  // A payment period opens the same side panel as a stage (CD-531); one panel at a time.
+  const [openDue, setOpenDue] = useState<number | null>(null);
+  const dueRefs = useRef(new Map<number, HTMLButtonElement>());
+  const pickStage = (id: string | null) => {
+    setOpenDue(null);
+    setOpenStage(id);
+  };
+  const pickDue = (i: number | null) => {
+    setOpenStage(null);
+    setOpenDue(i);
+  };
+  const closeDue = () => {
+    const band = openDue !== null ? dueRefs.current.get(openDue) : undefined;
+    setOpenDue(null);
+    band?.focus();
+  };
 
   const late = openLeads.filter((l) => l.lateDays > 0).sort((a, b) => b.lateDays - a.lateDays);
   const countLine = `${plural(openLeads.length, 'open opportunity', 'open opportunities')} in view, ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? `, ${undatedHidden} without a closing date hidden` : ''}`;
@@ -210,7 +228,7 @@ export function Dashboard() {
                     aria-pressed={on}
                     aria-label={`${st.name}: ${plural(rows.length, 'opportunity', 'opportunities')}, ${valueTotal(s, rows)}. Show them`}
                     title={`${st.name}: ${plural(rows.length, 'opportunity', 'opportunities')}, ${valueTotal(s, rows)}`}
-                    onClick={() => (on ? closeStage() : setOpenStage(st.id))}
+                    onClick={() => (on ? closeStage() : pickStage(st.id))}
                     style={{ width: bandWidth(i, stages.length), background: shadeVar(i, stages.length, !!st.won) }}
                   >
                     <b className="ov-band-name">{st.name}</b>
@@ -232,22 +250,31 @@ export function Dashboard() {
                 {undatedDeals ? ` ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out.` : ''}
               </span>
             </div>
-            <div className="ov-bands ov-due">
-              {dueBands.map((b) => (
-                <button
-                  key={b.label}
-                  type="button"
-                  className={'ov-band' + (b.i >= 3 ? ' dark' : '')}
-                  data-testid="funnel-due-band"
-                  disabled={!b.ids.length}
-                  title={b.ids.length ? `${b.label}: ${b.full} due, ${plural(b.ids.length, 'opportunity', 'opportunities')}` : `${b.label}: nothing due`}
-                  onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.full} due in this period` })}
-                  style={{ width: bandWidth(b.i, dueBands.length, 46), background: `var(--ov-due-${b.i})` }}
-                >
-                  <b className="ov-band-name">{b.label}</b>
-                  {b.ids.length ? <b className="ov-band-value">{b.short}</b> : <span className="ov-band-dash" aria-label="Nothing due" />}
-                </button>
-              ))}
+            <div className={'ov-bands ov-due' + (openDue !== null ? ' has-on' : '')}>
+              {dueBands.map((b) => {
+                const on = openDue === b.i;
+                const text = b.ids.length ? `${b.label}: ${b.full} due, ${plural(b.ids.length, 'opportunity', 'opportunities')}` : `${b.label}: nothing due`;
+                return (
+                  <button
+                    key={b.label}
+                    ref={(el) => {
+                      if (el) dueRefs.current.set(b.i, el);
+                      else dueRefs.current.delete(b.i);
+                    }}
+                    type="button"
+                    className={'ov-band' + (on ? ' on' : '') + (b.i >= 3 ? ' dark' : '')}
+                    data-testid="funnel-due-band"
+                    aria-pressed={on}
+                    aria-label={`${text}. Show them`}
+                    title={text}
+                    onClick={() => (on ? closeDue() : pickDue(b.i))}
+                    style={{ width: bandWidth(b.i, dueBands.length, 46), background: `var(--ov-due-${b.i})` }}
+                  >
+                    <b className="ov-band-name">{b.label}</b>
+                    {b.ids.length ? <b className="ov-band-value">{b.short}</b> : <span className="ov-band-dash" aria-hidden="true" />}
+                  </button>
+                );
+              })}
             </div>
             {wonLeads.length === 0 && <div className="ov-empty">No won opportunities in view. Payments show here once an opportunity is won.</div>}
           </section>
@@ -300,9 +327,9 @@ export function Dashboard() {
           leads={inFunnel}
           onClose={closeStage}
           onPick={setOpenStage}
-          onOpenPipeline={(st) => openPipeline({ kind: 'stage', stageId: st.id, won: !!st.won })}
         />
       )}
+      {openDue !== null && <DuePanel bands={dueBands} index={openDue} leads={wonLeads} onClose={closeDue} onPick={setOpenDue} />}
     </Screen>
   );
 }
@@ -359,24 +386,30 @@ function PipelineChip({ value, onPick }: { value: SegKey | null; onPick: (id: Se
 }
 
 /**
- * A funnel stage's opportunities (board C-Overview-Stage): a glass panel on the right with the
- * stage's numbers, its owner and target, the previous and next stage, the opportunities, and the
- * stage on the Pipeline. Escape, the scrim, × and the band again close it.
+ * The glass side panel (board C-Overview-Stage) shared by a funnel stage and a payment period: a
+ * panel on the right with a few numbers, a note, the previous and next band, and the
+ * opportunities. Escape, the scrim, × and the band again close it.
  */
-function StagePanel({ seg, stageId, leads, onClose, onPick, onOpenPipeline }: { seg: SegKey; stageId: string; leads: Lead[]; onClose: () => void; onPick: (id: string) => void; onOpenPipeline: (st: Stage) => void }) {
-  const { s } = useStore();
+function SidePanel({ panelKey, label, color, title, subtitle, stats, note, prev, next, onPrev, onNext, emptyText, onClose, children }: {
+  panelKey: string;
+  label: string;
+  color: string;
+  title: string;
+  subtitle: string;
+  stats: { k: string; v: string }[];
+  note: ReactNode;
+  prev?: string;
+  next?: string;
+  onPrev: () => void;
+  onNext: () => void;
+  emptyText: string;
+  onClose: () => void;
+  children: ReactNode[];
+}) {
   const closeBtn = useRef<HTMLButtonElement>(null);
-  const stages = stagesFor(s, seg);
-  const i = Math.max(0, stages.findIndex((st) => st.id === stageId));
-  const st = stages[i]!;
-  const rows = leads.filter((l) => l.stage === st.id);
-  const prob = num(st.prob);
-  const target = st.targetDays ?? s.funnels[seg]?.targetDays ?? null;
-  const prev = stages[i - 1];
-  const next = stages[i + 1];
   useEffect(() => {
     closeBtn.current?.focus();
-  }, [stageId]);
+  }, [panelKey]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -387,23 +420,15 @@ function StagePanel({ seg, stageId, leads, onClose, onPick, onOpenPipeline }: { 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  const stats = [
-    { k: 'Opportunities', v: String(rows.length) },
-    { k: 'Value', v: rows.length ? valueTotal(s, rows, true) : '—' },
-    { k: 'Weighted', v: rows.length ? moneyTotal(s, rows.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 })), true) : '—' },
-  ];
-  const stageOwner = st.ownerId ? memberName(s, st.ownerId) : null;
 
   return createPortal(
     <div className="gs-tokens ov-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ov-panel" role="dialog" aria-modal="true" aria-label={`${st.name} opportunities`} data-testid="stage-panel">
+      <div className="ov-panel" role="dialog" aria-modal="true" aria-label={label} data-testid="stage-panel">
         <div className="ov-panel-head">
-          <span className="ov-panel-dot" style={{ background: shadeVar(i, stages.length, !!st.won) }} aria-hidden="true" />
+          <span className="ov-panel-dot" style={{ background: color }} aria-hidden="true" />
           <div className="ov-panel-titles">
-            <b>{st.name}</b>
-            <span className="ov-sub">
-              {s.funnels[seg]?.label}, stage {i + 1} of {stages.length}
-            </span>
+            <b>{title}</b>
+            <span className="ov-sub">{subtitle}</span>
           </div>
           <button ref={closeBtn} type="button" className="gs-x plain" aria-label="Close" data-testid="stage-panel-close" onClick={onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -419,71 +444,146 @@ function StagePanel({ seg, stageId, leads, onClose, onPick, onOpenPipeline }: { 
             </div>
           ))}
         </div>
-        <div className="ov-panel-owner">
-          {stageOwner ? (
-            <>
-              <span className="gs-face soft ov-face-sm">{initialsOf(stageOwner)}</span>
-              <span>
-                Stage owner <b>{stageOwner}</b>, target {target ? dayCount(target) : 'none'}
-              </span>
-            </>
-          ) : (
-            <span>Each opportunity's owner answers for this stage, target {target ? dayCount(target) : 'none'}</span>
-          )}
-        </div>
+        <div className="ov-panel-owner">{note}</div>
         {(prev || next) && (
           <div className="ov-panel-nav">
             {prev && (
-              <button type="button" className="gs-btn small" aria-label="Previous stage" onClick={() => onPick(prev.id)}>
-                ← {prev.name}
+              <button type="button" className="gs-btn small" aria-label="Previous" onClick={onPrev}>
+                ← {prev}
               </button>
             )}
             {next && (
-              <button type="button" className="gs-btn small" aria-label="Next stage" onClick={() => onPick(next.id)}>
-                {next.name} →
+              <button type="button" className="gs-btn small" aria-label="Next" onClick={onNext}>
+                {next} →
               </button>
             )}
           </div>
         )}
         <div className="gs-glass ov-panel-list">
-          {rows.length === 0 && <div className="ov-empty">No opportunities in this stage right now.</div>}
-          {rows.map((l) => {
-            const owner = memberName(s, l.ownerId, l.owner);
-            const approval = approvalStatusOf(s, l);
-            return (
-              <Link key={l.id} to={paths.lead(l.id)} className="ov-row ov-opp" data-testid="stage-panel-row">
-                <span className="gs-face" title={owner}>
-                  {initialsOf(owner)}
-                </span>
-                <span className="ov-row-text">
-                  <b>{opportunityName(l)}</b>
-                  <span className="ov-sub">
-                    {l.company}, {dayCount(daysSince(l.stageSince))} in stage
-                  </span>
-                  {(l.lateDays > 0 || l.qualifiedAt || approval === 'pending' || approval === 'approved') && (
-                    <span className="ov-tags">
-                      {l.lateDays > 0 && <span className="ov-tag late">{dayCount(l.lateDays)} late</span>}
-                      {l.qualifiedAt && <span className="ov-tag ok">Qualified</span>}
-                      {(approval === 'pending' || approval === 'approved') && <span className={'ov-tag ' + (approval === 'pending' ? 'amber' : 'ok')}>{APPROVAL_LABELS[approval]}</span>}
-                    </span>
-                  )}
-                </span>
-                <span className="ov-opp-value">
-                  <b>{valueTotal(s, [l])}</b>
-                  <span className="ov-sub">
-                    {prob}%, {moneyTotal(s, [{ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 }], true)} weighted
-                  </span>
-                </span>
-              </Link>
-            );
-          })}
+          {children.length === 0 && <div className="ov-empty">{emptyText}</div>}
+          {children}
         </div>
-        <button type="button" className="gs-btn primary ov-panel-open" data-testid="stage-panel-pipeline" onClick={() => onOpenPipeline(st)}>
-          Open {st.name} in the Pipeline
-        </button>
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** One opportunity in a side panel: owner, name, a line about it, tags, and an amount. */
+function PanelRow({ lead, line, amount, amountNote }: { lead: Lead; line: string; amount: string; amountNote: string }) {
+  const { s } = useStore();
+  const owner = memberName(s, lead.ownerId, lead.owner);
+  const approval = approvalStatusOf(s, lead);
+  return (
+    <Link to={paths.lead(lead.id)} className="ov-row ov-opp" data-testid="stage-panel-row">
+      <span className="gs-face" title={owner}>
+        {initialsOf(owner)}
+      </span>
+      <span className="ov-row-text">
+        <b>{opportunityName(lead)}</b>
+        <span className="ov-sub">{line}</span>
+        {(lead.lateDays > 0 || lead.qualifiedAt || approval === 'pending' || approval === 'approved') && (
+          <span className="ov-tags">
+            {lead.lateDays > 0 && <span className="ov-tag late">{dayCount(lead.lateDays)} late</span>}
+            {lead.qualifiedAt && <span className="ov-tag ok">Qualified</span>}
+            {(approval === 'pending' || approval === 'approved') && <span className={'ov-tag ' + (approval === 'pending' ? 'amber' : 'ok')}>{APPROVAL_LABELS[approval]}</span>}
+          </span>
+        )}
+      </span>
+      <span className="ov-opp-value">
+        <b>{amount}</b>
+        <span className="ov-sub">{amountNote}</span>
+      </span>
+    </Link>
+  );
+}
+
+/** A funnel stage's opportunities, with the stage's numbers, its owner and target. */
+function StagePanel({ seg, stageId, leads, onClose, onPick }: { seg: SegKey; stageId: string; leads: Lead[]; onClose: () => void; onPick: (id: string) => void }) {
+  const { s } = useStore();
+  const stages = stagesFor(s, seg);
+  const i = Math.max(0, stages.findIndex((st) => st.id === stageId));
+  const st = stages[i]!;
+  const rows = leads.filter((l) => l.stage === st.id);
+  const prob = num(st.prob);
+  const target = st.targetDays ?? s.funnels[seg]?.targetDays ?? null;
+  const prev = stages[i - 1];
+  const next = stages[i + 1];
+  const weightedOf = (l: Lead) => moneyTotal(s, [{ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 }], true);
+  const stageOwner = st.ownerId ? memberName(s, st.ownerId) : null;
+
+  return (
+    <SidePanel
+      panelKey={st.id}
+      label={`${st.name} opportunities`}
+      color={shadeVar(i, stages.length, !!st.won)}
+      title={st.name}
+      subtitle={`${s.funnels[seg]?.label}, stage ${i + 1} of ${stages.length}`}
+      stats={[
+        { k: 'Opportunities', v: String(rows.length) },
+        { k: 'Value', v: rows.length ? valueTotal(s, rows, true) : '—' },
+        { k: 'Weighted', v: rows.length ? moneyTotal(s, rows.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * prob) / 100 })), true) : '—' },
+      ]}
+      note={
+        stageOwner ? (
+          <>
+            <span className="gs-face soft ov-face-sm">{initialsOf(stageOwner)}</span>
+            <span>
+              Stage owner <b>{stageOwner}</b>, target {target ? dayCount(target) : 'none'}
+            </span>
+          </>
+        ) : (
+          <span>Each opportunity's owner answers for this stage, target {target ? dayCount(target) : 'none'}</span>
+        )
+      }
+      prev={prev?.name}
+      next={next?.name}
+      onPrev={() => prev && onPick(prev.id)}
+      onNext={() => next && onPick(next.id)}
+      emptyText="No opportunities in this stage right now."
+      onClose={onClose}
+    >
+      {rows.map((l) => (
+        <PanelRow key={l.id} lead={l} line={`${l.company}, ${dayCount(daysSince(l.stageSince))} in stage`} amount={valueTotal(s, [l])} amountNote={`${prob}%, ${weightedOf(l)} weighted`} />
+      ))}
+    </SidePanel>
+  );
+}
+
+type DueBand = { i: number; label: string; ids: string[]; short: string; full: string; count: number; amounts: Record<string, string>; counts: Record<string, number> };
+
+/** A payment period's won opportunities (CD-531), with what each has falling due in it. */
+function DuePanel({ bands, index, leads, onClose, onPick }: { bands: DueBand[]; index: number; leads: Lead[]; onClose: () => void; onPick: (i: number) => void }) {
+  const { s } = useStore();
+  const b = bands[index]!;
+  const prev = bands[index - 1];
+  const next = bands[index + 1];
+  const rows = b.ids.map((id) => leads.find((l) => l.id === id)).filter((l): l is Lead => !!l);
+
+  return (
+    <SidePanel
+      panelKey={String(index)}
+      label={`Payments due ${b.label}`}
+      color={`var(--ov-due-${b.i})`}
+      title={b.label}
+      subtitle={`Funnel by payment due date, period ${index + 1} of ${bands.length}`}
+      stats={[
+        { k: 'Opportunities', v: String(rows.length) },
+        { k: 'Due', v: b.ids.length ? b.short : '—' },
+        { k: 'Payments', v: String(b.count) },
+      ]}
+      note={<span>Won opportunities only. Product and service payments falling due in this period, without VAT.</span>}
+      prev={prev?.label}
+      next={next?.label}
+      onPrev={() => onPick(index - 1)}
+      onNext={() => onPick(index + 1)}
+      emptyText="Nothing falls due in this period."
+      onClose={onClose}
+    >
+      {rows.map((l) => (
+        <PanelRow key={l.id} lead={l} line={`${l.company}, ${plural(b.counts[l.id] ?? 0, 'payment')} in this period`} amount={b.amounts[l.id] ?? '—'} amountNote={`of ${valueTotal(s, [l])} won`} />
+      ))}
+    </SidePanel>
   );
 }
 

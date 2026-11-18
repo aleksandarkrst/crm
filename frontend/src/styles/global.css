@@ -2191,7 +2191,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-band.won { color: var(--gs-green-dark); }
 .ov-band:hover:not(:disabled) { filter: brightness(1.04); box-shadow: 0 4px 14px rgba(13, 36, 28, 0.18); }
 .ov-band:active:not(:disabled) { transform: scale(0.99); }
-.ov-band:disabled { cursor: default; }
 .ov-band.on { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--gs-green); }
 .ov-bands.has-on .ov-band:not(.on) { opacity: 0.45; }
 .ov-band-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2260,7 +2259,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ov-opp .ov-row-text > b { font-size: 14px; }
 .ov-opp-value { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; white-space: nowrap; }
 .ov-opp-value b { font-size: 14px; }
-.ov-panel-open { flex: none; align-self: stretch; height: 38px; margin-top: auto; }
 /* Sales bonuses (owners and admins). */
 .ov-scroll { overflow-x: auto; }
 .ov-bonus-row { display: grid; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--gs-divider-2); font-size: 13px; }
