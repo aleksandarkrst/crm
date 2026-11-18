@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, eventually, fillField, newUserWithWorkspace, steps, text, useBrowser, waitForToastToClear, createNew, createReadyCompany, pickDealCompany } from '../lib/harness.mjs';
+import { pickOption } from '../lib/filters.mjs';
 
 describe('funnels and stages', () => {
   const browser = useBrowser();
@@ -78,12 +79,12 @@ describe('funnels and stages', () => {
 
   step('the Pipeline and Overview show the third funnel and its opportunity', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    // The Pipeline's funnel select and Overview's Audience select list it.
+    // The Pipeline's funnel select and Overview's Pipeline chip (CD-531) list it.
     await page.select('[data-testid=pipeline-funnel]', funnel.id);
     await page.waitForFunction(() => document.body.innerText.includes('Umbrella Corp'));
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
-    await page.select('[data-testid=overview-funnel]', funnel.id);
-    await page.waitForFunction(() => /1 opportunity in view/.test(document.body.innerText));
+    await pickOption(page, 'pipeline', funnel.id);
+    await page.waitForFunction(() => /^1 open opportunity in view/.test(document.querySelector('[data-testid=overview-count]')?.textContent ?? ''));
   });
 
   step('adds a stage, then removes a stage with the opportunity in it (the opportunity moves)', async () => {

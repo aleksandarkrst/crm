@@ -284,7 +284,7 @@ export function Calendar() {
   const openDay = useCallback((d: string) => update({ view: 'day', date: d }), [update]);
 
   return (
-    <Screen title="Calendar">
+    <Screen title="Meetings">
       <div className="cal" data-testid="calendar" data-view={view}>
         <div className="cal-toolbar">
           <div className="cal-nav">

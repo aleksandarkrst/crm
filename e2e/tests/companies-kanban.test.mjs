@@ -45,10 +45,10 @@ describe.skip('companies kanban', () => {
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${readyId}`)).status === 'opportunity'), 'the complete company is an opportunity');
   });
 
-  step('Companies is second in the sidebar; the Kanban puts each company in its status column', async () => {
+  step('Companies is third in the sidebar, after Overview and Today (CD-530); the Kanban puts each company in its status column', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
-    const nav = await page.$$eval('.app-sidebar nav .nav-item .nav-label', (els) => els.map((el) => el.textContent));
-    assert.deepEqual(nav.slice(0, 2), ['Overview', 'Companies']);
+    const nav = await page.$$eval('[data-testid=crm-sidebar] .gs-nav-row .label', (els) => els.map((el) => el.textContent));
+    assert.deepEqual(nav.slice(0, 3), ['Overview', 'Today', 'Companies']);
     await page.waitForSelector('[data-testid=companies-board]');
     assert.equal(await columnOf(page, leadId), 'lead');
     assert.equal(await columnOf(page, readyId), 'opportunity');

@@ -53,7 +53,7 @@ describe('products and the opportunity page', () => {
     dealId = await createDealInUi(page, { company: 'Globex', contact: 'Hank Scorpio' });
     await waitForToastToClear(page);
     assert.equal(await page.$eval('[data-testid=deal-title]', (el) => el.value), 'Globex');
-    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Opportunity');
+    assert.equal(await page.$eval('header.crm-topbar h1', (el) => el.textContent), 'Pipeline');
     assert.ok(await page.$('[data-testid=stage-bar] .stage-chev.current'), 'the stage bar marks the current stage');
     const tabs = await page.$$eval('.composer-tab', (els) => els.map((el) => el.textContent.trim()));
     assert.ok(!tabs.some((t) => t.startsWith('Products')), JSON.stringify(tabs));

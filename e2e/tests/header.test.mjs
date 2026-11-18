@@ -89,8 +89,8 @@ describe('command palette, + menu and account menu', () => {
     // The route changes in a transition: wait for the contact screen itself.
     await page.waitForFunction(() => location.pathname.startsWith('/contacts/'));
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Ana Marković');
-    // The header names the screen, not the record.
-    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Contact');
+    // The header names the screen, not the record: the CRM's glass top bar names the list (CD-530).
+    assert.equal(await page.$eval('header.crm-topbar h1', (el) => el.textContent), 'Contacts');
     // A clean contact id in the address, no "%3Ap" (CD-224); an old person-id link redirects to it.
     const clean = await page.evaluate(() => location.pathname);
     assert.match(clean, /^\/contacts\/[0-9a-f-]{36}$/);
@@ -135,7 +135,8 @@ describe('command palette, + menu and account menu', () => {
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => location.pathname === '/contacts');
     }
-    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'crm');
+    // Back in the CRM: its glass sidebar (CD-530) marks the page.
+    await page.waitForSelector('[data-testid=crm-sidebar] a.gs-nav-row.on[href="/contacts"][aria-current=page]');
   });
 
   step('the + menu runs an item by its letter', async () => {

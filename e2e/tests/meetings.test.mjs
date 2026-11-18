@@ -369,7 +369,7 @@ describe('meeting calendar', () => {
     assert.ok((await sideways()) <= 0, `/calendar scrolls sideways by ${await sideways()}px`);
     for (const path of [`/calendar?view=week&date=${DAY}`, `/calendar?view=month&date=${DAY}`, `/calendar?view=table&from=${isoDay(-30)}&to=${isoDay(30)}`, `/meetings/${meetingId}`, `/meetings/new?companyId=${company.id}`]) {
       await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
-      await page.waitForSelector('.screen-header');
+      await page.waitForSelector('.crm-topbar');
       assert.ok((await sideways()) <= 0, `${path} scrolls sideways by ${await sideways()}px`);
     }
     // On a phone "+ New meeting" opens the New meeting page (there is no popover on phones).

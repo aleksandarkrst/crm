@@ -1,5 +1,5 @@
 // Tablets and phones (CD-70): no sideways page scroll at 390×844 or 768×1024, navigation stays
-// reachable (bottom bar with Calendar, CD-223, and "More"), a deal's to-do can be ticked, and a contact can be called or
+// reachable (the CRM's glass sidebar as a row of icons, CD-530), a deal's to-do can be ticked, and a contact can be called or
 // emailed with one tap.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -35,43 +35,36 @@ describe('phones and tablets', () => {
       await page.setViewport(viewport);
       for (const path of screens) {
         await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
-        // Workspace and Profile settings have their own top bar (CD-524, CD-525).
-        await page.waitForSelector(path.startsWith('/settings/') || path.startsWith('/profile') ? '.gs-topbar' : '.screen-header');
+        // Workspace and Profile settings (CD-524, CD-525) and the CRM (CD-530) have the glass top bar.
+        await page.waitForSelector('.gs-topbar');
         assert.ok((await sideways()) <= 0, `${label} ${path} scrolls sideways by ${await sideways()}px`);
       }
     });
   }
 
-  step('the bottom bar and "More" reach every screen on a phone', async () => {
+  step('the CRM sidebar, a row of icons above the page on a phone, reaches every screen', async () => {
     await page.setViewport(PHONE);
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    const bar = await page.$eval('.app-sidebar', (el) => {
+    // The CRM's glass sidebar (CD-530) is a row above the page on a phone, not a bottom bar.
+    const row = await page.$eval('[data-testid=crm-sidebar]', (el) => {
       const r = el.getBoundingClientRect();
-      return { bottom: Math.round(r.bottom), width: Math.round(r.width) };
+      return { top: r.top, left: r.left, right: r.right };
     });
-    assert.deepEqual(bar, { bottom: 844, width: 390 });
-    // The CRM's everyday pages, Calendar included (CD-223), and "More".
-    const inBar = await page.$$eval('.app-sidebar nav .nav-item', (els) => els.filter((el) => el.getClientRects().length > 0).map((el) => el.querySelector('.nav-label').textContent));
-    assert.deepEqual(inBar, ['Companies', 'Pipeline', 'Today', 'Calendar']);
-    await click(page, '.app-sidebar a[href="/calendar"]');
-    await page.waitForFunction(() => location.pathname === '/calendar');
-    await click(page, '.app-sidebar a[href="/today"]');
-    await page.waitForFunction(() => location.pathname === '/today');
-    for (const [label, path] of [
-      ['Overview', '/overview'],
-      ['Contacts', '/contacts'],
-      ['Products', '/products'],
-      ['Settings', '/settings'],
-    ]) {
-      await click(page, '[data-testid=nav-more]');
-      await page.waitForSelector('[data-testid=more-sheet]');
-      await click(page, `[data-testid=more-sheet] a[href="${path}"]`);
-      await page.waitForFunction((p) => location.pathname.startsWith(p), {}, path);
-      assert.equal(await page.$('[data-testid=more-sheet]'), null, `sheet closes after ${label}`);
+    assert.ok(row.top < 100 && row.left >= 0 && row.right <= 390, JSON.stringify(row));
+    assert.equal(await page.$('[data-testid=nav-more]'), null, 'no bottom bar "More" in the CRM');
+    // Every CRM page, Meetings (the Calendar) included; the current one is marked.
+    for (const path of ['/calendar', '/today', '/overview', '/companies', '/contacts', '/products', '/pipeline']) {
+      await click(page, `[data-testid=crm-sidebar] a.gs-nav-row[href="${path}"]`);
+      await page.waitForFunction((p) => location.pathname === p, {}, path);
+      await page.waitForSelector(`[data-testid=crm-sidebar] a.gs-nav-row.on[href="${path}"]`);
     }
+    // The CRM sidebar has no Settings link: its mark goes Home, whose tile opens Workspace settings.
+    await click(page, '[data-testid=crm-sidebar] a.gs-home');
+    await click(page, '[data-testid=home-modules] [data-module=settings]');
+    await page.waitForFunction(() => location.pathname.startsWith('/settings'));
     // The header's search, "+" menu, notifications and account menu stay on screen.
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('.screen-header .new-menu-btn');
+    await page.waitForSelector('.crm-topbar .new-menu-btn');
     const header = await page.evaluate(() => ['.search-trigger', '.new-menu-btn', '[data-testid=notifications]', '[data-testid=account-menu]'].map((sel) => document.querySelector(sel).getBoundingClientRect().right <= window.innerWidth));
     assert.deepEqual(header, [true, true, true, true]);
   });

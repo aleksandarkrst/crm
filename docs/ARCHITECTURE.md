@@ -364,7 +364,7 @@ the Overview audience filter).
 - The funnel is not a chip (owner's call, 24 Oct). Pipeline: the select next to the view toggle is
   `s.segment` (the funnel the rest of the app opens); Status ("Open, Won" by default) replaces the
   old "lost" view (Won and Lost are values next to the open stages) and picks the columns. Overview:
-  the **Audience** select (all funnels or one), kept with the page's filters, so Clear filters resets
+  the **Pipeline** chip (all pipelines or one, CD-531), kept with the page's filters, so Clear filters resets
   it; on all funnels Status lists every funnel's stages.
 - The value is a per-browser convenience like the Pipeline view: `localStorage`
   `crm.filters.<userId>.<tenantId>.<page>` (`store/usePageFilters.ts`, in try/catch, the page's
@@ -1217,6 +1217,18 @@ the store is the one place that talks to the backend.
 - Discovery notes on a deal (headline, need, constraint, decision maker, discovery date) are
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
   view, which shows fields that are still empty as bracketed gaps.
+
+**The CRM glass shell and Overview** (CD-531, boards C-Overview and C-Overview-Stage). Every CRM
+page renders inside `CrmShell` (`components/Layout.tsx`): the `.gs` tokens and blobs, a glass
+sidebar (Home, the workspace, Overview, Today, Companies, Pipeline, Contacts, Products, Meetings;
+Today carries the overdue count) and, through `Screen`, a glass top bar with the title, search and
+your menu. Ctrl+J opens the module switcher beside the sidebar. Only Overview's content is
+redesigned so far (`screens/Dashboard.tsx`, pure helpers in `store/overview.ts`): the filter bar
+(Pipeline chip, Salesperson, Closing date, + Filter), four KPI cards, the pipeline funnel and the
+funnel by payment due date, stage conversion, the opportunities late in their stage, and Sales
+bonuses. A KPI card opens the Pipeline with Overview's filters passed as `location.state.filters`
+(`pipelineFilters`; not saved until the person changes one). A funnel stage or a payment period
+opens a glass side panel with its numbers and opportunities, and the previous and next band.
 
 **The Settings page** (CD-280; rebuilt in CD-524 to its spec and the design G-Settings,
 `screens/Settings.tsx` and `screens/settings/`) is an area of its own in the design's glass

@@ -32,7 +32,7 @@ describe('company and contact pages', () => {
   step('the company page: screen name in the header, the record below, its opportunities and contacts', async () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Umbrella d.o.o.');
-    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Company');
+    assert.equal(await page.$eval('header.crm-topbar h1', (el) => el.textContent), 'Companies');
     assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Open opportunities \(1\)[\s\S]*Umbrella rollout/);
     assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Alice Abernathy/);
     assert.ok(!(await text(page)).includes('Delete company'), 'Delete is in the menu');
@@ -125,7 +125,7 @@ describe('company and contact pages', () => {
   step('the contact page: header, summary, company and opportunities', async () => {
     await page.goto(`${BASE_URL}/contacts/${contact.id}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Alice Abernathy');
-    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Contact');
+    assert.equal(await page.$eval('header.crm-topbar h1', (el) => el.textContent), 'Contacts');
     assert.match(await page.$eval('[data-testid=contact-company]', (el) => el.innerText), /Umbrella d\.o\.o\./);
     assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Umbrella rollout/);
     assert.ok(await setByLabel(page, 'Role', 'Chief Operating Officer'), 'Role field found');

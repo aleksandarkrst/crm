@@ -55,6 +55,8 @@ describe('stage conversion on Overview', () => {
 
   step('shows conversion, win rate and time to proposal', async () => {
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
+    // On All pipelines the cards show one funnel, switched with the funnel card's select (CD-531).
+    await page.select('[data-testid=funnel-card-select]', funnels.find((f) => f.key === 'smb').id);
     await page.waitForSelector('[data-testid=stage-conversion] [data-stage]');
     // 6 deals entered New opportunity and 5 moved on; 5 → 4 → 3 → 1 → 1 after that.
     assert.deepEqual(await row(page, 'New opportunity'), ['83%', '5/6']);
@@ -63,20 +65,23 @@ describe('stage conversion on Overview', () => {
     assert.deepEqual(await row(page, 'Proposal'), ['33%', '1/3']);
     assert.deepEqual(await row(page, 'Negotiation'), ['100%', '1/1']);
     const text = await card(page);
-    assert.match(text, /Win rate\s+50%\s+1 won · 1 lost/i);
+    assert.match(text, /Win rate\s+50%\s+1 won, 1 lost/i);
     assert.match(text, /To proposal[\s\S]*3 opportunities/i);
     assert.match(text, /Opportunities that moved\s+5\s+of 6 opportunities in view/i);
   });
 
-  step('respects the Overview filters: Audience, Salesperson and Closing date together; Clear filters resets them', async () => {
+  step('respects the Overview filters: Pipeline, Salesperson and Closing date together; Clear filters resets them', async () => {
     const ent = funnels.find((f) => f.key === 'ent');
     const smb = funnels.find((f) => f.key === 'smb');
+    assert.equal(await chipText(page, 'pipeline'), 'Pipeline All pipelines');
     assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
-    // The funnel is the Audience select it was (CD-366), not a chip.
-    await page.select('[data-testid=overview-funnel]', ent.id);
+    // The funnel is the Pipeline chip (CD-531, was the Audience select): stage conversion follows it.
+    await pickOption(page, 'pipeline', ent.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
-    await page.select('[data-testid=overview-funnel]', smb.id);
+    assert.equal(await chipText(page, 'pipeline'), `Pipeline ${ent.label}`);
+    assert.equal(await page.$('[data-testid=funnel-card-select]'), null, 'no funnel select once a pipeline is picked');
+    await pickOption(page, 'pipeline', smb.id);
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'back on the SMB funnel');
     // Me (first in the list), then a closing date before today: the Won one closed today (winning sets
     // the closing date, CD-477) and the others have none, so none match.
@@ -89,9 +94,33 @@ describe('stage conversion on Overview', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
     assert.match(await text(page), /5 without a closing date hidden/);
     await clearFilters(page);
-    assert.equal(await page.$eval('[data-testid=overview-funnel]', (el) => el.value), 'Audience');
+    assert.equal(await chipText(page, 'pipeline'), 'Pipeline All pipelines');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'numbers are back once the filters are cleared');
+  });
+
+  step('a funnel band opens its opportunities in a side panel; a KPI card opens the Pipeline with its filter (CD-531)', async () => {
+    await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
+    await page.select('[data-testid=funnel-card-select]', funnels.find((f) => f.key === 'smb').id);
+    // On All pipelines the cards add up every pipeline but open one: the page says which.
+    assert.match(await page.$eval('[data-testid=kpi-pipeline-note]', (el) => el.textContent), /opens .+ in the Pipeline/);
+    const band = (name) => page.evaluateHandle((n) => [...document.querySelectorAll('[data-testid=funnel-stage-band]')].find((b) => b.querySelector('.ov-band-name')?.textContent === n), name);
+    await (await band('First touch')).click();
+    await page.waitForSelector('[data-testid=stage-panel]');
+    assert.equal(await (await band('First touch')).evaluate((b) => b.getAttribute('aria-pressed')), 'true');
+    assert.match(await page.$eval('[data-testid=stage-panel]', (el) => el.innerText), /At first touch/);
+    // Next stage, then Escape: the panel closes and focus goes back to the band it shows.
+    await page.$$eval('[data-testid=stage-panel] .ov-panel-nav button', (els) => els.find((b) => b.textContent.includes('Discovery call')).click());
+    await page.waitForFunction(() => document.querySelector('[data-testid=stage-panel]')?.innerText.includes('At discovery'));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=stage-panel]'));
+    assert.equal(await page.evaluate(() => document.activeElement?.querySelector('.ov-band-name')?.textContent), 'Discovery call');
+    // Stalled opens the Pipeline with "Days since contact" added to the filters.
+    const kpis = await page.$$('[data-testid=overview-kpi]');
+    await kpis[3].click();
+    await page.waitForFunction(() => location.pathname === '/pipeline');
+    await page.waitForSelector('[data-testid=filter-chip-stall]');
+    assert.match(await chipText(page, 'stall'), /^Days since contact/);
   });
 
   it('throws no uncaught errors in the page', () => {

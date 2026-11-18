@@ -16,7 +16,8 @@ describe('live updates across page loads', () => {
     const paths = ['/pipeline', '/today', '/companies', '/contacts', '/products', '/pipeline', '/today', '/companies', '/contacts', '/overview'];
     for (const path of paths) {
       await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
-      await page.waitForSelector('.screen-header');
+      // The CRM's glass top bar (CD-530).
+      await page.waitForSelector('.crm-topbar');
     }
     await page.waitForFunction(() => document.body.innerText.includes('Nothing to measure yet'));
     assert.equal(new URL(page.url()).pathname, '/overview');

@@ -32,7 +32,9 @@ async function pickClose(page, preset) {
   await closePopover(page);
 }
 
-const metaText = (page) => page.evaluate(() => [...document.querySelectorAll('span')].map((el) => el.textContent).find((t) => / in view · /.test(t)) ?? '');
+/** Overview's count line next to the filters (CD-531): the open opportunities in view. */
+const metaText = (page) => page.evaluate(() => document.querySelector('[data-testid=overview-count]')?.textContent ?? '');
+const metaIs = (page, re) => page.waitForFunction((src) => new RegExp(src).test(document.querySelector('[data-testid=overview-count]')?.textContent ?? ''), {}, re.source);
 
 describe('honest UI', () => {
   const browser = useBrowser();
@@ -70,27 +72,27 @@ describe('honest UI', () => {
     // The conversion card waits for the stage history (CD-62).
     await page.waitForFunction(() => document.body.innerText.includes('so far)'));
     const body = await text(page);
-    for (const fake of ['41%', 'Proposal → won', 'Days to proposal', 'Docs generated', 'Up from 24%', '57h saved', 'nudge sent automatically']) assert.ok(!body.includes(fake), `no "${fake}"`);
+    // The empty "Documents generated" card is gone (CD-531) rather than showing made-up counts.
+    for (const fake of ['41%', 'Proposal → won', 'Days to proposal', 'Docs generated', 'Documents generated', 'Up from 24%', '57h saved', 'nudge sent automatically']) assert.ok(!body.includes(fake), `no "${fake}"`);
     assert.ok(body.includes('Conversion rates appear once at least 5 opportunities in view have moved between stages (0 so far)'), 'conversion empty state');
-    assert.ok(body.includes('Document counts appear once'), 'documents empty state');
     assert.match(body, /2 open opportunities in the current filter/);
-    assert.match(await metaText(page), /^2 opportunities in view · any closing date$/);
+    assert.match(await metaText(page), /^2 open opportunities in view, any closing date$/);
   });
 
   step('the closing-date filter changes what Overview counts', async () => {
     await pickClose(page, 'next30');
-    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view'));
-    assert.match(await metaText(page), /^1 opportunity in view · closing next 30 days · 1 without a closing date hidden$/);
+    await metaIs(page, /^1 open opportunity in view/);
+    assert.match(await metaText(page), /^1 open opportunity in view, closing next 30 days, 1 without a closing date hidden$/);
     assert.match(await text(page), /1 open opportunity in the current filter/);
 
     await pickClose(page, 'before');
-    await page.waitForFunction(() => document.body.innerText.includes('0 opportunities in view'));
+    await metaIs(page, /^0 open opportunities in view/);
     assert.match(await text(page), /0 open opportunities in the current filter/);
 
     await openChip(page, 'close');
     await click(page, '[data-testid=filter-clear-selection]');
     await closePopover(page);
-    await page.waitForFunction(() => document.body.innerText.includes('2 opportunities in view'));
+    await metaIs(page, /^2 open opportunities in view/);
   });
 
   step('templates and funnels can be created, and nothing is made up', async () => {
