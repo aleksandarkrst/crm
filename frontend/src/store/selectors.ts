@@ -3,6 +3,7 @@ import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals, num } from './dealMath';
 import { readiness, STATUS_RANK } from './companyBoard';
+import { uniquePeople } from './companyPeople';
 import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, CompanyStatus, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
@@ -298,19 +299,10 @@ export function contactsForLead(s: State, leadId: string): Person[] {
  * company page lists them, and the Companies list and its CSV count them, so the two agree.
  */
 export function companyPeople(s: State, companyId: string, leads: Lead[]): Person[] {
-  const people: Person[] = [];
-  const seen = new Set<string>();
-  const add = (p: Person) => {
-    const key = p.contactId || p.id;
-    if (seen.has(key)) return;
-    seen.add(key);
-    people.push(p);
-  };
-  allPeople(s)
-    .filter((p) => p.companyId === companyId)
-    .forEach(add);
-  leads.forEach((l) => contactsForLead(s, l.id).forEach(add));
-  return people;
+  return uniquePeople(
+    allPeople(s).filter((p) => p.companyId === companyId),
+    leads.map((l) => contactsForLead(s, l.id)),
+  );
 }
 
 /** What an opportunity is called on the Pipeline (CD-477): its own name, or its company's while it has none. */

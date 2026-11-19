@@ -3,10 +3,15 @@
  * internal minutes", saving with conflicts, who may send and when (held only), recipients (external
  * participants with an email; members as CC; nothing typed), the email the worker sends (from the
  * sender's name, reply-to the sender), per-recipient failure and retry, the deal timeline, undo held
- * refused after a send while an owner can still delete the meeting with its send log (CD-518), the
+ * refused after a send while an owner can still delete the meeting with its send log and PDF, but not
+ * while a send is being delivered (CD-518), the
  * internal minutes never in the email, and Serbian chrome.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { Client } from 'pg';
+import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
 import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
@@ -342,9 +347,33 @@ describe('sending', () => {
     expect((await send(owner, m.id, { subject: `Sent ${RUN}`, toContactIds: [contact.id] })).status).toBe(202);
     expect((await settled(m.id)).status).toBe('sent');
 
-    // Members still can't delete a meeting; the owner can.
-    expect((await call('DELETE', `/crm/meetings/${m.id}`, as(ana))).status).toBe(403);
-    expect((await call('DELETE', `/crm/meetings/${m.id}`, as(owner))).status).toBe(204);
+    // As the migration role (no row-level security): a recipient still being delivered, and the PDF the send kept.
+    const db = new Client({ connectionString: process.env.MIGRATION_DATABASE_URL || DEFAULT_MIGRATION_DATABASE_URL });
+    await db.connect();
+    try {
+      const recipientsTo = (status: string) => db.query(`update meeting_minutes_recipients set status = $2 where meeting_id = $1`, [m.id, status]);
+      const { rows } = await db.query(`select pdf_storage_key as key from meeting_minutes_sends where meeting_id = $1`, [m.id]);
+      expect(rows).toHaveLength(1);
+      // The file, when the tests know where the API keeps files.
+      const dir = inject('storageDir');
+      const pdf = dir && rows[0].key ? join(dir, tenant, rows[0].key) : '';
+      if (pdf) expect(existsSync(pdf), pdf).toBe(true);
+
+      // While a send is still going out the meeting stays, so the worker never mails a deleted meeting's minutes.
+      await recipientsTo('queued');
+      const sending = await call('DELETE', `/crm/meetings/${m.id}`, as(owner));
+      expect(sending.status).toBe(409);
+      expect(sending.body.message).toBe('Minutes for this meeting are still being sent. Try again once they have gone out.');
+      await recipientsTo('sent');
+
+      // Members still can't delete a meeting; the owner can, and the PDF goes after the commit.
+      expect((await call('DELETE', `/crm/meetings/${m.id}`, as(ana))).status).toBe(403);
+      expect((await call('DELETE', `/crm/meetings/${m.id}`, as(owner))).status).toBe(204);
+      if (pdf) expect(existsSync(pdf), pdf).toBe(false);
+      expect((await db.query(`select count(*)::int as n from meeting_minutes_recipients where meeting_id = $1`, [m.id])).rows[0].n).toBe(0);
+    } finally {
+      await db.end();
+    }
     expect((await call('GET', `/crm/meetings/${m.id}`, as(owner))).status).toBe(404);
     expect((await call('GET', `/crm/meetings/${m.id}/minutes/sends`, as(owner))).status).toBe(404);
 

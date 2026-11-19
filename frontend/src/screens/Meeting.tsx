@@ -103,7 +103,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
     setMenu(false);
     // Minutes already went to the customer (CD-518): the email stays sent, the record of it goes with the meeting.
     const message = sent
-      ? "Its minutes were already emailed to the customer. The meeting, its minutes and the record of what was sent are deleted. This can't be undone."
+      ? "Its minutes were already emailed to the customer. The meeting, its minutes and its send log are deleted; the opportunity's timeline still shows that the minutes were sent. This can't be undone."
       : "This can't be undone. To keep a record of it, cancel it instead.";
     if (!(await askConfirm({ title: `Delete the meeting "${m.title}"?`, message, confirmLabel: 'Delete', danger: true }))) return;
     if (await meetings.remove(m.id)) navigate(paths.calendar(), { replace: true });

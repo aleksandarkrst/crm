@@ -32,19 +32,23 @@ export function Discovery({ lead }: { lead: Lead }) {
 
   // A click right after the switch was flipped from elsewhere (another tab or person, shown by a
   // refresh) was meant for the value the screen showed a moment ago, and would undo that change.
-  // So it is ignored and the screen says why (CD-518). Flips this tab made itself don't count.
-  const flip = useRef({ value: qualified, at: 0, mine: false });
+  // So it is ignored and the screen says why (CD-518). Changes this tab makes don't count, from the
+  // click until the save settles (a failed save's rollback included), nor does opening another opportunity.
+  const flip = useRef({ lead: lead.id, value: qualified, at: 0, saving: 0 });
   useEffect(() => {
     const f = flip.current;
-    if (f.value !== qualified) flip.current = { value: qualified, at: f.mine ? 0 : Date.now(), mine: false };
-  }, [qualified]);
+    // Another opportunity in the same component: start over (a save still running for the old one stays its own).
+    if (f.lead !== lead.id) flip.current = { lead: lead.id, value: qualified, at: 0, saving: 0 };
+    else if (f.value !== qualified) Object.assign(f, { value: qualified, at: f.saving ? 0 : Date.now() });
+  }, [lead.id, qualified]);
   const toggleQualified = () => {
-    if (Date.now() - flip.current.at < SETTLE_MS) {
+    const f = flip.current;
+    if (Date.now() - f.at < SETTLE_MS) {
       store.flash(`Qualified was just turned ${qualified ? 'on' : 'off'} elsewhere. Nothing was changed.`);
       return;
     }
-    flip.current.mine = true;
-    store.setQualified(lead.id, !qualified);
+    f.saving++;
+    void store.setQualified(lead.id, !qualified).finally(() => f.saving--);
   };
 
   return (
