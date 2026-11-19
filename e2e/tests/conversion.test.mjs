@@ -121,6 +121,12 @@ describe('stage conversion on Overview', () => {
     await page.waitForFunction(() => location.pathname === '/pipeline');
     await page.waitForSelector('[data-testid=filter-chip-stall]');
     assert.match(await chipText(page, 'stall'), /^Days since contact/);
+    // Won opens the Pipeline with Status Won only, not "Open, Won".
+    await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
+    await (await page.$$('[data-testid=overview-kpi]'))[2].click();
+    await page.waitForFunction(() => location.pathname === '/pipeline');
+    await page.waitForSelector('[data-testid=filter-chip-status]');
+    assert.equal(await chipText(page, 'status'), 'Status Won');
   });
 
   it('throws no uncaught errors in the page', () => {

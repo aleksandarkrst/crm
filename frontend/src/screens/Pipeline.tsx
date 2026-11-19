@@ -29,7 +29,9 @@ export function Pipeline() {
   const me = session.userId;
   // The funnel is the select next to the view toggle (owner's call, 24 Oct), not a chip.
   const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']), [s, seg]);
-  const [saved, setSaved] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } }, linked);
+  // The link's Status has seen every stage, so withNewSubs below doesn't tick them all ("Won" stays
+  // Won, not "Open, Won").
+  const [saved, setSaved] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } }, linked && markSeen(fields, linked, 'status'));
   // "Open" is saved as the whole group, so it follows the funnel's stages; single stages of another
   // funnel are dropped ("Open, Won" if nothing is left), and stages added since are ticked.
   const filters = withNewSubs(fields, pruneList(fields, saved, 'status', openAndWon()), 'status');
