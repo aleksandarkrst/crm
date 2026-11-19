@@ -1450,9 +1450,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     /** The Qualified switch (CD-362): the server records who and when, and logs it; reloading the deal and its timeline shows both. */
-    const setQualified = (id: string, on: boolean) => {
+    /** Settles after the save and its refresh, or after the rollback when it failed. */
+    const setQualified = (id: string, on: boolean): Promise<void> => {
       mapLead(id, (l) => ({ ...l, qualifiedAt: on ? new Date().toISOString() : undefined, qualifiedBy: on ? session.userId : undefined }));
-      void save(() => crmApi.updateDeal(id, { qualified: on }, ver('deal', id)), () => Promise.all([reload(), refreshLog(id)]), 'Qualified');
+      return save(() => crmApi.updateDeal(id, { qualified: on }, ver('deal', id)), () => Promise.all([reload(), refreshLog(id)]), 'Qualified');
     };
 
     // ------------------------------------------------------------ deleting (owners and admins)

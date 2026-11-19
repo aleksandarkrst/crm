@@ -46,7 +46,7 @@ export function GenerationModal() {
           {doc ? `Building ${doc.name}` : `Generate a document for ${lead.company || lead.title}`}
         </ModalTitle>
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
-          {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this opportunity: company, contact, discovery notes, products and amounts in the opportunity currency.'}
+          {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this opportunity: company, contact, products and amounts in the opportunity currency.'}
         </div>
       </div>
 

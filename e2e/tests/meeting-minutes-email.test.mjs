@@ -91,7 +91,7 @@ describe('external minutes by email', () => {
     assert.match(html, /<strong>pilot<\/strong>/);
   });
 
-  step('sends: the tab says who got it, the customer has the email, the meeting stays held', async () => {
+  step('sends: the tab says who got it, the customer has the email, the meeting stays held but can be deleted', async () => {
     await click(page, '[data-testid=preview-send]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=preview-head]'), { timeout: 10_000 });
     await page.waitForFunction(() => /Minutes sent to Jovan Customer on /.test(document.querySelector('[data-testid=external-last-send]')?.innerText ?? ''), { timeout: 10_000 });
@@ -104,7 +104,7 @@ describe('external minutes by email', () => {
 
     await page.waitForFunction(() => document.querySelector('[data-testid=send-status]')?.dataset.status === 'sent', { timeout: 20_000 });
     assert.equal(await page.$('[data-testid=meeting-undo-held]'), null, 'no Undo held after sending');
-    assert.equal(await page.$('[data-testid=meeting-menu]'), null, 'no Delete after sending');
+    assert.ok(await page.$('[data-testid=meeting-menu]'), 'an owner can still delete it after sending (CD-518)');
     assert.equal((await api(page, `/crm/meetings/${meeting.id}`)).externalDelivery, 'sent');
 
     await click(page, '[data-testid=meeting-tab-history]');

@@ -54,7 +54,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
             <button type="button" className={'choice' + (mode === 'generate' ? ' on' : '')} data-testid="docs-mode-generate" onClick={() => setMode('generate')}>
               <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Generate automatically</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Built from the deal, its products and the discovery notes.</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Built from the opportunity, its company, contact and products.</span>
             </button>
             <button type="button" className={'choice' + (mode === 'import' ? ' on' : '')} data-testid="docs-mode-import" onClick={() => setMode('import')}>
               <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Import my own</span>

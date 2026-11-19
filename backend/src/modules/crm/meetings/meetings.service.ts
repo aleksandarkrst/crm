@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { and, asc, desc, eq, gt, inArray, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
+import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
@@ -71,9 +72,10 @@ const externalDelivery = sql<'not_sent' | 'queued' | 'sent' | 'failed'>`(select 
   where r.send_id = (select s.id from ${meetingMinutesSends} s where s.meeting_id = ${meetings.id} order by s.created_at desc, s.id desc limit 1))`;
 /** The last change of any send's delivery: an open External minutes tab reads the send log again when it moves. */
 const sendsUpdatedAt = sql<Date | null>`(select max(r.updated_at) from ${meetingMinutesRecipients} r where r.meeting_id = ${meetings.id})`.mapWith(meetingMinutesRecipients.updatedAt);
-/** External minutes were sent: the meeting stays held and can't be deleted (spec 4.3, 4.5). */
+/** External minutes were sent: the meeting stays held (spec 4.3); owners and admins can still delete it (CD-518). */
 const SENT_HOLDS = 'Minutes were sent to the customer, so this meeting stays held.';
-const SENT_KEEPS = "Minutes were sent to the customer for this meeting, so it can't be deleted: the send log stays with it.";
+/** A send still being delivered keeps the meeting (CD-518): the worker reads it to mail the minutes. */
+const SENDING_KEEPS = 'Minutes for this meeting are still being sent. Try again once they have gone out.';
 
 
 export const CreateMeeting = z
@@ -213,6 +215,7 @@ export class MeetingsService {
     private readonly activities: ActivitiesService,
     private readonly changes: RecordHistoryService,
     private readonly jobs: JobsService,
+    private readonly storage: StorageService,
   ) {}
 
   list(ctx: TenantContext, query: MeetingsQuery) {
@@ -409,13 +412,26 @@ export class MeetingsService {
   }
 
   /**
-   * Owners and admins only (the route says so). Participants and minutes go with the meeting; a
-   * meeting whose external minutes were sent stays (409, CD-133; the foreign key backs it up).
+   * Owners and admins only (the route says so). Participants and minutes go with the meeting, and
+   * so does the log of external minutes sent (CD-518): with it kept, a meeting whose minutes were
+   * sent could never be deleted, and neither could its opportunity and company. The emails went
+   * out already; their PDFs are removed once the delete has committed. While a send is still being
+   * delivered the meeting stays (409), so the worker never mails the minutes of a deleted meeting.
    */
-  remove(ctx: TenantContext, id: string): Promise<void> {
-    return this.database
+  async remove(ctx: TenantContext, id: string): Promise<void> {
+    const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        if (await this.minutesSent(tx, id)) throw new ConflictException(SENT_KEEPS);
+        // Locked, so a send can't start (its row references the meeting) until this is done.
+        const [locked] = await tx.select({ id: meetings.id }).from(meetings).where(eq(meetings.id, id)).for('update');
+        if (!locked) throw new NotFoundException('Meeting not found');
+        const [sending] = await tx
+          .select({ id: meetingMinutesRecipients.id })
+          .from(meetingMinutesRecipients)
+          .where(and(eq(meetingMinutesRecipients.meetingId, id), eq(meetingMinutesRecipients.status, 'queued')))
+          .limit(1);
+        if (sending) throw new ConflictException(SENDING_KEEPS);
+        // A send's recipients go with it (foreign key cascade).
+        const sends = await tx.delete(meetingMinutesSends).where(eq(meetingMinutesSends.meetingId, id)).returning({ key: meetingMinutesSends.pdfStorageKey });
         const [row] = await tx.delete(meetings).where(eq(meetings.id, id)).returning({ id: meetings.id, title: meetings.title, dealId: meetings.dealId });
         if (!row) throw new NotFoundException('Meeting not found');
         if (row.dealId) {
@@ -425,9 +441,12 @@ export class MeetingsService {
           await tx.delete(activities).where(and(eq(activities.dealId, row.dealId), eq(activities.channel, 'MT'), inArray(activities.title, titles)));
           await this.activities.record(tx, ctx, row.dealId, { channel: null, title: `Meeting deleted · ${row.title}`, detail: null });
         }
-        await this.audit.record(tx, ctx, { action: 'meeting.deleted', entityType: 'meeting', entityId: id, data: { title: row.title } });
+        await this.audit.record(tx, ctx, { action: 'meeting.deleted', entityType: 'meeting', entityId: id, data: { title: row.title, minutesSends: sends.length } });
+        return sends.flatMap((x) => (x.key ? [x.key] : []));
       })
       .catch(mapDbError);
+    // A file that can't be removed stays behind unreferenced; the meeting is deleted either way.
+    for (const key of files) await this.storage.delete(ctx.tenantId, key).catch(() => undefined);
   }
 
   // ------------------------------------------------------------------ helpers
