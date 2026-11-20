@@ -168,6 +168,12 @@ Code's `/code-review`; it catches different things than the agent that wrote the
 - **How.** One pull request at a time; after each merge the other open branches bring in `main`
   and run their checks again (section 2). Squash or merge commit as the repository's default
   setting says; never rebase someone else's branch.
+- **Auto-merge is on.** The repository setting "Allow auto-merge" is enabled on GitHub. Whoever
+  may merge a pull request (the review routine, or the project owner for a protected path) can
+  turn on auto-merge for it instead of waiting for CI: GitHub then merges it by itself once the
+  required checks are green and the branch is up to date with `main`, and a new push that fails
+  a check holds it back. Agents still never turn it on: `gh pr merge --auto` is refused by the
+  same hook as `gh pr merge`.
 - After merging, delete the branch. Linear moves the issue to **Done**.
 
 ## 7. From `main` to production
