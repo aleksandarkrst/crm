@@ -15,8 +15,6 @@ import { usePageFilters } from '../store/usePageFilters';
 import { useMeetingList } from '../store/useMeetings';
 import { paths } from '../lib/paths';
 import type { Lead } from '../store/types';
-import { TeamTodayCard } from './teamStatus/parts';
-
 interface TodayRow extends FilterTask {
   id: string;
   leadId: string;
@@ -234,8 +232,6 @@ export function Today() {
                   </Link>
                 </section>
               )}
-              {/* Managers' counters for their reports (spec 12.1); nothing for people without reports. */}
-              <TeamTodayCard />
             </div>
           </div>
         )}

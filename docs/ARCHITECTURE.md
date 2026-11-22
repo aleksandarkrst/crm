@@ -1243,9 +1243,10 @@ stored), also after a reload. "Today" here is the person's own day: the browser'
 the workspace's. The chips are Due and Company; without Salesperson (in + Filter, which starts at
 you) Today shows your own to-dos and meetings. "+ To-do" opens the short dialog (`taskQuick`):
 Opportunity first with nothing preselected, Title, Due date, Owner. The right column has Meetings
-today (the next one's time in green), Pultly suggests, shown when meetings of the last seven days
-were held without minutes (the board's example; there were no suggestion rules before), and, for
-managers, the Team today card. Editing a to-do happens on its opportunity.
+today (the next one's time in green) and Pultly suggests, shown when meetings of the last seven days
+were held without minutes (the board's example; there were no suggestion rules before). The Team
+today card is no longer on Today (Workforce → Today's status has it). Editing a to-do happens on its
+opportunity.
 
 **The Settings page** (CD-280; rebuilt in CD-524 to its spec and the design G-Settings,
 `screens/Settings.tsx` and `screens/settings/`) is an area of its own in the design's glass
@@ -2448,7 +2449,7 @@ Spec 15 section 12: who is working, away or off on a date (90 days back to 60 ah
   Admins only.
 - **Frontend:** Workforce → Today's status (`screens/TeamStatus.tsx`): counters (a counter filters
   the list), department, team, manager and status filters, search, grouping by department, all
-  kept in the address; the Today screen's Team today card (`scope=reports`). Both re-read on
+  kept in the address (the Team today card on Today was dropped in CD-532). It re-reads on
   `statusRev` (time off, timesheet, holiday, workspace and people hints).
 
 ## Products, deal products and currency (CD-83)

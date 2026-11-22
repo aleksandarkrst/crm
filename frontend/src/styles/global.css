@@ -1994,12 +1994,6 @@ a.task-card-project:hover { color: var(--brand); }
 .tst-note { font-size: 12px; color: var(--warn); }
 .tst-ts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tst-badge-trip { background: var(--lime); color: var(--forest); }
-.tst-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.tst-card-head { display: flex; justify-content: space-between; align-items: baseline; }
-.tst-card-counts { display: flex; flex-wrap: wrap; gap: 8px 18px; }
-.tst-card-count { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.tst-card-away { margin: 0; padding: 0; list-style: none; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-.tst-card-away a { color: var(--ink); font-weight: 500; }
 @media (max-width: 760px) {
   .tst-table > .table-head { display: none; }
   .tst-table .tst-row { grid-template-columns: minmax(0, 1fr) !important; gap: 6px; }
@@ -2337,9 +2331,21 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .td-suggest-text { font-size: 15px; line-height: 21px; font-weight: 600; }
 .td-suggest-btn { align-self: flex-start; display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--lime); color: var(--gs-green-dark) !important; font-size: 13px; font-weight: 600; transition: transform 0.1s ease-out, filter 0.15s ease; }
 .td-suggest-btn:hover { filter: brightness(1.05); }
-/* The managers' Team today card (spec 12.1) in the glass column. */
-.td-side .tst-card { border-radius: 18px; border: 1px solid var(--gs-glass-line); background: var(--gs-glass); box-shadow: var(--gs-glass-shadow); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
 .td-suggest-btn:active { transform: scale(0.97); }
+/* The New to-do glass sheet (CD-532): Due date and Owner side by side, stacked on phones. */
+.td-dialog-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.gs-placeholder { color: var(--gs-faint); }
+/* Sheets are portalled outside .gs, so they need the green focus ring themselves. */
+.gs-sheet :focus-visible, .drp-glass :focus-visible { outline: 2px solid var(--gs-green); outline-offset: 2px; }
+.gs-ddb.drp-field { width: 100%; }
+.gs-ddb.drp-empty { color: var(--gs-faint); }
+/* The date picker's calendar in the glass dialogs: a glass popover with round green days. */
+.drp-pop.drp-glass { border: 0; border-radius: 14px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); font-family: var(--gs-font); color: var(--gs-ink); }
+.drp-glass .drp-day { border-radius: 999px; color: var(--gs-ink); }
+.drp-glass .drp-day.other { color: var(--gs-faint); }
+.drp-glass .drp-day:hover { background: var(--gs-chip); }
+.drp-glass .drp-day.on, .drp-glass .drp-day.edge { background: var(--gs-green); color: var(--white); font-weight: 600; }
+.drp-glass .drp-weekday, .drp-glass .drp-hint { color: var(--gs-text-2); }
 @media (max-width: 560px) {
   .td-row { padding: 9px 14px; }
   .td-card-head { padding: 14px 14px 6px; }

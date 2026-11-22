@@ -21,6 +21,10 @@ const dayText = (iso: string) => {
 /** "Wed 1 Jan" or "Fri 1 Jan – Sat 2 Jan". */
 export const rangeText = (r: DateRange) => (r.from === r.to ? dayText(r.from) : `${dayText(r.from)} – ${dayText(r.to)}`);
 
+/** "23.11.2026", or "23.11.2026 – 25.11.2026": date fields read dd.mm.yyyy in the glass CRM (CD-530). */
+const dmy = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+const glassText = (r: DateRange) => (r.from === r.to ? dmy(r.from) : `${dmy(r.from)} – ${dmy(r.to)}`);
+
 /** The weeks of a month ("2026-01"), Monday first, padded with the neighbouring months' days. */
 function weeksOf(month: string): string[][] {
   const first = `${month}-01`;
@@ -44,8 +48,9 @@ const shiftMonth = (month: string, by: number) => {
  * a month calendar. The first click picks the first day, the second the last (a single day is
  * both); Escape, a click outside or scrolling closes it (the shared Popover, CD-355). `month` is the month it opens on without a value.
  * `single` (CD-350, sick leave with no end date yet): one click picks one day.
+ * `glass` (CD-532, the CRM's glass dialogs): the field is a glass field reading dd.mm.yyyy, and the calendar is glass too.
  */
-export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label, single }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string; single?: boolean }) {
+export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label, single, glass }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string; single?: boolean; glass?: boolean }) {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(value?.from.slice(0, 7) ?? month);
   const [start, setStart] = useState<string | null>(null);
@@ -72,12 +77,12 @@ export function DateRangePicker({ value, onChange, month, placeholder = 'Pick da
   const inRange = (d: string) => (start ? d === start : !!value && d >= value.from && d <= value.to);
   return (
     <div className="drp" data-testid={testId}>
-      <button ref={field} type="button" className={'form-input drp-field' + (value ? '' : ' drp-empty')} aria-label={label} aria-expanded={open} onClick={toggle} data-testid={testId ? `${testId}-open` : undefined}>
-        {value ? rangeText(value) : placeholder}
+      <button ref={field} type="button" className={(glass ? 'gs-ddb drp-field' : 'form-input drp-field') + (value ? '' : ' drp-empty')} aria-label={label} aria-expanded={open} onClick={toggle} data-testid={testId ? `${testId}-open` : undefined}>
+        {value ? (glass ? glassText(value) : rangeText(value)) : placeholder}
       </button>
       {/* The shared popover (CD-355): at the top of the page, placed under the field or above it. */}
       {open && (
-        <Popover anchor={field} onClose={() => setOpen(false)} className="drp-pop" label={label} testId={testId ? `${testId}-calendar` : undefined}>
+        <Popover anchor={field} onClose={() => setOpen(false)} className={'drp-pop' + (glass ? ' gs-tokens drp-glass' : '')} label={label} testId={testId ? `${testId}-calendar` : undefined}>
           <div className="drp-head">
             <button type="button" className="btn-plain drp-nav" aria-label="Previous month" onClick={() => setShown(shiftMonth(shown, -1))}>
               ←

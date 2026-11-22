@@ -6,6 +6,8 @@ import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostRea
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
 import { deviceTimeZone } from '../lib/timeZones';
+import { DateRangePicker } from '../components/DateRangePicker';
+import { Dropdown, Modal as GlassModal } from '../screens/settings/parts';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, opportunityName, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
@@ -405,50 +407,41 @@ function QuickTodoModal() {
     }
   };
 
+  // The glass sheet of the redesign (CD-530): the Settings modal, glass dropdowns and a dd.mm.yyyy date field.
   return (
-    <Modal maxWidth={520} onClose={close}>
-      <ModalHeader title="New to-do" sub="It shows on Today and on the opportunity's timeline." />
-      <label className="form-label">
+    <GlassModal title="New to-do" desc="It shows on Today and on the opportunity's timeline." onClose={close} testId="todo-dialog">
+      <div className="gs-label">
         Opportunity
-        <select className="form-input" data-testid="todo-opportunity" value={leadId} autoFocus onChange={(e) => setLeadId(e.target.value)}>
-          <option value="">{options.length ? 'Pick an opportunity' : 'No opportunities yet'}</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="form-label">
-        Title
-        <input className="form-input" data-testid="todo-title" placeholder="e.g. Send the revised offer" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
-      </label>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <label className="form-label">
-          Due date
-          <input type="date" className="form-input" data-testid="todo-due" style={{ padding: '9px 10px' }} value={due} onChange={(e) => setDue(e.target.value)} />
-        </label>
-        <label className="form-label">
-          Owner
-          <select className="form-input" data-testid="todo-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Dropdown label="Opportunity" value={leadId} placeholder={options.length ? 'Pick an opportunity' : 'No opportunities yet'} options={options.map((o) => ({ value: o.id, label: o.name }))} onChange={(v) => setLeadId(v)} width="100%" testId="todo-opportunity" />
       </div>
-      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={close}>
+      <label className="gs-label">
+        Title
+        <input className="gs-input" data-testid="todo-title" placeholder="e.g. Send the revised offer" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+      </label>
+      <div className="td-dialog-row">
+        <div className="gs-label">
+          Due date
+          <DateRangePicker glass single label="Due date" value={due ? { from: due, to: due } : null} month={due.slice(0, 7)} placeholder="dd.mm.yyyy" onChange={(r) => setDue(r.from)} testId="todo-due" />
+        </div>
+        <div className="gs-label">
+          Owner
+          <Dropdown label="Owner" value={ownerId} options={members.map((m) => ({ value: m.id, label: m.name }))} onChange={(v) => setOwnerId(v)} width="100%" testId="todo-owner" />
+        </div>
+      </div>
+      {error && (
+        <span className="gs-error" role="alert">
+          {error}
+        </span>
+      )}
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={close}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" data-testid="todo-add" disabled={busy} onClick={() => void submit()}>
+        <button type="button" className="gs-btn primary" data-testid="todo-add" disabled={busy} onClick={() => void submit()}>
           {busy ? 'Adding…' : 'Add to-do'}
         </button>
       </div>
-    </Modal>
+    </GlassModal>
   );
 }
 
