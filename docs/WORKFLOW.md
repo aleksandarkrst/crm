@@ -27,13 +27,13 @@ Tasks and bugs live in Linear (team **Coding**, project **CRM**, IDs `CD-…`), 
   agents and reviewers know why.
 
 Issue states: **Backlog / Todo** → **Specification** / **In design** → **Ready for dev** →
-**In Progress** (a branch exists) → **In Review** (a pull request is open) → **QA** (merged; Linear
-moves it when the pull request is merged, and the build reaches staging minutes later) →
-**Release** (checked on staging, waiting for production) → **Done**.
+**In Progress** (a branch exists) → **QA** (the pull request's CI is green; the review runs in
+CI, so green CI means the review passed, and the merge and staging deploy follow) → **Release**
+(checked on staging, waiting for production) → **Done**.
 
-One issue is in development and one is in QA at a time. When an agent's issue reaches QA (merged
-and on staging), the agent starts the top **Ready for dev** issue in the board's manual order:
-`/finish-issue` waits for that in the background and then runs `/start-issue` without an id.
+One issue is in development and one is in QA at a time. When an agent's issue reaches QA, the
+agent starts the top **Ready for dev** issue in the board's manual order: `/finish-issue` moves
+the issue to QA and then runs `/start-issue` without an id.
 
 Linear is the only place plans and milestones live: there is no plan file in the repository.
 

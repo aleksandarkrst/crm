@@ -1,6 +1,6 @@
 ---
 name: finish-issue
-description: Finish the current Linear issue the way docs/WORKFLOW.md asks - run the checks, have the reviewer agents look at the diff, push, open the pull request with the section 4 description, and move the issue to In Review. Never merges. Once the pull request is merged and on staging (QA), starts the next Ready for dev issue.
+description: Finish the current Linear issue the way docs/WORKFLOW.md asks - run the checks, have the reviewer agents look at the diff, push, open the pull request with the section 4 description, and move the issue to QA once CI is green (the review runs in CI). Never merges. Then starts the next Ready for dev issue.
 disable-model-invocation: true
 ---
 
@@ -48,36 +48,22 @@ at the first failure and report it (a failing check is fixed, never skipped or d
    Watch CI (`gh pr checks <n> --watch`). When `backend`, `frontend`, `website` and
    `integration / run` are green, mark it ready: `gh pr ready <n>`. If a check fails, fix it in a
    new commit, push, and watch again.
-8. **Move the issue to In Review** in Linear (`save_issue` with state `In Review`) and add a
-   comment with the pull request link, what was tested, and anything left undone or decided.
+8. **Move the issue to QA** in Linear (`save_issue` with state `QA`) as soon as those checks are
+   green. The review happens in CI (the checks plus the review bots), so green CI means the
+   review passed; the issue skips In Review. Add a comment with the pull request link, what was
+   tested, anything left undone or decided, and `/staging-check <id>` as the tester's next step
+   once the merge reaches staging.
 9. **Report** to the user: the PR link, the check results, the reviewer findings and their
    outcome, whether the pull request touches a protected path (CLAUDE.md lists them; then the
    project owner merges it, otherwise the review routine does), and what is left to check on
    staging (docs/STAGING_CHECK.md). Don't wait for a human code review: once the pull request is
    ready for review with green CI, the hand-over is done.
-10. **Wait for QA, then start the next issue.** The rule is one issue in development and one in
-    QA. An issue reaches QA when its pull request is merged (Linear's GitHub automation moves it
-    to QA) and the new build is on staging. Wait for both in the background, so the session costs
-    nothing while the review routine (or the project owner, for a protected path) gets to it:
-    ```bash
-    # run_in_background: true. It exits when the PR leaves OPEN and staging has the merge commit.
-    pr=<n>
-    while [ "$(gh pr view $pr --json state -q .state)" = OPEN ]; do sleep 300; done
-    [ "$(gh pr view $pr --json state -q .state)" = MERGED ] || { echo "PR $pr closed without merging"; exit 1; }
-    sha=$(gh pr view $pr --json mergeCommit -q .mergeCommit.oid)
-    until run=$(gh run list --workflow "CI / CD" --commit $sha --json databaseId -q '.[0].databaseId') && [ -n "$run" ]; do sleep 30; done
-    gh run watch $run --exit-status >/dev/null
-    gh run view $run --json jobs -q '.jobs[] | select(.name | startswith("deploy-staging")) | .conclusion'
-    ```
-    When it exits:
-    - **Closed without merging**, a failed run, or a staging deploy that isn't `success`: start
-      nothing. Tell the user what happened (the failed job and `gh run view <run> --log-failed`).
-    - **On staging**: make sure the issue is in **QA** (`save_issue` with state `QA` if the
-      automation didn't move it) and comment that the build is on staging, with
-      `/staging-check <id>` as the tester's next step. Then, in a clean working tree, follow
-      `.claude/skills/start-issue/SKILL.md` with no id: it picks the next **Ready for dev** issue
-      and starts it. Letting the user test on localhost before the pull request still applies.
-    If the session ends first, the next session picks step 10 up again from the PR number.
+10. **Start the next issue.** The rule is one issue in development and one in QA, and this one
+    is in QA from step 8. Right away, in a clean working tree, follow
+    `.claude/skills/start-issue/SKILL.md` with no id: it picks the next **Ready for dev** issue
+    and starts it. The user still tests it on localhost before its pull request. The merge, by
+    the review routine or (for a protected path) the project owner, needs nothing more from
+    this session.
 
 Never merge (`gh pr merge` is refused by a hook anyway), never push to `main`, and don't close
 the Linear issue: the merge does that.
