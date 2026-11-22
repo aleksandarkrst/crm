@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { FilterEmpty, FilterRow } from '../components/FilterRow';
+import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { deviceTimeZone } from '../lib/timeZones';
 import { filterPeople, type FilterTask, taskFields } from '../store/filterFields';
@@ -131,9 +132,7 @@ export function Today() {
             {dateText}, {leftText(open)}
           </span>
           <button type="button" className="gs-btn primary td-new" data-testid="today-new-todo" onClick={() => set({ taskOpen: true, taskEditId: null, taskQuick: true })}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Icon name="plus" size={14} />
             To-do
           </button>
         </div>
@@ -168,9 +167,7 @@ export function Today() {
                       <div key={r.id} className={'td-row' + (r.done ? ' done' : '')} data-task={r.taskId}>
                         {r.taskId ? (
                           <button type="button" role="checkbox" aria-checked={r.done} aria-label={r.title} className={'td-check' + (r.done ? ' on' : '')} onClick={() => toggleLeadTask(r.taskId!, { undo: true })}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                              <path d="M5 12l5 5L20 7" />
-                            </svg>
+                            <Icon name="check" size={13} />
                           </button>
                         ) : (
                           <span className="td-step" title="The stage's next step: doing it moves the opportunity on" aria-hidden />

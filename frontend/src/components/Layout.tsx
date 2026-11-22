@@ -477,7 +477,14 @@ export function Layout() {
             )}
           </div>
         ) : (
-          <div className="toast">{s.toast}</div>
+          <div className="toast">
+            {s.toast}
+            {s.toastAction && (
+              <button type="button" className="toast-action" data-testid="toast-action" onClick={s.toastAction.run}>
+                {s.toastAction.label}
+              </button>
+            )}
+          </div>
         ))}
       <ConfirmHost />
     </div>

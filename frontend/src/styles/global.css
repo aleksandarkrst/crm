@@ -2297,16 +2297,17 @@ a.task-card-project:hover { color: var(--brand); }
 .td-card-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; padding: 14px 18px 6px; }
 .td-card-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .td-link { font-size: 13.5px; font-weight: 600; white-space: nowrap; }
-.td-empty { padding: 22px 18px; font-size: 13.5px; line-height: 19px; color: var(--gs-text-2); text-align: center; }
+.td-empty { padding: 26px 16px; font-size: 13.5px; line-height: 19px; color: var(--gs-text-2); text-align: center; }
 .td-card-head + .td-empty { border-top: 1px solid var(--gs-divider); }
-.td-row { display: flex; align-items: center; gap: 12px; min-height: 56px; box-sizing: border-box; padding: 9px 18px; border-top: 1px solid var(--gs-divider); color: var(--gs-ink); }
+/* Board C-Today sets 56 px to-do rows (Overview's list rows are 60 px), so the padding is a little tighter than .ov-row's. */
+.td-row { display: flex; align-items: center; gap: 10px 16px; min-height: 56px; box-sizing: border-box; padding: 10px 18px; border-top: 1px solid var(--gs-divider); color: var(--gs-ink); }
 a.td-row { color: var(--gs-ink); transition: background 0.12s ease; }
 .td-row a.gs-btn { color: var(--gs-ink); }
 a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .td-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .td-title { font-size: 15px; line-height: 20px; overflow-wrap: anywhere; }
-.td-where { align-self: flex-start; max-width: 100%; font-size: 12.5px; line-height: 17px; color: var(--gs-text-2) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.td-where:hover { color: var(--gs-green) !important; text-decoration: underline; }
+.td a.td-where { align-self: flex-start; max-width: 100%; font-size: 12.5px; line-height: 17px; color: var(--gs-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td a.td-where:hover { color: var(--gs-green); text-decoration: underline; }
 .td-row.done .td-title { color: var(--gs-muted); text-decoration: line-through; }
 /* The round checkbox: 22 px, a 1.5 px border; ticked is green 700 with a white tick. */
 .td-check { flex: none; width: 22px; height: 22px; padding: 0; border-radius: 999px; border: 1.5px solid var(--gs-border); background: var(--ov-fill); color: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s ease, transform 0.1s ease-out; }
@@ -2329,7 +2330,7 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .td-suggest { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: 18px; background: var(--td-suggest); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); color: var(--white); }
 .td-suggest-label { font-size: 12px; font-weight: 600; color: var(--lime); }
 .td-suggest-text { font-size: 15px; line-height: 21px; font-weight: 600; }
-.td-suggest-btn { align-self: flex-start; display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--lime); color: var(--gs-green-dark) !important; font-size: 13px; font-weight: 600; transition: transform 0.1s ease-out, filter 0.15s ease; }
+.td a.td-suggest-btn { align-self: flex-start; display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--lime); color: var(--gs-green-dark); font-size: 13px; font-weight: 600; transition: transform 0.1s ease-out, filter 0.15s ease; }
 .td-suggest-btn:hover { filter: brightness(1.05); }
 .td-suggest-btn:active { transform: scale(0.97); }
 /* The New to-do glass sheet (CD-532): Due date and Owner side by side, stacked on phones. */
@@ -2347,7 +2348,11 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .drp-glass .drp-day.on, .drp-glass .drp-day.edge { background: var(--gs-green); color: var(--white); font-weight: 600; }
 .drp-glass .drp-weekday, .drp-glass .drp-hint { color: var(--gs-text-2); }
 @media (max-width: 560px) {
-  .td-row { padding: 9px 14px; }
+  /* A row with Review and a tag wraps its tail under the title rather than squeezing it. */
+  .td-row { flex-wrap: wrap; padding: 10px 14px; }
+  .td-row .td-text { flex: 1 1 150px; }
+  .td-row > .gs-btn, .td-row > .td-tag { margin-left: auto; }
+  .td-row > .gs-btn + .td-tag { margin-left: 0; }
   .td-card-head { padding: 14px 14px 6px; }
   .td-side { min-width: 0; flex-basis: 100%; }
 }
