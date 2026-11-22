@@ -197,6 +197,8 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
       return {};
   }
 }
+/** How long a toast with Undo stays (CD-532): a little longer than a plain one, so there is time to press it. */
+const UNDO_TOAST_MS = 4000;
 const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans', 'visitScope'];
 /** A contact with none of the CD-361 details filled in. */
 const EMPTY_EXTRA: ContactExtra = { orgUnit: '', source: '', influence: '', birthday: '', spouseName: '', children: '', pets: '' };
@@ -296,13 +298,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   }, []);
 
   const flash = useCallback(
-    (msg: string, ms = 2600, error = false) => {
+    (msg: string, ms = 2600, error = false, action?: State['toastAction']) => {
       clearTimeout(toastTimer.current);
-      set({ toast: msg, toastError: error });
-      toastTimer.current = setTimeout(() => set({ toast: '' }), ms);
+      set({ toast: msg, toastError: error, toastAction: action });
+      toastTimer.current = setTimeout(() => set({ toast: '', toastAction: undefined }), ms);
     },
     [set],
   );
+  /** Timeline entries of to-dos ticked on Today, waiting until their Undo toast has gone (CD-532). */
+  const doneLogTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const actions = useMemo(() => {
     const cur = () => ref.current;
@@ -1059,18 +1063,43 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, title, note, due: patch.due ?? t.due, channel: patch.channel ?? t.channel, ownerId, ownerName } : y)) }));
       void save(() => crmApi.updateTask(id, body), undefined, `the task "${t.title}"`);
     };
-    /** Ticks or unticks a task; ticking also logs it on the lead's timeline. */
-    const toggleLeadTask = (id: string) => {
+    /**
+     * Ticks or unticks a task; ticking also logs it on the lead's timeline. With `undo` (Today,
+     * CD-532) the toast offers Undo, and the timeline entry waits until the toast has gone, so an
+     * undone tick leaves nothing behind. `quiet` is the Undo itself: no new toast.
+     */
+    const toggleLeadTask = (id: string, opts: { undo?: boolean; quiet?: boolean } = {}) => {
       const t = cur().leadTasks.find((x) => x.id === id);
       if (!t) return;
       const done = !t.done;
       const date = todayLabel(cur().workspace.timezone);
-      set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, done, at: done ? date : undefined, by: done ? session.userName.split(' ')[0] : undefined } : y)) }));
+      const doneAt = done ? new Date().toISOString() : undefined;
+      set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, done, at: done ? date : undefined, by: done ? session.userName.split(' ')[0] : undefined, doneAt } : y)) }));
       void save(() => crmApi.updateTask(id, { done }), undefined, `the task "${t.title}"`);
-      if (done) {
-        pushLog(t.leadId, { date, channel: t.channel, title: t.title, detail: t.note || 'Task completed.' });
-        flash('Marked done · added to the activity timeline');
+      const pending = doneLogTimers.current.get(id);
+      if (pending) {
+        // Unticked before its entry was written: there is nothing to log.
+        clearTimeout(pending);
+        doneLogTimers.current.delete(id);
       }
+      const log = () => pushLog(t.leadId, { date, channel: t.channel, title: t.title, detail: t.note || 'Task completed.' });
+      if (!opts.undo) {
+        if (done) {
+          log();
+          flash('Marked done · added to the activity timeline');
+        }
+        return;
+      }
+      if (done)
+        doneLogTimers.current.set(
+          id,
+          setTimeout(() => {
+            doneLogTimers.current.delete(id);
+            log();
+          }, UNDO_TOAST_MS),
+        );
+      if (opts.quiet) set({ toast: '', toastAction: undefined });
+      else flash(done ? 'To-do done' : 'To-do reopened', UNDO_TOAST_MS, false, { label: 'Undo', run: () => toggleLeadTask(id, { undo: true, quiet: true }) });
     };
     /** Deletes a task; the backend logs "Task removed" on the timeline, so refresh it if loaded. */
     const removeLeadTask = (id: string) => {

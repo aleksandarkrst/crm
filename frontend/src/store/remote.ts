@@ -210,6 +210,7 @@ export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
   done: t.done,
   at: t.doneAt ? dateLabel(t.doneAt, tz) : undefined,
   by: t.doneByName?.split(' ')[0] ?? undefined,
+  doneAt: t.doneAt ?? undefined,
 });
 
 /** What the workspace is built from, one API list each. */

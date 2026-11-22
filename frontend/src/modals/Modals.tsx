@@ -5,9 +5,10 @@ import { Chevron, Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
+import { deviceTimeZone } from '../lib/timeZones';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, opportunityName, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
 import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
@@ -365,6 +366,93 @@ function CompleteCompany({ companyId }: { companyId: string }) {
  * and stage; its title, owner, due date, channel and note can change.
  */
 function NewTaskModal() {
+  const { s } = useStore();
+  return s.taskQuick && !s.taskEditId ? <QuickTodoModal /> : <TaskModal />;
+}
+
+/**
+ * Today's "+ To-do" (CD-532): the opportunity first, with nothing preselected, then the title, the
+ * due date and the owner (you). The to-do goes on the opportunity's current stage, with its channel.
+ */
+function QuickTodoModal() {
+  const { s, set, flash, addLeadTask, session } = useStore();
+  const members = s.team.filter((m) => m.status === 'Active');
+  const [leadId, setLeadId] = useState('');
+  const [title, setTitle] = useState('');
+  // Today is your own day (CD-532): this device's time zone, else the workspace's.
+  const [due, setDue] = useState(todayIso(deviceTimeZone() ?? s.workspace.timezone));
+  const [ownerId, setOwnerId] = useState(members.some((m) => m.id === session.userId) ? session.userId : (members[0]?.id ?? ''));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => set({ taskOpen: false, taskQuick: false });
+  // Lost opportunities have no work left; the rest by name.
+  const options = s.leads
+    .filter((l) => l.outcome !== 'lost')
+    .map((l) => ({ id: l.id, name: l.title?.trim() ? `${opportunityName(l)}, ${l.company}` : l.company }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const submit = async () => {
+    const lead = leadById(s, leadId);
+    if (!lead) return setError('Pick the opportunity this to-do belongs to.');
+    if (!title.trim()) return setError('Give the to-do a title.');
+    setError('');
+    setBusy(true);
+    const stage = stageOf(s, lead);
+    const ok = await addLeadTask({ leadId: lead.id, stageId: stage.id, title, channel: stage.channel, due, ownerId, note: '' });
+    setBusy(false);
+    if (ok) {
+      set({ taskOpen: false, taskQuick: false, taskLeadId: lead.id });
+      flash('To-do added');
+    }
+  };
+
+  return (
+    <Modal maxWidth={520} onClose={close}>
+      <ModalHeader title="New to-do" sub="It shows on Today and on the opportunity's timeline." />
+      <label className="form-label">
+        Opportunity
+        <select className="form-input" data-testid="todo-opportunity" value={leadId} autoFocus onChange={(e) => setLeadId(e.target.value)}>
+          <option value="">{options.length ? 'Pick an opportunity' : 'No opportunities yet'}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="form-label">
+        Title
+        <input className="form-input" data-testid="todo-title" placeholder="e.g. Send the revised offer" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        <label className="form-label">
+          Due date
+          <input type="date" className="form-input" data-testid="todo-due" style={{ padding: '9px 10px' }} value={due} onChange={(e) => setDue(e.target.value)} />
+        </label>
+        <label className="form-label">
+          Owner
+          <select className="form-input" data-testid="todo-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={close}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary" data-testid="todo-add" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Adding…' : 'Add to-do'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function TaskModal() {
   const { s, set, flash, addLeadTask, updateLeadTask, session } = useStore();
   const editing = s.leadTasks.find((t) => t.id === s.taskEditId);
   const initialLead = leadById(s, editing?.leadId) || s.leads.find((l) => l.id === s.taskLeadId) || s.leads[0];

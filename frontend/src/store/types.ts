@@ -284,6 +284,8 @@ export interface LeadTask {
   done: boolean;
   at?: string;
   by?: string;
+  /** When it was ticked (an ISO instant): Today keeps a to-do ticked today on screen until the day ends (CD-532). */
+  doneAt?: string;
 }
 
 /** A stage or outcome change from the stage history; `at` is epoch ms. */
@@ -475,6 +477,8 @@ export interface State {
   toast: string;
   /** The toast is an error (Workspace settings shows it red, CD-524). */
   toastError?: boolean;
+  /** A button in the toast, e.g. Undo after ticking a to-do on Today (CD-532). */
+  toastAction?: { label: string; run: () => void };
   /** Document templates (CD-13); null until loaded (see loadTemplates). */
   templates: DocTemplate[] | null;
   /** Generated documents per deal id, loaded when a deal opens (see ensureDocs). */
@@ -517,6 +521,8 @@ export interface State {
   taskLeadId: string;
   /** Task the dialog edits (CD-27); null when it adds a new one. */
   taskEditId: string | null;
+  /** Today's "+ To-do" (CD-532): the short dialog, Opportunity first with nothing preselected, then Title, Due date and Owner. */
+  taskQuick?: boolean;
   contactOpen: boolean;
   /** Deal the New contact dialog links the new contact to: only when it was opened from that deal (CD-464). */
   contactDealId: string;

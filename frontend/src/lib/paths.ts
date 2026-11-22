@@ -48,7 +48,8 @@ export const paths = {
   myNotifications: '/profile/notifications',
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
-  lead: (id: string) => '/deals/' + encodeURIComponent(id),
+  /** An opportunity; `docs` opens it on the Documents tab (Today's Review button, CD-532). */
+  lead: (id: string, tab?: 'docs') => '/deals/' + encodeURIComponent(id) + (tab ? '?tab=' + tab : ''),
   /** The Projects board and list (CD-234); `?type=` picks the board's project type. */
   projects: '/projects',
   /** A project's page (CD-275). */

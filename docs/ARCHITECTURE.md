@@ -1164,7 +1164,7 @@ the store is the one place that talks to the backend.
     a label alone is refused (400).
 - Tasks from the **New task** dialog are `deal_tasks` rows too (off-playbook, `blocks_advance =
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
-  workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
+  workspace). They show in Today (Late / Today / After the win, with a done toggle; see "Today" below) and on the lead's
   To-Do list, but don't count towards finishing a stage. Creating one logs "Task added" on the
   deal's timeline with the task's channel and deleting one logs "Task removed" (the timeline is history, so the first entry
   stays). **System entries** ("Deal created", "Moved to <stage>", "Moved to funnel", "Task
@@ -1173,7 +1173,7 @@ the store is the one place that talks to the backend.
   `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
   - A task can take any of the seven channels (`CHANNELS`), labelled as on the timeline. Its
     title, owner, due date, channel and note can be edited (the same dialog, in edit mode, from
-    Today or the deal screen; `PATCH /api/crm/deal-tasks/:id`); its deal and stage can't.
+    the deal screen; `PATCH /api/crm/deal-tasks/:id`); its deal and stage can't.
   - **Overdue**: not done and due before the workspace's today. Today lists them first, the
     sidebar's Today icon shows how many, and the deal screen highlights them. The funnel's own
     tasks (each deal's stage activity) have no due date, so they are never overdue.
@@ -1229,6 +1229,23 @@ funnel by payment due date, stage conversion, the opportunities late in their st
 bonuses. A KPI card opens the Pipeline with Overview's filters passed as `location.state.filters`
 (`pipelineFilters`; not saved until the person changes one). A funnel stage or a payment period
 opens a glass side panel with its numbers and opportunities, and the previous and next band.
+
+**Today** (CD-532, board C-Today; `screens/Today.tsx`, pure helpers in `store/today.ts`). The
+to-dos from New task, meeting minutes and approval requests, plus each open opportunity's next
+stage step (no checkbox; due today once the opportunity has been quiet a day, else tomorrow), in
+three glass cards: **Late** (due before today), **Today** (due today or later, and the "Approve the
+proposal" task however old, with a Review button that opens the opportunity on Documents,
+`/deals/:id?tab=docs`) and **After the win** (to-dos on won opportunities). Empty groups are hidden.
+Ticking a to-do strikes it through with "To-do done" and Undo in the toast (`toggleLeadTask(id,
+{ undo: true })`; the timeline entry waits until the toast has gone, so an undone tick leaves none).
+A ticked to-do stays in its place until the day it was ticked ends (`deal_tasks.done_at`, already
+stored), also after a reload. "Today" here is the person's own day: the browser's time zone, else
+the workspace's. The chips are Due and Company; without Salesperson (in + Filter, which starts at
+you) Today shows your own to-dos and meetings. "+ To-do" opens the short dialog (`taskQuick`):
+Opportunity first with nothing preselected, Title, Due date, Owner. The right column has Meetings
+today (the next one's time in green), Pultly suggests, shown when meetings of the last seven days
+were held without minutes (the board's example; there were no suggestion rules before), and, for
+managers, the Team today card. Editing a to-do happens on its opportunity.
 
 **The Settings page** (CD-280; rebuilt in CD-524 to its spec and the design G-Settings,
 `screens/Settings.tsx` and `screens/settings/`) is an area of its own in the design's glass
