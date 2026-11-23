@@ -469,9 +469,22 @@ export function Layout() {
           <div className={'toast toast-glass' + (s.toastError ? ' error' : '')} role={s.toastError ? 'alert' : 'status'}>
             {!s.toastError && <Icon name="check" size={14} />}
             {s.toast}
+            {/* Undo after ticking a to-do on Today (CD-532). */}
+            {s.toastAction && (
+              <button type="button" className="toast-action" data-testid="toast-action" onClick={s.toastAction.run}>
+                {s.toastAction.label}
+              </button>
+            )}
           </div>
         ) : (
-          <div className="toast">{s.toast}</div>
+          <div className="toast">
+            {s.toast}
+            {s.toastAction && (
+              <button type="button" className="toast-action" data-testid="toast-action" onClick={s.toastAction.run}>
+                {s.toastAction.label}
+              </button>
+            )}
+          </div>
         ))}
       <ConfirmHost />
     </div>

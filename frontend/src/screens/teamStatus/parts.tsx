@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom';
 import { paths } from '../../lib/paths';
 import type { ApiDayStatus, ApiStatusRow } from '../../lib/timesheetApi';
-import { useStore } from '../../store/store';
-import { useTeamStatus } from '../../store/timesheet';
 
 /**
  * The counters of Today's status (spec 12.1), in the design's order. `always`: shown even at 0;
@@ -48,54 +46,5 @@ export function TimesheetCell({ t }: { t: ApiStatusRow['timesheet'] }) {
       </Link>
       {t.notSubmitted && t.label !== 'Not submitted' && <span className="badge badge-danger">Not submitted</span>}
     </span>
-  );
-}
-
-const AWAY: ReadonlySet<ApiDayStatus> = new Set(['business_trip', 'time_off', 'sick_leave']);
-
-/**
- * The Today screen's "Team today" card (spec 12.1): for managers, the counters for their direct
- * and indirect reports and the names of those away. Nothing for people without reports.
- */
-export function TeamTodayCard() {
-  const { s } = useStore();
-  const { data } = useTeamStatus(s.visitScope.seesTeam, undefined, 'reports');
-  const rows = (data?.rows ?? []).filter((r) => r.status !== 'not_employed');
-  if (!rows.length) return null;
-  const counts = statusCounts(rows);
-  const away = rows.filter((r) => AWAY.has(r.status));
-  const counters = STATUS_COUNTERS.filter((c) => c.status !== 'not_employed' && (counts[c.status] > 0 || c.status === 'working'));
-  return (
-    <section className="card tst-card" data-testid="team-today">
-      <div className="tst-card-head">
-        <span className="caps">Team today</span>
-        <Link to={paths.teamStatus()} className="emp-note">
-          Today's status
-        </Link>
-      </div>
-      <div className="tst-card-counts">
-        {counters.map((c) => (
-          <span key={c.status} className="tst-card-count" data-testid={`team-today-${c.status}`}>
-            <span className="tst-dot" style={{ background: c.dot }} />
-            <strong>{counts[c.status]}</strong>
-            <span className="emp-note">{c.label}</span>
-          </span>
-        ))}
-      </div>
-      {away.length > 0 && (
-        <ul className="tst-card-away">
-          {away.map((r) => (
-            <li key={r.id}>
-              <Link to={paths.employee(r.id)}>{r.name}</Link>
-              <span className="emp-note">
-                {' · '}
-                {r.label}
-                {r.detail ? `, ${r.detail.charAt(0).toLowerCase()}${r.detail.slice(1)}` : ''}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }

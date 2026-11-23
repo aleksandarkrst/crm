@@ -232,20 +232,23 @@ export interface FilterTask {
   companyId: string | null;
 }
 
-/** Today: the task's fields, and its opportunity's stage and company. */
+/**
+ * Today: the task's fields, and its opportunity's stage and company. Due and Company are its chips
+ * (CD-532); Salesperson is in + Filter, and without it Today shows your own to-dos.
+ */
 export function taskFields(s: State, tasks: FilterTask[]): FilterField<FilterTask>[] {
   const records = companyRecords(s);
   const labels = companyLabels(records);
   const g = 'Task';
   return [
-    { id: 'owner', label: 'Salesperson', group: g, kind: 'person', pinned: true, get: (t) => t.ownerId },
+    { id: 'due', label: 'Due', group: g, kind: 'date', pinned: true, get: (t) => t.dueIso },
+    { id: 'company', label: 'Company', group: 'Opportunity', kind: 'list', icon: 'company', pinned: true, options: records.map((c) => ({ id: c.id, name: labels.get(c.id) ?? c.name })).sort((a, b) => a.name.localeCompare(b.name)), get: (t) => t.companyId },
+    { id: 'owner', label: 'Salesperson', group: g, kind: 'person', get: (t) => t.ownerId },
     { id: 'type', label: 'Type', group: g, kind: 'list', options: optionsOf([], tasks.map((t) => t.channelLabel)), get: (t) => t.channelLabel },
-    { id: 'due', label: 'Due date', group: g, kind: 'date', get: (t) => t.dueIso },
     { id: 'title', label: 'Title', group: g, kind: 'text', get: (t) => t.title },
     { id: 'note', label: 'Note', group: g, kind: 'text', get: (t) => t.note },
     { id: 'done', label: 'Done', group: g, kind: 'checkbox', get: (t) => t.done },
     { id: 'stage', label: 'Stage', group: 'Opportunity', kind: 'list', icon: 'status', options: optionsOf([], Object.values(s.funnels).flatMap((f) => f.stages.map((st) => st.name))), get: (t) => t.stageName },
-    { id: 'company', label: 'Company', group: 'Opportunity', kind: 'list', icon: 'company', options: records.map((c) => ({ id: c.id, name: labels.get(c.id) ?? c.name })).sort((a, b) => a.name.localeCompare(b.name)), get: (t) => t.companyId },
   ];
 }
 

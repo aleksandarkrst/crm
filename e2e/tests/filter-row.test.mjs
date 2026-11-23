@@ -45,15 +45,17 @@ describe('filter row', () => {
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Workshop day', unitPrice: 1200, billingFrequency: 'one_time' }) });
   });
 
-  step('Today: Salesperson Me, then Type, Due date and is not together; the no-results card', async () => {
+  step('Today: Due and Company, Salesperson from + Filter starts at you; Type, Due and is not together; the no-results card', async () => {
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
-    assert.deepEqual(await chips(page), ['owner']);
-    assert.equal(await chipText(page, 'owner'), 'Salesperson Me');
+    // CD-532: Due and Company are the chips; without Salesperson Today shows your own to-dos.
+    assert.deepEqual(await chips(page), ['due', 'company']);
     await page.waitForFunction(() => document.body.innerText.includes('Call Acme back') && document.body.innerText.includes('Email the price list'));
+    await addFilter(page, 'owner');
+    await closePopover(page);
+    assert.equal(await chipText(page, 'owner'), 'Salesperson Me');
     await addFilter(page, 'type');
     await pickOption(page, 'type', 'Call');
     await closePopover(page);
-    await addFilter(page, 'due');
     await pickOption(page, 'due', 'today');
     assert.match(await page.$eval('[data-testid="filter-pop-due"]', (el) => el.innerText), /Updates with today's date\./);
     await closePopover(page);
@@ -61,10 +63,9 @@ describe('filter row', () => {
     await setOp(page, 'type', 'isnot');
     await closePopover(page);
     assert.equal(await chipText(page, 'type'), 'Type is not Call');
-    assert.match(await emptyCard(page), /No tasks match these filters/);
+    assert.match(await emptyCard(page), /No to-dos match these filters/);
     await clearFilters(page);
-    assert.deepEqual(await chips(page), ['owner']);
-    assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
+    assert.deepEqual(await chips(page), ['due', 'company']);
     await page.waitForFunction(() => document.body.innerText.includes('Email the price list'));
   });
 
@@ -85,9 +86,8 @@ describe('filter row', () => {
 
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
     const meetings = () => page.$$eval('[data-testid=meetings-today] [data-meeting-id]', (els) => els.map((el) => el.innerText).join(' | '));
-    // Me and Ana ticked: both meetings (it used to show only yours).
-    await openChip(page, 'owner');
-    await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Fiona Filter')}"]`);
+    // Me and Ana ticked: both meetings (it used to show only yours). Salesperson starts at me (CD-532).
+    await addFilter(page, 'owner');
     await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Ana Agent')}"]`);
     await closePopover(page);
     await page.waitForFunction(() => /Fiona site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? '') && /Ana site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? ''));

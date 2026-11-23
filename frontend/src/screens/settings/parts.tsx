@@ -255,8 +255,11 @@ export function Segmented<T extends string>({
 
 export type Opt<T extends string = string> = { value: T; label: string };
 
-/** A button with the current value; its list is a glass menu with a check on the chosen option. Arrows, Enter and Escape work. */
-export function Dropdown<T extends string>({ value, options, onChange, label, width = 240, disabled, testId }: { value: T; options: readonly Opt<T>[]; onChange: (v: T) => void; label: string; width?: number | string; disabled?: boolean; testId?: string }) {
+/**
+ * A button with the current value; its list is a glass menu with a check on the chosen option. Arrows, Enter and Escape work.
+ * `placeholder` is shown (muted) while the value matches no option, e.g. "Pick an opportunity" (CD-532).
+ */
+export function Dropdown<T extends string>({ value, options, onChange, label, width = 240, disabled, testId, placeholder }: { value: T; options: readonly Opt<T>[]; onChange: (v: T) => void; label: string; width?: number | string; disabled?: boolean; testId?: string; placeholder?: string }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const { ref, menu } = useDismiss(open, () => setOpen(false));
@@ -300,7 +303,7 @@ export function Dropdown<T extends string>({ value, options, onChange, label, wi
         }}
         onKeyDown={onKey}
       >
-        <span className="v">{current?.label ?? '—'}</span>
+        <span className={'v' + (!current && placeholder ? ' gs-placeholder' : '')}>{current?.label ?? placeholder ?? '—'}</span>
         {chevron}
       </button>
       {open && (

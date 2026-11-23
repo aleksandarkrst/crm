@@ -33,10 +33,10 @@ describe('tasks: overdue, editing and channels', () => {
     });
   });
 
-  step('Today shows it under Overdue, and the sidebar counts it', async () => {
+  step('Today shows it under Late, 3 days late, and the sidebar counts it', async () => {
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
-    const overdue = await page.waitForSelector('[data-group="Overdue"]');
-    assert.match(await overdue.evaluate((el) => el.innerText), /Chase the signed NDA/);
+    const overdue = await page.waitForSelector('[data-group="Late"]');
+    assert.match(await overdue.evaluate((el) => el.innerText), /Chase the signed NDA[\s\S]*3 days late/);
     const badge = await page.waitForSelector('[data-testid="nav-badge"]');
     assert.equal(await badge.evaluate((el) => el.textContent.trim()), '1');
     const todayGroup = await page.$eval('[data-group="Today"]', (el) => el.innerText);
@@ -63,7 +63,9 @@ describe('tasks: overdue, editing and channels', () => {
   });
 
   step("edits the task's title and due date, and they survive a reload", async () => {
-    const row = await page.waitForSelector(`[data-task="${task.id}"]`);
+    // Today only ticks and adds (CD-532); a task is edited on its opportunity.
+    await page.goto(BASE_URL + '/deals/' + deal.id, { waitUntil: 'networkidle0' });
+    const row = await page.waitForSelector(`[data-lead-task="${task.id}"]`);
     await (await row.$('button[title="Edit this task"]')).click();
     await page.waitForSelector('::-p-text(Edit task)');
     const titleInput = 'input[placeholder="e.g. Send revised scope to procurement"]';
@@ -75,10 +77,30 @@ describe('tasks: overdue, editing and channels', () => {
       return t?.label === 'Chase the countersigned NDA' && t.dueDate === isoDay(5) && t;
     });
     assert.ok(saved, 'title and due date saved');
-    await page.reload({ waitUntil: 'networkidle0' });
-    const next = await page.waitForSelector('[data-group="Next up"]');
+    // Due in five days: under Today with its weekday, no longer late (CD-532).
+    await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
+    const next = await page.waitForSelector('[data-group="Today"]');
     assert.match(await next.evaluate((el) => el.innerText), /Chase the countersigned NDA/);
+    assert.equal(await page.$('[data-group="Late"]'), null, 'nothing late any more');
     assert.equal(await page.$('[data-testid="nav-badge"]'), null, 'no overdue badge any more');
+  });
+
+  step('ticking it on Today strikes it through, counts it, can be undone, and stays after a reload (CD-532)', async () => {
+    const box = `[role=checkbox][aria-label="Chase the countersigned NDA"]`;
+    const left = () => page.$eval('[data-testid=today-summary]', (el) => el.innerText);
+    const before = await left();
+    await waitForToastToClear(page).catch(() => {});
+    await page.click(box);
+    await page.waitForSelector(`${box}[aria-checked=true]`);
+    assert.notEqual(await left(), before, 'the summary counts open to-dos only');
+    await page.click('[data-testid=toast-action]');
+    await page.waitForSelector(`${box}[aria-checked=false]`);
+    assert.equal(await left(), before);
+    await page.click(box);
+    await eventually(async () => (await api(page, '/crm/deal-tasks')).find((x) => x.id === task.id)?.done);
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector(`${box}[aria-checked=true]`);
+    assert.match(await page.$eval('[data-group="Today"]', (el) => el.innerText), /Chase the countersigned NDA[\s\S]*Done/);
   });
 
   it('throws no uncaught errors in the page', () => {

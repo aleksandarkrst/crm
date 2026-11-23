@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CHANNEL_LABELS, OBJECTIONS } from '../../store/seed';
 import { initialsOf, script, stageOf, todayLabel } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -26,7 +27,14 @@ export function Composer({ lead }: { lead: Lead }) {
   const { s } = store;
   const stage = stageOf(s, lead);
   const def = DEFAULT_TAB[stage.channel] || 'note';
-  const [picked, setTab] = useState<TabKey | null>(null);
+  // Today's Review button (CD-532) opens the opportunity on the Documents tab with ?tab=docs.
+  const [params] = useSearchParams();
+  const fromLink = params.get('tab') === 'docs';
+  const [picked, setTab] = useState<TabKey | null>(fromLink ? 'docs' : null);
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (fromLink) card.current?.scrollIntoView({ block: 'start' });
+  }, [fromLink]);
   const tab = picked ?? def; // follows the stage until the user picks a tab
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [objectionsOpen, setObjectionsOpen] = useState(false);
@@ -62,7 +70,7 @@ export function Composer({ lead }: { lead: Lead }) {
   };
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
+    <div ref={card} className="card" style={{ overflow: 'hidden', scrollMarginTop: 'calc(var(--screen-header-h, 0px) + 12px)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '14px 18px', background: 'var(--brand-tint)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span className="caps" style={{ color: 'var(--brand)' }}>

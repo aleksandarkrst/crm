@@ -5,9 +5,12 @@ import { Chevron, Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
+import { deviceTimeZone } from '../lib/timeZones';
+import { DateRangePicker } from '../components/DateRangePicker';
+import { Dropdown, Modal as GlassModal } from '../screens/settings/parts';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, opportunityName, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
 import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
@@ -365,6 +368,84 @@ function CompleteCompany({ companyId }: { companyId: string }) {
  * and stage; its title, owner, due date, channel and note can change.
  */
 function NewTaskModal() {
+  const { s } = useStore();
+  return s.taskQuick && !s.taskEditId ? <QuickTodoModal /> : <TaskModal />;
+}
+
+/**
+ * Today's "+ To-do" (CD-532): the opportunity first, with nothing preselected, then the title, the
+ * due date and the owner (you). The to-do goes on the opportunity's current stage, with its channel.
+ */
+function QuickTodoModal() {
+  const { s, set, flash, addLeadTask, session } = useStore();
+  const members = s.team.filter((m) => m.status === 'Active');
+  const [leadId, setLeadId] = useState('');
+  const [title, setTitle] = useState('');
+  // Today is your own day (CD-532): this device's time zone, else the workspace's.
+  const [due, setDue] = useState(todayIso(deviceTimeZone() ?? s.workspace.timezone));
+  const [ownerId, setOwnerId] = useState(members.some((m) => m.id === session.userId) ? session.userId : (members[0]?.id ?? ''));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => set({ taskOpen: false, taskQuick: false });
+  // Lost opportunities have no work left; the rest by name.
+  const options = s.leads
+    .filter((l) => l.outcome !== 'lost')
+    .map((l) => ({ id: l.id, name: l.title?.trim() ? `${opportunityName(l)}, ${l.company}` : l.company }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const submit = async () => {
+    const lead = leadById(s, leadId);
+    if (!lead) return setError('Pick the opportunity this to-do belongs to.');
+    if (!title.trim()) return setError('Give the to-do a title.');
+    setError('');
+    setBusy(true);
+    const stage = stageOf(s, lead);
+    const ok = await addLeadTask({ leadId: lead.id, stageId: stage.id, title, channel: stage.channel, due, ownerId, note: '' });
+    setBusy(false);
+    if (ok) {
+      set({ taskOpen: false, taskQuick: false, taskLeadId: lead.id });
+      flash('To-do added');
+    }
+  };
+
+  // The glass sheet of the redesign (CD-530): the Settings modal, glass dropdowns and a dd.mm.yyyy date field.
+  return (
+    <GlassModal title="New to-do" desc="It shows on Today and on the opportunity's timeline." onClose={close} testId="todo-dialog">
+      <div className="gs-label">
+        Opportunity
+        <Dropdown label="Opportunity" value={leadId} placeholder={options.length ? 'Pick an opportunity' : 'No opportunities yet'} options={options.map((o) => ({ value: o.id, label: o.name }))} onChange={(v) => setLeadId(v)} width="100%" testId="todo-opportunity" />
+      </div>
+      <label className="gs-label">
+        Title
+        <input className="gs-input" data-testid="todo-title" placeholder="e.g. Send the revised offer" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+      </label>
+      <div className="td-dialog-row">
+        <div className="gs-label">
+          Due date
+          <DateRangePicker glass single label="Due date" value={due ? { from: due, to: due } : null} month={due.slice(0, 7)} placeholder="dd.mm.yyyy" onChange={(r) => setDue(r.from)} testId="todo-due" />
+        </div>
+        <div className="gs-label">
+          Owner
+          <Dropdown label="Owner" value={ownerId} options={members.map((m) => ({ value: m.id, label: m.name }))} onChange={(v) => setOwnerId(v)} width="100%" testId="todo-owner" />
+        </div>
+      </div>
+      {error && (
+        <span className="gs-error" role="alert">
+          {error}
+        </span>
+      )}
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={close}>
+          Cancel
+        </button>
+        <button type="button" className="gs-btn primary" data-testid="todo-add" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Adding…' : 'Add to-do'}
+        </button>
+      </div>
+    </GlassModal>
+  );
+}
+
+function TaskModal() {
   const { s, set, flash, addLeadTask, updateLeadTask, session } = useStore();
   const editing = s.leadTasks.find((t) => t.id === s.taskEditId);
   const initialLead = leadById(s, editing?.leadId) || s.leads.find((l) => l.id === s.taskLeadId) || s.leads[0];
