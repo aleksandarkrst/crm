@@ -28,7 +28,8 @@ Tasks and bugs live in Linear (team **Coding**, project **CRM**, IDs `CD-…`), 
 
 Issue states: **Backlog / Todo** → **Specification** / **In design** → **Ready for dev** →
 **In Progress** (a branch exists) → **QA** (the pull request's CI is green; the review runs in
-CI, so green CI means the review passed, and the merge and staging deploy follow) → **Release**
+CI, so green CI means the review passed. QA testing starts once the merge is on staging, and the
+agent comments on the issue when it is) → **Release**
 (checked on staging, waiting for production) → **Done**.
 
 One issue is in development and one is in QA at a time. When an agent's issue reaches QA, the
