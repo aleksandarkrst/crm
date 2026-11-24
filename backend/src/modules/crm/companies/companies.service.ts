@@ -6,7 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
+import { activities, companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
@@ -16,6 +16,9 @@ import { CompanyStatusService } from './company-status.service';
 
 const noSpaces = (v: unknown) => (typeof v === 'string' ? v.replace(/\s/g, '') : v);
 
+/** A PIB as typed: spaces are dropped ("104 052 135" is 104052135), then 9 digits with a valid check digit. */
+export const PibInput = z.preprocess(noSpaces, z.string().refine(pibValid, PIB_MESSAGE));
+
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
   industry: optionalText(100),
@@ -23,9 +26,9 @@ export const CreateCompany = z.object({
   teamSize: optionalText(40),
   source: optionalText(80),
   domain: optionalText(253),
-  // Identity (CD-357). The PIB is required and, once set, can't be cleared (a PATCH may change it, not null it).
-  // Spaces are dropped ("104 052 135" is 104052135), as the dialogs do, so a spreadsheet's formatting passes.
-  pib: z.preprocess(noSpaces, z.string({ error: 'PIB is required' }).refine(pibValid, PIB_MESSAGE)),
+  // Identity (CD-357). The PIB is optional for a new lead (CD-533) and, once set, can't be cleared (a PATCH
+  // may change it, not null it). It counts towards Opportunity (company-status.ts).
+  pib: PibInput.nullish(),
   mb: z.preprocess(noSpaces, optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE)),
   address: optionalText(200),
   city: optionalText(100),
@@ -38,7 +41,7 @@ export const CreateCompany = z.object({
   customFields: CustomFieldValuesInput,
   notes: optionalText(5000),
 });
-export const UpdateCompany = nonEmptyPatch(CreateCompany.partial());
+export const UpdateCompany = nonEmptyPatch(CreateCompany.partial().extend({ pib: PibInput.optional() }));
 
 /**
  * `GET /crm/companies` filters (CD-358): `status=lead,opportunity` keeps those statuses; `outcome=won`
@@ -65,6 +68,20 @@ export const SetCompanyStatus = z
 export type SetCompanyStatus = z.infer<typeof SetCompanyStatus>;
 export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
+
+/**
+ * The company's latest activity for the Companies list (CD-533): the newest timeline entry with a
+ * channel on any of its opportunities, or a meeting with it that was held. `channel` is the
+ * activity's (MT for a meeting), `at` an ISO time; null when nothing happened yet. Entries dated in
+ * the future (a planned call) don't count.
+ */
+const lastActivityOf = sql<{ channel: string; at: string } | null>`(
+  select json_build_object('channel', x.channel, 'at', x.at) from (
+    select a.channel, a.occurred_at as at from ${activities} a join ${deals} d on d.id = a.deal_id
+      where d.company_id = ${companies.id} and a.channel is not null and a.occurred_at <= now()
+    union all
+    select 'MT', coalesce(m.held_at, m.ends_at) from ${meetings} m where m.company_id = ${companies.id} and m.status = 'held'
+  ) x order by x.at desc limit 1)`;
 
 /**
  * Two companies in one workspace never share a PIB (CD-357): a 409 that names the existing one, so
@@ -106,7 +123,7 @@ export class CompaniesService {
           : undefined;
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
+        .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId), lastActivity: lastActivityOf })
         .from(companies)
         .where(
           and(
@@ -137,7 +154,7 @@ export class CompaniesService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
-        await assertPibFree(tx, input.pib);
+        if (input.pib) await assertPibFree(tx, input.pib);
         // A create that sends custom field values (a create form) must fill the required ones.
         const { customFields: cfInput, ...fields } = input;
         const cf = await this.customFields.validate(tx, 'company', cfInput, { requireAll: cfInput !== undefined });

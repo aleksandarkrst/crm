@@ -399,6 +399,12 @@ export interface ApiCompany {
   status: ApiCompanyStatus;
   statusSetManually: boolean;
   statusChangedAt: string | null;
+  /** The latest activity with it (lists only, CD-533): a timeline channel (MT for a held meeting) and an ISO time. */
+  lastActivity?: { channel: Channel; at: string } | null;
+  /** The version: send it back as If-Match when changing the company (CD-20). */
+  updatedAt: string;
+}
+export interface ApiContact| null;
   /** The version: send it back as If-Match when changing the company (CD-20). */
   updatedAt: string;
 }
@@ -837,7 +843,7 @@ export interface ApiConflict {
 
 /** Custom field values to write: null or '' clears a field. */
 export type CustomFieldPatch = Record<string, CustomValue | null>;
-export type CompanyInput = Partial<Omit<ApiCompany, 'id' | 'customFields' | 'updatedAt'>> & { name?: string; customFields?: CustomFieldPatch };
+export type CompanyInput = Partial<Omit<ApiCompany, 'id' | 'customFields' | 'updatedAt' | 'lastActivity'>> & { name?: string; customFields?: CustomFieldPatch };
 export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName' | 'customFields' | 'updatedAt'>> & { customFields?: CustomFieldPatch };
 export type DealInput = Partial<
   Pick<
@@ -1178,7 +1184,7 @@ export const crmApi = {
     api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
   companies: (ids?: readonly string[]) => all<ApiCompany>(only('/crm/companies', 'ids', ids)),
-  createCompany: (input: CompanyInput & { name: string; pib: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
+  createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
   /** "Set status back…" (a lower status) or "Back to automatic" (null), CD-358. */

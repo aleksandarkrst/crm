@@ -1768,13 +1768,13 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        * Creates a company from the New company dialog and opens it. A PIB already in the workspace
        * comes back as the existing company's id, so the dialog can offer to open that one instead.
        */
-      createCompany: async (input: CompanyInput & { name: string; pib: string }): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
+      createCompany: async (input: CompanyInput & { name: string }): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
         try {
           const created = await crmApi.createCompany(input);
           await reload();
           set({ newCompanyOpen: false });
           navigate(paths.company(created.id));
-          flash(input.name + ' added as a lead');
+          flash(input.name + ' created as a lead');
           return { ok: true };
         } catch (err) {
           const existingId = err instanceof ApiError && err.status === 409 ? (err.body as { existingCompanyId?: string } | null)?.existingCompanyId : undefined;

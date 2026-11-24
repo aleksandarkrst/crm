@@ -191,6 +191,11 @@ export interface CompanyExtra {
   statusManual?: boolean;
   /** When the status last changed (ISO): a past client's "Last project done" month (CD-359). */
   statusChangedAt?: string | null;
+  /** Its latest activity (CD-533): a timeline channel and an ISO time; null when nothing happened yet. */
+  lastActivity?: { channel: ChannelCode; at: string } | null;
+}
+
+/** How an opportunity is sold| null;
 }
 
 /** How an opportunity is sold (CD-360). */

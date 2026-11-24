@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeStatus, factsFingerprint, opportunityReadiness, type StatusCompany, type StatusContact } from '../src/modules/crm/companies/company-status';
 
-const complete: StatusCompany = { name: 'Vega Logistika', pib: '104532877', mb: '21345678', address: 'Bulevar 12', city: 'Beograd', postalCode: '11000', activityCode: '4941' };
+const complete: StatusCompany = { name: 'Vega Logistika', pib: '104532877', mb: '21345678', address: 'Bulevar 12', city: 'Beograd', postalCode: '11000', activityCode: '4941', ownerUserId: 'u0' };
 const qualified: StatusContact = { fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole: 'Champion', ownerUserId: 'u1' };
 const status = (over: Partial<Parameters<typeof computeStatus>[0]> = {}) => computeStatus({ company: complete, contacts: [qualified], opportunities: [], projects: [], ...over });
 
@@ -12,7 +12,13 @@ describe('opportunityReadiness (CD-358)', () => {
 
   it('lists what is missing, the address parts as one line', () => {
     const r = opportunityReadiness({ ...complete, mb: null, address: ' ', postalCode: null, activityCode: '' }, [qualified]);
-    expect(r).toEqual({ ready: 3, total: 7, blockers: ['Matični broj', 'Address (street and postal code)', 'Šifra delatnosti'] });
+    expect(r).toEqual({ ready: 4, total: 7, blockers: ['Matični broj', 'Address (street and postal code)', 'Šifra delatnosti'] });
+  });
+
+  it('counts the company owner and the name as checks (CD-533)', () => {
+    expect(opportunityReadiness({ ...complete, ownerUserId: null }, [qualified])).toEqual({ ready: 6, total: 7, blockers: ['Company owner'] });
+    expect(opportunityReadiness({ ...complete, name: ' ' }, [qualified]).blockers).toEqual(['Name']);
+    expect(computeStatus({ company: { ...complete, ownerUserId: null }, contacts: [qualified], opportunities: [], projects: [] })).toBe('lead');
   });
 
   it('names the contact closest to qualifying and what it misses', () => {

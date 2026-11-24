@@ -95,7 +95,7 @@ describe('the 0123 backfill', () => {
         before.map((c) => [
           c.id,
           computeStatus({
-            company: { name: c.name, pib: c.pib, mb: c.mb, address: c.address, city: c.city, postalCode: c.postal_code, activityCode: c.activity_code },
+            company: { name: c.name, pib: c.pib, mb: c.mb, address: c.address, city: c.city, postalCode: c.postal_code, activityCode: c.activity_code, ownerUserId: c.owner_user_id },
             contacts: contacts.filter((p) => p.company_id === c.id).map((p) => ({ fullName: p.full_name, jobTitle: p.job_title, buyerRole: p.buyer_role, ownerUserId: p.owner_user_id })),
             opportunities: deals.filter((d) => d.company_id === c.id).map((d): OpportunityState => (d.lost_at ? 'lost' : d.is_won ? 'won' : 'open')),
             projects: projects.filter((p) => p.company_id === c.id).map((p) => p.status as ProjectState),

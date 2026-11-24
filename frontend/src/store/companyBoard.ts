@@ -3,6 +3,9 @@
 import type { CompanyStatus } from './types';
 
 export interface ReadinessCompany {
+  name?: string | null;
+  /** The company's owner (CD-533). */
+  ownerId?: string | null;
   pib?: string | null;
   mb?: string | null;
   address?: string | null;
@@ -22,7 +25,8 @@ const list = (items: string[], and: string) => (items.length > 1 ? `${items.slic
 
 /**
  * What a lead still needs before it becomes an opportunity, as the API checks it
- * (opportunityReadiness in crm/companies/company-status.ts): 7 checks, the address as one line.
+ * (opportunityReadiness in crm/companies/company-status.ts): 7 checks (CD-533), each counted once:
+ * name, PIB, MB, address (street, city and postal code), activity code, owner and a qualified contact.
  * `blockers` are the company page's sentences, `missing` the card's short words.
  */
 export function readiness(c: ReadinessCompany | undefined, people: ReadinessContact[]): { ready: number; total: number; blockers: string[]; missing: string[] } {
@@ -37,15 +41,17 @@ export function readiness(c: ReadinessCompany | undefined, people: ReadinessCont
     contact = best ? `${want}: ${best.name} has no ${list(gaps, 'or')} yet.` : want;
     contactShort = best ? `contact ${list(gaps, 'and')}` : 'a contact';
   }
-  const checks: [number, string, string][] = [
-    [filled(c?.pib) ? 0 : 1, 'Company ID (PIB)', 'company ID'],
-    [filled(c?.mb) ? 0 : 1, 'Matični broj', 'MB'],
-    [address.length, `Address (${list(address, 'and')})`, 'address'],
-    [filled(c?.activityCode) ? 0 : 1, 'Šifra delatnosti', 'activity code'],
-    [contact ? 1 : 0, contact ?? '', contactShort],
+  const checks: [passed: boolean, string, string][] = [
+    [filled(c?.name), 'Name', 'name'],
+    [filled(c?.pib), 'Company ID (PIB)', 'company ID'],
+    [filled(c?.mb), 'Matični broj', 'MB'],
+    [address.length === 0, `Address (${list(address, 'and')})`, 'address'],
+    [filled(c?.activityCode), 'Šifra delatnosti', 'activity code'],
+    [!!c?.ownerId, 'Company owner', 'owner'],
+    [!contact, contact ?? '', contactShort],
   ];
-  const open = checks.filter(([m]) => m > 0);
-  return { ready: 7 - checks.reduce((n, [m]) => n + m, 0), total: 7, blockers: open.map(([, msg]) => msg), missing: open.map(([, , short]) => short) };
+  const open = checks.filter(([passed]) => !passed);
+  return { ready: checks.length - open.length, total: checks.length, blockers: open.map(([, msg]) => msg), missing: open.map(([, , short]) => short) };
 }
 
 /** The Kanban's columns, left to right. */

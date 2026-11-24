@@ -1,5 +1,5 @@
 /**
- * Company identity (CD-357): the PIB is the company's ID. It is required and checked by the API,
+ * Company identity (CD-357): the PIB is the company's ID. It is optional for a new lead (CD-533), checked by the API,
  * unique in a workspace (a 409 that names the existing company), free across workspaces, and once
  * set it can be changed but never cleared. The other identity fields are checked too, recorded in
  * the company's history and searchable by PIB.
@@ -21,10 +21,12 @@ beforeAll(async () => {
 });
 
 describe('creating a company', () => {
-  it('needs a PIB with a valid check digit (400 without one or with a bad one)', async () => {
-    const missing = await call('POST', '/crm/companies', { ...as(), body: { name: 'No PIB d.o.o.' } });
-    expect(missing.status).toBe(400);
-    expect(JSON.stringify(missing.body)).toContain('PIB is required');
+  it('takes a lead without a PIB (CD-533), but not a bad one, and a PATCH cannot clear one', async () => {
+    const noPib = await ok<{ id: string; pib: string | null; status: string }>('POST', '/crm/companies', { ...as(), body: { name: 'No PIB d.o.o.' } });
+    expect(noPib).toMatchObject({ pib: null, status: 'lead' });
+    const [pib] = testPibs(1);
+    await ok('PATCH', `/crm/companies/${noPib.id}`, { ...as(), body: { pib } });
+    expect((await call('PATCH', `/crm/companies/${noPib.id}`, { ...as(), body: { pib: null } })).status).toBe(400);
     const bad = await call('POST', '/crm/companies', { ...as(), body: { name: 'Bad PIB d.o.o.', pib: '104052136' } });
     expect(bad.status).toBe(400);
     expect(JSON.stringify(bad.body)).toContain('PIB is 9 digits with a valid check digit');
