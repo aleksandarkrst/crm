@@ -1,5 +1,6 @@
-// Company identity (CD-357): New company is a dialog that needs the name and a valid PIB, a PIB the
-// workspace already has offers the existing company, and the list and page show the Company ID.
+// Company identity (CD-357, CD-533): New company is a glass dialog with the name, an optional PIB
+// (checked as it is typed) and the industry; it creates a lead and opens it. A PIB the workspace
+// already has names that company with a link to it, and the list shows the lead with its readiness.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, newUserWithWorkspace, steps, testPib, useBrowser } from '../lib/harness.mjs';
@@ -15,38 +16,56 @@ describe('company identity', () => {
     await newUserWithWorkspace(page, { label: 'company-identity', name: 'Ida Identity', workspace: 'Identity Co' });
   });
 
-  step('New company asks for a valid PIB, then creates a lead with its Company ID', async () => {
+  step('the empty list offers the first company', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
-    await click(page, '.filter-actions .btn-primary');
+    assert.match(await page.$eval('[data-testid=companies-empty]', (el) => el.innerText), /No companies yet\. Add the first one\./);
+  });
+
+  step('New company checks a typed PIB, then creates a lead and opens it', async () => {
+    await click(page, '[data-testid=companies-new]');
+    await page.waitForSelector('[data-testid=new-company-dialog]');
+    assert.match(await page.$eval('[data-testid=new-company-dialog]', (el) => el.innerText), /all seven checks are done: name, PIB, MB, address, activity code, owner and a contact with a role in the decision/);
+    assert.ok(await page.$eval('[data-testid=new-company-create]', (el) => el.disabled), 'Create company waits for a name');
     await page.type('[data-testid=new-company-name]', 'Vega Logistika d.o.o.');
     await page.type('[data-testid=new-company-pib]', '10405213');
     await click(page, '[data-testid=new-company-create]');
-    assert.match(await page.$eval('[role=alert]', (el) => el.textContent), /9 digits; this one has 8/);
+    assert.match(await page.$eval('[data-testid=new-company-dialog] [role=alert]', (el) => el.textContent), /9 digits; this one has 8/);
     await page.$eval('[data-testid=new-company-pib]', (el) => el.select());
     await page.type('[data-testid=new-company-pib]', pib);
-    await page.select('[data-testid=new-company-ownership]', 'private');
     await click(page, '[data-testid=new-company-create]');
     await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
+    await page.waitForFunction(() => /Vega Logistika d\.o\.o\. created as a lead/.test(document.querySelector('.toast')?.textContent ?? ''));
     await page.waitForSelector('[data-testid=company-identity]');
     assert.equal(await page.$eval('[data-testid=company-identity] input[aria-label="Company ID (PIB)"]', (el) => el.value), pib);
   });
 
-  step('the list shows the Company ID and the ownership', async () => {
+  step('the list shows the lead with its readiness and what it misses', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
-    const row = await page.$eval('.table-row', (el) => el.innerText);
-    // The Status column sits between the Company ID and the ownership (CD-358).
-    assert.match(row, new RegExp(`Vega Logistika d.o.o.\\s+${pib}\\s+Lead\\s+Private`));
+    const row = await page.$eval('[data-testid=company-row]', (el) => el.innerText);
+    // Name, PIB and owner are in: 3 of 7. No address and no contact yet.
+    assert.match(row, /Vega Logistika d\.o\.o\.[\s\S]*Lead\s+3 of 7 ready[\s\S]*Ida Identity/);
+    assert.match(row, /No activity yet\s+Incomplete record, no address or contact/);
   });
 
-  step('the same PIB again offers the existing company instead', async () => {
-    await click(page, '.filter-actions .btn-primary');
+  step('the same PIB again names the existing company and opens it', async () => {
+    await click(page, '[data-testid=companies-new]');
     await page.type('[data-testid=new-company-name]', 'Vega Copy');
     await page.type('[data-testid=new-company-pib]', pib);
-    await click(page, '[data-testid=new-company-create]');
-    await page.waitForSelector('[data-testid=new-company-error]');
-    assert.match(await page.$eval('[data-testid=new-company-error]', (el) => el.textContent), /already exists: Vega Logistika d\.o\.o\./);
-    await click(page, '[data-testid=new-company-error] button');
+    await page.waitForSelector('[data-testid=new-company-pib-taken]');
+    assert.match(await page.$eval('[data-testid=new-company-pib-taken]', (el) => el.textContent), /This PIB belongs to Vega Logistika d\.o\.o\.\s*Open it/);
+    await click(page, '[data-testid=new-company-pib-taken] button');
     await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
     assert.equal((await api(page, '/crm/companies')).length, 1, 'no second company');
+  });
+
+  step('a lead can be created without a PIB', async () => {
+    await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
+    await click(page, '[data-testid=companies-new]');
+    await page.type('[data-testid=new-company-name]', 'Brightline Studio');
+    await click(page, '[data-testid=new-company-create]');
+    await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
+    const made = (await api(page, '/crm/companies')).find((c) => c.name === 'Brightline Studio');
+    assert.equal(made.pib, null);
+    assert.equal(made.status, 'lead');
   });
 });

@@ -339,6 +339,13 @@ export interface CompanyRecord {
   lifetimeLabel: string;
   stageName: string;
   lastTouch: string;
+  /** The status itself (CD-533), and the company's own owner (the record's `owner` is its latest deal's while it has deals). */
+  statusKey: CompanyStatus;
+  companyOwner: string;
+  companyOwnerId: string | null;
+  city: string;
+  /** Its latest activity (CD-533): a timeline channel and an ISO time; null when nothing happened yet. */
+  lastActivity: { channel: string; at: string } | null;
 }
 
 /**
@@ -346,7 +353,7 @@ export interface CompanyRecord {
  * company aren't grouped into a company record.
  */
 export function companyRecords(s: State): CompanyRecord[] {
-  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'lifetimeValue' | 'lifetimeLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership' | 'status' | 'statusRank'>>();
+  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'lifetimeValue' | 'lifetimeLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership' | 'status' | 'statusRank' | 'statusKey' | 'companyOwner' | 'companyOwnerId' | 'city' | 'lastActivity'>>();
   for (const l of s.leads) {
     if (!l.companyId) continue;
     if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(s, l), ownerId: l.ownerId ?? null, leads: [] });
@@ -375,6 +382,12 @@ export function companyRecords(s: State): CompanyRecord[] {
       lifetimeLabel: valueTotal(s, won),
       stageName: last ? stageOf(s, last).name : '—',
       lastTouch: stall === null ? '—' : stall === 0 ? 'Today' : stall + 'd ago',
+      statusKey: extra?.status ?? 'lead',
+      // A company of another loader (no extra yet) keeps the record's owner.
+      companyOwner: extra ? memberName(s, extra.ownerId, extra.owner) : r.owner,
+      companyOwnerId: extra ? (extra.ownerId ?? null) : r.ownerId,
+      city: extra?.city ?? '',
+      lastActivity: extra?.lastActivity ?? null,
     };
   });
 }

@@ -195,9 +195,6 @@ export interface CompanyExtra {
   lastActivity?: { channel: ChannelCode; at: string } | null;
 }
 
-/** How an opportunity is sold| null;
-}
-
 /** How an opportunity is sold (CD-360). */
 export type SaleType = 'capital' | 'transactional';
 
@@ -521,6 +518,8 @@ export interface State {
   newLeadMade: { companyId: string; dealId: string } | null;
   /** The command palette (Ctrl/⌘ K, CD-80). */
   paletteOpen: boolean;
+  /** What is typed in the top bar search on a list page that filters as you type (Companies, CD-533). */
+  listSearch: string;
   taskOpen: boolean;
   /** Deal the "New task" dialog opens on. */
   taskLeadId: string;

@@ -404,10 +404,6 @@ export interface ApiCompany {
   /** The version: send it back as If-Match when changing the company (CD-20). */
   updatedAt: string;
 }
-export interface ApiContact| null;
-  /** The version: send it back as If-Match when changing the company (CD-20). */
-  updatedAt: string;
-}
 export interface ApiContact {
   id: string;
   companyId: string | null;

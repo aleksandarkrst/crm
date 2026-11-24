@@ -2143,6 +2143,11 @@ a.task-card-project:hover { color: var(--brand); }
 .crm-topbar .header-center { justify-self: stretch; }
 .crm-topbar .search-trigger { flex: 1 1 auto; width: auto; height: 36px; box-sizing: border-box; border: 0; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); color: var(--gs-text-2); }
 .crm-topbar .search-trigger:hover { background: var(--white); }
+/* The search that filters the list as you type (Companies, CD-533): the same pill, with an input in it. */
+.crm-topbar .search-field { cursor: text; }
+.crm-topbar .search-field:focus-within { background: var(--white); box-shadow: 0 0 0 2px var(--gs-green); }
+.search-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0; font: inherit; font-size: 13px; color: var(--gs-ink); }
+.search-input::placeholder { color: var(--gs-text-2); }
 .crm-topbar .round-btn, .crm-topbar .icon-round { border: 0; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); }
 /* Filter chips in the glass (CD-530 list pattern): 40 px pills; a set value is ink. */
 .gs .fr-chip, .gs .fr-add { height: 40px; padding: 0 14px; border: 0; border-radius: 999px; font-size: 13px; }
@@ -2358,4 +2363,42 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 }
 @media (prefers-reduced-motion: reduce) {
   .td-check, .td-suggest-btn, a.td-row { transition: none !important; }
+}
+
+/* ---------------------------------------------------------------- Companies list (CD-533, board C-Companies) */
+.cl-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.cl-new { height: 36px; padding: 0 16px; }
+.cl-actions .btn.btn-secondary { height: 36px; border: 0; border-radius: 999px; background: var(--ov-fill); box-shadow: inset 0 0 0 1px var(--gs-outline); color: var(--gs-ink); }
+.cl-actions .btn.btn-secondary:hover { background: var(--white); }
+.cl-card { border-radius: 18px; min-width: 0; overflow: hidden; }
+/* Narrow screens: the table scrolls inside its card (CD-530). */
+.cl-scroll { overflow-x: auto; }
+.cl-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13.5px; }
+.cl-table th { padding: 12px 10px 10px; border-bottom: 1px solid var(--gs-divider); text-align: left; white-space: nowrap; }
+.cl-table td { height: 56px; box-sizing: border-box; padding: 8px 10px; border-top: 1px solid var(--gs-divider-2); vertical-align: middle; }
+.cl-table tbody tr:first-child td { border-top: 0; }
+.cl-table th:first-child, .cl-table td:first-child { padding-left: 18px; }
+.cl-table th:last-child, .cl-table td:last-child { padding-right: 18px; }
+.cl-table .num { text-align: right; white-space: nowrap; }
+.cl-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--gs-text-2); cursor: pointer; white-space: nowrap; }
+.cl-sort:hover { color: var(--gs-ink); }
+.cl-sort.on { color: var(--gs-green); }
+.cl-row { cursor: pointer; transition: background 0.15s ease; }
+.cl-row:hover { background: rgba(255, 255, 255, 0.5); }
+.gs a.cl-co, .cl-co { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--gs-ink); }
+.gs a.cl-co:hover { color: var(--gs-ink); }
+.cl-tile { flex: none; width: 32px; height: 32px; border-radius: 9px; background: var(--white); box-shadow: inset 0 0 0 1px var(--gs-outline); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--gs-ink-3); }
+.cl-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 18px; }
+.cl-text b { font-weight: 600; }
+.cl-sub { font-size: 12px; line-height: 16px; color: var(--gs-text-2); white-space: nowrap; }
+.cl-status { display: inline-flex; align-items: center; gap: 6px; }
+.cl-owner { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.gs-face.cl-face { width: 22px; height: 22px; font-size: 9.5px; }
+.cl-none { display: inline-block; width: 14px; height: 2px; border-radius: 1px; background: var(--gs-faint); vertical-align: middle; }
+.cl-note { font-size: 12px; line-height: 16px; color: var(--gs-amber); }
+.cl-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 14px; padding: 34px 16px; font-size: 13.5px; color: var(--gs-text-2); text-align: center; }
+.cl-link { padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--gs-green); cursor: pointer; }
+.cl-link:hover { color: var(--gs-green-dark); text-decoration: underline; }
+@media (max-width: 560px) {
+  .cl-actions { margin-left: 0; flex-basis: 100%; justify-content: flex-end; }
 }

@@ -1,157 +1,114 @@
-import { useState } from 'react';
-import { Modal, ModalHeader } from '../components/ui';
-import type { ApiOwnership } from '../lib/api';
+import { useRef, useState } from 'react';
+import { askConfirm } from '../components/ConfirmDialog';
 import { paths } from '../lib/paths';
-import { mbValid, pibProblem } from '../lib/serbianIds';
-import { INDUSTRIES, SOURCES } from '../store/seed';
-import { memberLabels } from '../store/selectors';
+import { pibProblem } from '../lib/serbianIds';
+import { Dropdown, Modal } from '../screens/settings/parts';
+import { INDUSTRIES } from '../store/seed';
 import { useStore } from '../store/store';
 
 /**
- * New company (CD-357): the name and the PIB are required, the rest can wait. It starts as a lead.
- * The PIB is checked here as the user types (digits and check digit) and by the API (unique in the
- * workspace); a PIB the workspace already has offers the existing company instead.
+ * New company (CD-533, board C-Companies): a name, and the PIB and industry if they are at hand.
+ * It starts as a lead with you as its owner, and the company page opens. A PIB is checked as it is
+ * typed (9 digits and the check digit); one the workspace already has names that company, with a
+ * link to it, here and again from the API (a 409) if someone added it meanwhile.
  */
 export function NewCompanyDialog() {
   const { s, set, session, navigate, createCompany } = useStore();
   const [name, setName] = useState('');
   const [pib, setPib] = useState('');
-  const [mb, setMb] = useState('');
   const [industry, setIndustry] = useState('');
-  const [ownership, setOwnership] = useState<ApiOwnership | ''>('');
-  const [owner, setOwner] = useState(session.userId);
-  const [source, setSource] = useState('');
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ error: string; existingId?: string } | null>(null);
 
   const cleanPib = pib.replace(/\s/g, '');
-  const cleanMb = mb.replace(/\s/g, '');
-  const pibError = touched || cleanPib.length >= 9 ? pibProblem(cleanPib) : null;
-  const mbError = cleanMb && (touched || cleanMb.length >= 8) && !mbValid(cleanMb) ? 'An MB has 8 digits with a valid check digit.' : null;
-  const nameError = touched && !name.trim() ? 'The company name is required.' : null;
-  const owners = [...memberLabels(s)].map(([value, label]) => ({ value, label: value === session.userId ? `${label} (me)` : label }));
+  // Optional: only a PIB that was typed is checked, once it is long enough or on Create.
+  const pibError = cleanPib && (touched || cleanPib.length >= 9) ? pibProblem(cleanPib) : null;
+  const taken = cleanPib && !pibError ? s.extraCompanies.find((c) => c.id && c.pib === cleanPib) : undefined;
+  const existing = taken ? { id: taken.id!, name: taken.name } : failed?.existingId ? { id: failed.existingId, name: s.extraCompanies.find((c) => c.id === failed.existingId)?.name ?? 'another company' } : null;
   const close = () => set({ newCompanyOpen: false });
+  // Escape, the backdrop and × ask before dropping what was typed (CD-490); Cancel doesn't.
+  const asking = useRef(false);
+  const dismiss = () => {
+    if (!name && !pib && !industry) return close();
+    if (asking.current) return;
+    asking.current = true;
+    void askConfirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true }).then((ok) => {
+      asking.current = false;
+      if (ok) close();
+    });
+  };
+  const open = (id: string) => {
+    close();
+    navigate(paths.company(id));
+  };
 
   const create = async () => {
     setTouched(true);
     setFailed(null);
-    if (!name.trim() || pibProblem(cleanPib) || (cleanMb && !mbValid(cleanMb))) return;
+    if (!name.trim() || (cleanPib && pibProblem(cleanPib)) || taken) return;
     setBusy(true);
-    const result = await createCompany({
-      name: name.trim(),
-      pib: cleanPib,
-      mb: cleanMb || null,
-      industry: industry || null,
-      ownershipType: ownership || null,
-      source: source || null,
-      ownerUserId: owner || null,
-    });
+    const result = await createCompany({ name: name.trim(), pib: cleanPib || null, industry: industry || null, ownerUserId: session.userId });
     setBusy(false);
     if (!result.ok) setFailed(result);
   };
 
   return (
-    <Modal maxWidth={560} gap={18} onClose={close}>
-      <ModalHeader title="New company" sub="Every company starts as a lead. The name and Company ID (PIB, the tax number) are required; the rest can wait until it becomes an opportunity." />
-      <label className="form-label">
-        Company name
-        <input className="form-input" data-testid="new-company-name" autoFocus value={name} placeholder="e.g. Vega Logistika d.o.o." aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
-        {nameError && (
-          <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
-            {nameError}
-          </span>
-        )}
-        <span className="subform-hint">Name as registered in APR</span>
+    <Modal
+      title="New company"
+      desc="It starts as a lead. Pultly makes it an opportunity by itself once all seven checks are done: name, PIB, MB, address, activity code, owner and a contact with a role in the decision."
+      onClose={dismiss}
+      testId="new-company-dialog"
+    >
+      <label className="gs-label">
+        Name
+        <input
+          className="gs-input"
+          data-testid="new-company-name"
+          autoFocus
+          placeholder="Company name"
+          value={name}
+          maxLength={200}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && name.trim() && void create()}
+        />
       </label>
-      <div className="policy-field-row">
-        <label className="form-label">
-          Company ID (PIB)
-          <input className="form-input" data-testid="new-company-pib" inputMode="numeric" placeholder="9 digits" value={pib} aria-invalid={!!pibError} onChange={(e) => setPib(e.target.value)} style={pibError ? { borderColor: 'var(--danger)' } : undefined} />
-          {pibError && (
-            <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
-              {pibError}
-            </span>
-          )}
-          <span className="subform-hint">The company's ID in Pultly. No two companies can share it.</span>
+      <div className="td-dialog-row">
+        <label className="gs-label">
+          <span>
+            PIB <span className="gs-sub">(optional)</span>
+          </span>
+          <input className="gs-input" data-testid="new-company-pib" inputMode="numeric" placeholder="9 digits" value={pib} aria-invalid={!!pibError || !!existing} onChange={(e) => setPib(e.target.value)} />
         </label>
-        <label className="form-label">
-          Matični broj
-          <input className="form-input" data-testid="new-company-mb" inputMode="numeric" placeholder="8 digits, optional for a lead" value={mb} aria-invalid={!!mbError} onChange={(e) => setMb(e.target.value)} style={mbError ? { borderColor: 'var(--danger)' } : undefined} />
-          {mbError && (
-            <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
-              {mbError}
-            </span>
-          )}
-        </label>
-      </div>
-      <div className="policy-field-row">
-        <label className="form-label">
+        <div className="gs-label">
           Industry
-          <select className="form-input" value={industry} onChange={(e) => setIndustry(e.target.value)}>
-            <option value="">Not set</option>
-            {INDUSTRIES.map((i) => (
-              <option key={i}>{i}</option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          Ownership
-          <select className="form-input" data-testid="new-company-ownership" value={ownership} onChange={(e) => setOwnership(e.target.value as ApiOwnership | '')}>
-            <option value="">Not set</option>
-            <option value="private">Private</option>
-            <option value="state">State</option>
-          </select>
-        </label>
-      </div>
-      <div className="policy-field-row">
-        <label className="form-label">
-          Owner
-          <select className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)}>
-            {owners.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          Source
-          <select className="form-input" value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">Not set</option>
-            {SOURCES.map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {failed ? (
-        <div className="notice-warn" role="alert" data-testid="new-company-error">
-          <span>{failed.error}</span>
-          {failed.existingId && (
-            <span>
-              <button
-                type="button"
-                className="btn-link"
-                onClick={() => {
-                  close();
-                  navigate(paths.company(failed.existingId!));
-                }}
-              >
-                Open the existing company
-              </button>
-            </span>
-          )}
+          <Dropdown label="Industry" value={industry} placeholder="Pick an industry" options={INDUSTRIES.map((i) => ({ value: i, label: i }))} onChange={setIndustry} width="100%" testId="new-company-industry" />
         </div>
-      ) : (
-        <div className="hint-box">A Company ID (PIB) already in the workspace can't be used again, so there are never two records for one firm.</div>
+      </div>
+      {pibError && (
+        <span className="gs-error" role="alert">
+          {pibError}
+        </span>
       )}
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={close}>
+      {existing && (
+        <span className="gs-error" role="alert" data-testid="new-company-pib-taken">
+          This PIB belongs to {existing.name}.{' '}
+          <button type="button" className="cl-link" onClick={() => open(existing.id)}>
+            Open it
+          </button>
+        </span>
+      )}
+      {failed && !failed.existingId && (
+        <span className="gs-error" role="alert" data-testid="new-company-error">
+          {failed.error}
+        </span>
+      )}
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={close}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" data-testid="new-company-create" disabled={busy} onClick={() => void create()}>
-          {busy ? 'Creating…' : 'Create lead'}
+        <button type="button" className="gs-btn primary" data-testid="new-company-create" disabled={busy || !name.trim()} onClick={() => void create()}>
+          {busy ? 'Creating…' : 'Create company'}
         </button>
       </div>
     </Modal>
