@@ -161,7 +161,7 @@ export function Companies() {
                     <td>
                       {c.companyOwner ? (
                         <span className="cl-owner">
-                          <span className="gs-face cl-face" aria-hidden="true">
+                          <span className="gs-face ov-face-sm" aria-hidden="true">
                             {initialsOf(c.companyOwner)}
                           </span>
                           {c.companyOwner}
@@ -170,7 +170,7 @@ export function Companies() {
                         <span className="cl-sub">No owner</span>
                       )}
                     </td>
-                    <td className="num">{c.value ? <b>{c.valueLabel}</b> : <span className="cl-none" aria-label="None" />}</td>
+                    <td className="num">{c.value ? <b>{c.valueLabel}</b> : <span className="cl-none" role="img" aria-label="None" />}</td>
                     <td className="num">{c.lifetimeLabel}</td>
                     <td className="num">{c.contactCount}</td>
                     <td>

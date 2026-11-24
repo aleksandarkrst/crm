@@ -75,12 +75,15 @@ export type UpdateCompany = z.infer<typeof UpdateCompany>;
  * activity's (MT for a meeting), `at` an ISO time; null when nothing happened yet. Entries dated in
  * the future (a planned call) don't count.
  */
+// Qualified by hand: in a select from one table drizzle writes `${companies.id}` as a bare "id",
+// which the subquery would read as its own tables' id.
+const companyId = sql`${companies}.${sql.identifier('id')}`;
 const lastActivityOf = sql<{ channel: string; at: string } | null>`(
   select json_build_object('channel', x.channel, 'at', x.at) from (
     select a.channel, a.occurred_at as at from ${activities} a join ${deals} d on d.id = a.deal_id
-      where d.company_id = ${companies.id} and a.channel is not null and a.occurred_at <= now()
+      where d.company_id = ${companyId} and a.channel is not null and a.occurred_at <= now()
     union all
-    select 'MT', coalesce(m.held_at, m.ends_at) from ${meetings} m where m.company_id = ${companies.id} and m.status = 'held'
+    select 'MT', coalesce(m.held_at, m.ends_at) from ${meetings} m where m.company_id = ${companyId} and m.status = 'held'
   ) x order by x.at desc limit 1)`;
 
 /**

@@ -46,7 +46,7 @@ export function NewCompanyDialog() {
   const create = async () => {
     setTouched(true);
     setFailed(null);
-    if (!name.trim() || (cleanPib && pibProblem(cleanPib)) || taken) return;
+    if (busy || !name.trim() || (cleanPib && pibProblem(cleanPib)) || taken) return;
     setBusy(true);
     const result = await createCompany({ name: name.trim(), pib: cleanPib || null, industry: industry || null, ownerUserId: session.userId });
     setBusy(false);
@@ -82,7 +82,7 @@ export function NewCompanyDialog() {
         </label>
         <div className="gs-label">
           Industry
-          <Dropdown label="Industry" value={industry} placeholder="Pick an industry" options={INDUSTRIES.map((i) => ({ value: i, label: i }))} onChange={setIndustry} width="100%" testId="new-company-industry" />
+          <Dropdown label="Industry" value={industry} placeholder="Pick an industry" options={[{ value: '', label: 'Not set' }, ...INDUSTRIES.map((i) => ({ value: i, label: i }))]} onChange={setIndustry} width="100%" testId="new-company-industry" />
         </div>
       </div>
       {pibError && (

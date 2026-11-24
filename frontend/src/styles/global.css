@@ -2384,7 +2384,7 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cl-sort:hover { color: var(--gs-ink); }
 .cl-sort.on { color: var(--gs-green); }
 .cl-row { cursor: pointer; transition: background 0.15s ease; }
-.cl-row:hover { background: rgba(255, 255, 255, 0.5); }
+.cl-row:hover { background: var(--gs-drop); }
 .gs a.cl-co, .cl-co { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--gs-ink); }
 .gs a.cl-co:hover { color: var(--gs-ink); }
 .cl-tile { flex: none; width: 32px; height: 32px; border-radius: 9px; background: var(--white); box-shadow: inset 0 0 0 1px var(--gs-outline); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--gs-ink-3); }
@@ -2393,7 +2393,6 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cl-sub { font-size: 12px; line-height: 16px; color: var(--gs-text-2); white-space: nowrap; }
 .cl-status { display: inline-flex; align-items: center; gap: 6px; }
 .cl-owner { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.gs-face.cl-face { width: 22px; height: 22px; font-size: 9.5px; }
 .cl-none { display: inline-block; width: 14px; height: 2px; border-radius: 1px; background: var(--gs-faint); vertical-align: middle; }
 .cl-note { font-size: 12px; line-height: 16px; color: var(--gs-amber); }
 .cl-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 14px; padding: 34px 16px; font-size: 13.5px; color: var(--gs-text-2); text-align: center; }
