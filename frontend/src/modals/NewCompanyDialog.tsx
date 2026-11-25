@@ -87,15 +87,15 @@ export function NewCompanyDialog() {
       onClose={dismiss}
       testId="new-company-dialog"
     >
-      <Field label="Name" error={nameError}>
-        <input className="gs-input" data-testid="new-company-name" autoFocus placeholder="Company name" value={name} maxLength={200} aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
+      <Field label="Name" required error={nameError}>
+        <input className="gs-input" data-testid="new-company-name" aria-required="true" autoFocus placeholder="Company name" value={name} maxLength={200} aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
       </Field>
       <div className="td-dialog-row">
-        <Field label="Company ID (PIB)" error={pibError}>
-          <input className="gs-input" data-testid="new-company-pib" inputMode="numeric" placeholder="9 digits" value={pib} aria-invalid={!!pibError || !!existing} onChange={(e) => setPib(e.target.value)} onKeyDown={onEnter} />
+        <Field label="Company ID (PIB)" required error={pibError}>
+          <input className="gs-input" data-testid="new-company-pib" aria-required="true" inputMode="numeric" placeholder="9 digits" value={pib} aria-invalid={!!pibError || !!existing} onChange={(e) => setPib(e.target.value)} onKeyDown={onEnter} />
         </Field>
-        <Field label="Matični broj" error={mbError}>
-          <input className="gs-input" data-testid="new-company-mb" inputMode="numeric" placeholder="8 digits" value={mb} aria-invalid={!!mbError} onChange={(e) => setMb(e.target.value)} onKeyDown={onEnter} />
+        <Field label="Matični broj" required error={mbError}>
+          <input className="gs-input" data-testid="new-company-mb" aria-required="true" inputMode="numeric" placeholder="8 digits" value={mb} aria-invalid={!!mbError} onChange={(e) => setMb(e.target.value)} onKeyDown={onEnter} />
         </Field>
       </div>
       {existing && (
@@ -107,10 +107,10 @@ export function NewCompanyDialog() {
         </span>
       )}
       <div className="td-dialog-row">
-        <Field label="Šifra delatnosti" error={codeError}>
-          <input className="gs-input" data-testid="new-company-activity-code" inputMode="numeric" placeholder="4 digits, e.g. 6201" value={activityCode} aria-invalid={!!codeError} onChange={(e) => setActivityCode(e.target.value)} onKeyDown={onEnter} />
+        <Field label="Šifra delatnosti" required error={codeError}>
+          <input className="gs-input" data-testid="new-company-activity-code" aria-required="true" inputMode="numeric" placeholder="4 digits, e.g. 6201" value={activityCode} aria-invalid={!!codeError} onChange={(e) => setActivityCode(e.target.value)} onKeyDown={onEnter} />
         </Field>
-        <Field label="Ownership" optional div>
+        <Field label="Ownership" div>
           <Dropdown
             label="Ownership"
             value={ownership}
@@ -127,16 +127,16 @@ export function NewCompanyDialog() {
         </Field>
       </div>
       <div className="td-dialog-row">
-        <Field label="Industry" optional div>
+        <Field label="Industry" div>
           <Dropdown label="Industry" value={industry} placeholder="Pick an industry" options={[{ value: '', label: 'Not set' }, ...INDUSTRIES.map((i) => ({ value: i, label: i }))]} onChange={setIndustry} width="100%" testId="new-company-industry" />
         </Field>
-        <Field label="Contact" optional div>
+        <Field label="Contact" div>
           <Dropdown label="Contact" value={contact} placeholder="No contact" options={[{ value: '', label: 'No contact' }, { value: NEW_CONTACT, label: '+ New contact' }, ...contacts]} onChange={setContact} width="100%" testId="new-company-contact" />
         </Field>
       </div>
       {contact === NEW_CONTACT && (
-        <Field label="Contact's full name" error={contactError}>
-          <input className="gs-input" data-testid="new-company-contact-name" autoFocus placeholder="e.g. Marko Petrović" value={contactName} maxLength={200} aria-invalid={!!contactError} onChange={(e) => setContactName(e.target.value)} onKeyDown={onEnter} />
+        <Field label="Contact's full name" required error={contactError}>
+          <input className="gs-input" data-testid="new-company-contact-name" aria-required="true" autoFocus placeholder="e.g. Marko Petrović" value={contactName} maxLength={200} aria-invalid={!!contactError} onChange={(e) => setContactName(e.target.value)} onKeyDown={onEnter} />
         </Field>
       )}
       {movesFrom && <span className="gs-sub">{`This contact moves from ${movesFrom} to the new company.`}</span>}
@@ -158,13 +158,17 @@ export function NewCompanyDialog() {
   );
 }
 
-/** A labelled field with "(optional)" or its error under it. `div` for a dropdown, which is a button of its own. */
-function Field({ label, optional, error, div, children }: { label: string; optional?: boolean; error?: string | null; div?: boolean; children: ReactNode }) {
+/** A labelled field, a red asterisk when it is required, and its error under it. `div` for a dropdown, which is a button of its own. */
+function Field({ label, required, error, div, children }: { label: string; required?: boolean; error?: string | null; div?: boolean; children: ReactNode }) {
   const body = (
     <>
       <span>
         {label}
-        {optional && <span className="gs-sub"> (optional)</span>}
+        {required && (
+          <span className="gs-req" aria-hidden="true">
+            *
+          </span>
+        )}
       </span>
       {children}
       {error && (
