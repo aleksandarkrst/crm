@@ -231,5 +231,16 @@ describe('the companies list', () => {
     const last = rows.find((r) => r.id === busy.id)!.lastActivity!;
     expect(last.channel).toBe('PH');
     expect(Math.abs(new Date(last.at).getTime() - new Date(day(-2)).getTime())).toBeLessThan(1000);
+
+    // A meeting with the company that was held is newer still: it is the last activity now.
+    const start = Date.now() - 2 * 3_600_000;
+    const meeting = await ok<{ id: string }>('POST', '/crm/meetings', {
+      ...as(),
+      body: { title: 'Site visit', type: 'visit', companyId: busy.id, dealId: deal.id, startsAt: new Date(start).toISOString(), endsAt: new Date(start + 3_600_000).toISOString() },
+    });
+    await ok('POST', `/crm/meetings/${meeting.id}/held`, as(), 200);
+    const after = (await ok<Row[]>('GET', '/crm/companies?limit=200', as())).find((r) => r.id === busy.id)!.lastActivity!;
+    expect(after.channel).toBe('MT');
+    expect(new Date(after.at).getTime()).toBeGreaterThan(new Date(day(-1)).getTime());
   });
 });
