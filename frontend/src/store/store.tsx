@@ -1767,14 +1767,28 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /**
        * Creates a company from the New company dialog and opens it. A PIB already in the workspace
        * comes back as the existing company's id, so the dialog can offer to open that one instead.
+       * A contact picked in the dialog moves to the new company; a typed name becomes a new contact
+       * there, owned by you. The company stays created if that second step fails.
        */
-      createCompany: async (input: CompanyInput & { name: string }): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
+      createCompany: async (
+        input: CompanyInput & { name: string; pib: string },
+        contact?: { id: string } | { name: string },
+      ): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
         try {
           const created = await crmApi.createCompany(input);
+          let contactFailed = false;
+          if (contact) {
+            try {
+              if ('id' in contact) await crmApi.updateContact(contact.id, { companyId: created.id }, ver('contact', contact.id));
+              else await crmApi.createContact({ fullName: contact.name, companyId: created.id, ownerUserId: session.userId });
+            } catch {
+              contactFailed = true;
+            }
+          }
           await reload();
           set({ newCompanyOpen: false });
           navigate(paths.company(created.id));
-          flash(input.name + ' created as a lead');
+          flash(input.name + ' created as a lead' + (contactFailed ? ', but the contact could not be added' : ''));
           return { ok: true };
         } catch (err) {
           const existingId = err instanceof ApiError && err.status === 409 ? (err.body as { existingCompanyId?: string } | null)?.existingCompanyId : undefined;

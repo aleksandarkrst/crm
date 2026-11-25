@@ -16,9 +16,6 @@ import { CompanyStatusService } from './company-status.service';
 
 const noSpaces = (v: unknown) => (typeof v === 'string' ? v.replace(/\s/g, '') : v);
 
-/** A PIB as typed: spaces are dropped ("104 052 135" is 104052135), then 9 digits with a valid check digit. */
-export const PibInput = z.preprocess(noSpaces, z.string().refine(pibValid, PIB_MESSAGE));
-
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
   industry: optionalText(100),
@@ -26,9 +23,9 @@ export const CreateCompany = z.object({
   teamSize: optionalText(40),
   source: optionalText(80),
   domain: optionalText(253),
-  // Identity (CD-357). The PIB is optional for a new lead (CD-533) and, once set, can't be cleared (a PATCH
-  // may change it, not null it). It counts towards Opportunity (company-status.ts).
-  pib: PibInput.nullish(),
+  // Identity (CD-357). The PIB is required and, once set, can't be cleared (a PATCH may change it, not null it).
+  // Spaces are dropped ("104 052 135" is 104052135), as the dialogs do, so a spreadsheet's formatting passes.
+  pib: z.preprocess(noSpaces, z.string({ error: 'PIB is required' }).refine(pibValid, PIB_MESSAGE)),
   mb: z.preprocess(noSpaces, optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE)),
   address: optionalText(200),
   city: optionalText(100),
@@ -41,7 +38,7 @@ export const CreateCompany = z.object({
   customFields: CustomFieldValuesInput,
   notes: optionalText(5000),
 });
-export const UpdateCompany = nonEmptyPatch(CreateCompany.partial().extend({ pib: PibInput.optional() }));
+export const UpdateCompany = nonEmptyPatch(CreateCompany.partial());
 
 /**
  * `GET /crm/companies` filters (CD-358): `status=lead,opportunity` keeps those statuses; `outcome=won`
@@ -157,7 +154,7 @@ export class CompaniesService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
-        if (input.pib) await assertPibFree(tx, input.pib);
+        await assertPibFree(tx, input.pib);
         // A create that sends custom field values (a create form) must fill the required ones.
         const { customFields: cfInput, ...fields } = input;
         const cf = await this.customFields.validate(tx, 'company', cfInput, { requireAll: cfInput !== undefined });

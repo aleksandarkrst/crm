@@ -8,7 +8,7 @@ import { CompanyStatusService } from '../companies/company-status.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, type OwnershipType, products, tenants, users } from '../../../shared/database/schema';
-import { CreateCompany, PibInput } from '../companies/companies.service';
+import { CreateCompany } from '../companies/companies.service';
 import { CreateContact } from '../contacts/contacts.service';
 import { CreateDeal } from '../deals/deals.service';
 import { CreateProduct } from '../products/products.service';
@@ -99,8 +99,6 @@ interface Prepared {
 }
 
 const key = (v: string) => v.trim().toLowerCase();
-/** A company row of an import still needs its PIB: rows are matched to companies by it (CD-357). */
-const ImportedCompany = CreateCompany.extend({ pib: PibInput });
 
 /** "14000", "14,000.50", "14.000,50", "€ 14 000" → "14000.50"; anything else is passed on for zod to reject. */
 export function normalizeAmount(raw: string): string {
@@ -323,7 +321,7 @@ export class ImportService {
     if (type === 'deals') {
       for (const row of prep.rows) {
         const v = this.valuesOf(prep, row);
-        const pib = v.companyPib ? PibInput.safeParse(v.companyPib) : undefined; // parsed as companyRef parses it
+        const pib = v.companyPib ? CreateCompany.shape.pib.safeParse(v.companyPib) : undefined; // parsed as companyRef parses it
         const id = (pib?.success && companiesByPib.get(pib.data)) || (v.company ? companiesByName.get(key(v.company)) : undefined);
         if (id) named.add(id);
       }
@@ -455,7 +453,7 @@ export class ImportService {
       ownershipType = ownershipOf(v.ownershipType);
       if (!ownershipType) errors.push(`Ownership: "${v.ownershipType}" is not Private or State`);
     }
-    const parsed = ImportedCompany.safeParse({
+    const parsed = CreateCompany.safeParse({
       name: v.name,
       pib: v.pib || undefined,
       mb: v.mb,
@@ -635,7 +633,7 @@ export class ImportService {
   ): CompanyRef | undefined {
     const name = CreateCompany.shape.name.safeParse(rawName);
     if (!name.success) errors.push(...zodErrors(name.error, 'Company'));
-    const pib = rawPib ? PibInput.safeParse(rawPib) : undefined;
+    const pib = rawPib ? CreateCompany.shape.pib.safeParse(rawPib) : undefined;
     if (pib && !pib.success) errors.push(...zodErrors(pib.error, 'Company ID (PIB)'));
     if (!name.success || (pib && !pib.success)) return undefined;
 

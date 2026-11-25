@@ -1180,7 +1180,7 @@ export const crmApi = {
     api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
   companies: (ids?: readonly string[]) => all<ApiCompany>(only('/crm/companies', 'ids', ids)),
-  createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
+  createCompany: (input: CompanyInput & { name: string; pib: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
   /** "Set status back…" (a lower status) or "Back to automatic" (null), CD-358. */
