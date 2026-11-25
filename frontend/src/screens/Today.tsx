@@ -132,8 +132,7 @@ export function Today() {
             {dateText}, {leftText(open)}
           </span>
           <button type="button" className="gs-btn primary td-new" data-testid="today-new-todo" onClick={() => set({ taskOpen: true, taskEditId: null, taskQuick: true })}>
-            <Icon name="plus" size={14} />
-            To-do
+            Add task
           </button>
         </div>
         <div className="ov-fbar">

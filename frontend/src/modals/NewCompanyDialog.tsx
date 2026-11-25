@@ -1,9 +1,8 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { askConfirm } from '../components/ConfirmDialog';
+import { useState, type ReactNode } from 'react';
 import type { ApiOwnership } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, mbProblem, pibProblem } from '../lib/serbianIds';
-import { Dropdown, Modal } from '../screens/settings/parts';
+import { Confirm, Dropdown, Modal } from '../screens/settings/parts';
 import { INDUSTRIES } from '../store/seed';
 import { allPeople } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -53,16 +52,12 @@ export function NewCompanyDialog() {
     .map((p) => ({ value: p.contactId!, label: p.company ? `${p.name}, ${p.company}` : p.name }));
 
   const close = () => set({ newCompanyOpen: false });
-  // Escape, the backdrop and × ask before dropping what was typed (CD-490); Cancel doesn't.
-  const asking = useRef(false);
+  // Escape, the backdrop and × ask before dropping what was typed (CD-490), with the glass confirm
+  // over the dialog; Cancel doesn't ask. Escape on the confirm closes only the confirm.
+  const [discarding, setDiscarding] = useState(false);
   const dismiss = () => {
-    if (![name, pib, mb, activityCode, industry, ownership, contact].some(Boolean)) return close();
-    if (asking.current) return;
-    asking.current = true;
-    void askConfirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true }).then((ok) => {
-      asking.current = false;
-      if (ok) close();
-    });
+    if (![name, pib, mb, activityCode, industry, ownership, contact].some(Boolean)) close();
+    else setDiscarding(true);
   };
   const open = (id: string) => {
     close();
@@ -158,6 +153,7 @@ export function NewCompanyDialog() {
           {busy ? 'Creating…' : 'Create company'}
         </button>
       </div>
+      {discarding && <Confirm title="Discard this company?" text="What you entered here is not saved." confirmLabel="Discard" onConfirm={close} onCancel={() => setDiscarding(false)} testId="new-company-discard" />}
     </Modal>
   );
 }

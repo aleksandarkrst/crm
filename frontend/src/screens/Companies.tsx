@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Board, BOARD_CARD, BoardColumn } from '../components/Board';
 import { DataActions } from '../components/DataActions';
 import { FilterRow } from '../components/FilterRow';
-import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { BOARD_STATUSES, dropOutcome } from '../store/companyBoard';
@@ -93,11 +92,10 @@ export function Companies() {
       <div className="ov-fbar cl-bar">
         <FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />
         <span className="cl-actions">
-          <DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />
           <button type="button" className="gs-btn primary cl-new" data-testid="companies-new" onClick={addCompany}>
-            <Icon name="plus" size={14} />
-            New company
+            Add company
           </button>
+          <DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />
         </span>
       </div>
 
@@ -106,8 +104,7 @@ export function Companies() {
           <div className="cl-empty" data-testid="companies-empty">
             <span>No companies yet. Add the first one.</span>
             <button type="button" className="gs-btn primary" onClick={addCompany}>
-              <Icon name="plus" size={14} />
-              New company
+              Add company
             </button>
           </div>
         ) : rows.length === 0 ? (

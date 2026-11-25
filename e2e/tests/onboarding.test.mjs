@@ -44,7 +44,7 @@ describe('first-run onboarding', () => {
     }
     // Companies has the glass list's own empty line and button (CD-533).
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
-    assert.match(await page.$eval('[data-testid=companies-empty]', (el) => el.innerText), /No companies yet\. Add the first one\.\s+New company/);
+    assert.match(await page.$eval('[data-testid=companies-empty]', (el) => el.innerText), /No companies yet\. Add the first one\.\s+Add company/);
     // The action works: "New product" from the empty state opens the dialog.
     await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=empty-state] button.btn-primary');
