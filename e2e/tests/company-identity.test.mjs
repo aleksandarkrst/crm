@@ -48,7 +48,14 @@ describe('company identity', () => {
     await page.type('[data-testid=new-company-activity-code]', '4941');
     await pick('new-company-ownership', 'Private');
     await pick('new-company-contact', '+ New contact');
-    await page.type('[data-testid=new-company-contact-name]', 'Marko Petrović');
+    // The contact opens in a sheet over the dialog; Add takes it back to the dialog, picked.
+    await page.waitForSelector('[data-testid=new-company-contact-sheet]');
+    await page.type('[data-testid=new-contact-name]', 'Marko Petrović');
+    await page.type('[data-testid=new-contact-job-title]', 'Fleet Manager');
+    await pick('new-contact-buyer-role', 'Decision maker');
+    await click(page, '[data-testid=new-contact-add]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-company-contact-sheet]'));
+    assert.equal(await page.$eval('[data-testid=new-company-contact]', (el) => el.textContent.trim()), 'Marko Petrović (new)');
     await click(page, '[data-testid=new-company-create]');
     await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
     await page.waitForFunction(() => /Vega Logistika d\.o\.o\. created as a lead/.test(document.querySelector('.toast')?.textContent ?? ''));
@@ -57,15 +64,15 @@ describe('company identity', () => {
     const made = (await api(page, '/crm/companies')).find((c) => c.name === 'Vega Logistika d.o.o.');
     assert.deepEqual([made.mb, made.activityCode, made.ownershipType], ['20000007', '4941', 'private']);
     const contacts = await api(page, '/crm/contacts');
-    assert.deepEqual(contacts.map((c) => [c.fullName, c.companyId]), [['Marko Petrović', made.id]]);
+    assert.deepEqual(contacts.map((c) => [c.fullName, c.jobTitle, c.buyerRole, c.companyId]), [['Marko Petrović', 'Fleet Manager', 'Decision maker', made.id]]);
   });
 
   step('the list shows the lead with its readiness and what it misses', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     const row = await page.$eval('[data-testid=company-row]', (el) => el.innerText);
-    // Name, PIB, MB, activity code and owner are in: 5 of 7. No address, and the contact has no role yet.
-    assert.match(row, /Vega Logistika d\.o\.o\.[\s\S]*Lead\s+5 of 7 ready[\s\S]*Ida Identity/);
-    assert.match(row, /No activity yet\s+Incomplete record, no address or contact/);
+    // Name, PIB, MB, activity code, owner and a contact with a role are in: 6 of 7. Only the address is missing.
+    assert.match(row, /Vega Logistika d\.o\.o\.[\s\S]*Lead\s+6 of 7 ready[\s\S]*Ida Identity/);
+    assert.match(row, /No activity yet\s+Incomplete record, no address/);
   });
 
   step('the same PIB again names the existing company and opens it', async () => {

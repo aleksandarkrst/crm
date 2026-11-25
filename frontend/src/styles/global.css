@@ -1516,9 +1516,11 @@ textarea.gs-input { height: auto; padding: 8px 12px; line-height: 19px; resize: 
 .gs-move { display: flex; flex-wrap: wrap; gap: 6px; }
 .gs-move button { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--gs-chip); font: inherit; font-size: 13px; color: var(--gs-ink); cursor: pointer; }
 .gs-move button.on { background: var(--gs-green); color: var(--white); }
-/* Layers: the glass sheets and the drawer (50/51) sit under the app's popovers (date picker, 60) and its confirm dialog (70); a glass confirm (52/53) sits over a sheet or the drawer; menus float over all of them (56); the toast is on top (80). */
+/* Layers: the glass sheets and the drawer (50/51) sit under the app's popovers (date picker, 60) and its confirm dialog (70); a glass confirm (52/53) sits over a sheet or the drawer; a stacked sheet (52/53, CD-533) sits over another sheet; menus float over all of them (56); the toast is on top (80). */
 .gs-scrim.confirm { z-index: 52; }
 .gs-dialog-wrap.confirm { z-index: 53; padding-top: 120px; }
+.gs-scrim.stacked { z-index: 52; }
+.gs-dialog-wrap.stacked { z-index: 53; padding-top: 120px; }
 .gs-float { position: fixed; top: auto; right: auto; z-index: 56; }
 .gs-drawer-scrim { position: fixed; inset: 0; z-index: 50; background: var(--gs-scrim); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: gsFade 0.2s ease-out; }
 .gs-drawer { position: fixed; top: 12px; right: 12px; bottom: 12px; z-index: 51; width: min(760px, calc(100% - 24px)); border-radius: 24px; background: rgba(246, 248, 247, 0.97); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(13, 36, 28, 0.22); animation: gsSlide 0.28s var(--gs-ease); font-family: var(--gs-font); color: var(--gs-ink); }

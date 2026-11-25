@@ -1767,12 +1767,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /**
        * Creates a company from the New company dialog and opens it. A PIB already in the workspace
        * comes back as the existing company's id, so the dialog can offer to open that one instead.
-       * A contact picked in the dialog moves to the new company; a typed name becomes a new contact
+       * A contact picked in the dialog moves to the new company; one added with "+ New contact" is created
        * there, owned by you. The company stays created if that second step fails.
        */
       createCompany: async (
         input: CompanyInput & { name: string; pib: string },
-        contact?: { id: string } | { name: string },
+        contact?: { id: string } | { name: string; jobTitle: string; email: string; phone: string; buyerRole: string },
       ): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
         try {
           const created = await crmApi.createCompany(input);
@@ -1780,7 +1780,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           if (contact) {
             try {
               if ('id' in contact) await crmApi.updateContact(contact.id, { companyId: created.id }, ver('contact', contact.id));
-              else await crmApi.createContact({ fullName: contact.name, companyId: created.id, ownerUserId: session.userId });
+              else await crmApi.createContact({ fullName: contact.name, jobTitle: contact.jobTitle || null, email: contact.email || null, phone: contact.phone || null, buyerRole: contact.buyerRole || null, companyId: created.id, ownerUserId: session.userId });
             } catch {
               contactFailed = true;
             }

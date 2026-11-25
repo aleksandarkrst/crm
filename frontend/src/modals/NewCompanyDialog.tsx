@@ -2,17 +2,20 @@ import { useState, type ReactNode } from 'react';
 import type { ApiOwnership } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, mbProblem, pibProblem } from '../lib/serbianIds';
+import { checkEmail, checkPhone } from '../lib/validate';
 import { Confirm, Dropdown, Modal } from '../screens/settings/parts';
-import { INDUSTRIES } from '../store/seed';
+import { BUYER_ROLES, INDUSTRIES } from '../store/seed';
 import { allPeople } from '../store/selectors';
 import { useStore } from '../store/store';
 
+/** Contact dropdown values: "+ New contact" opens the sheet; the contact added there is picked as NEW_CONTACT. */
+const ADD_CONTACT = '__add';
 const NEW_CONTACT = '__new';
 
 /**
  * New company (CD-533, board C-Companies). The name, PIB, Matični broj and Šifra delatnosti are
  * required; industry, ownership and a contact are optional. The contact is one already in the
- * workspace (it moves to the new company) or a new one by name. The company starts as a lead with
+ * workspace (it moves to the new company) or a new one, added in a sheet over this dialog. The company starts as a lead with
  * you as its owner, and its page opens. The IDs are checked as they are typed; a PIB the workspace
  * already has names that company, with a link to it, here and again from the API (a 409) if
  * someone added it meanwhile.
@@ -26,7 +29,8 @@ export function NewCompanyDialog() {
   const [industry, setIndustry] = useState('');
   const [ownership, setOwnership] = useState<ApiOwnership | ''>('');
   const [contact, setContact] = useState('');
-  const [contactName, setContactName] = useState('');
+  const [draft, setDraft] = useState<NewContactDraft | null>(null);
+  const [addingContact, setAddingContact] = useState(false);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ error: string; existingId?: string } | null>(null);
@@ -41,7 +45,6 @@ export function NewCompanyDialog() {
   const mbError = required(cleanMb, 'The Matični broj') ?? (cleanMb && (touched || cleanMb.length >= 8) ? mbProblem(cleanMb) : null);
   const codeCheck = checkActivityCode(code);
   const codeError = required(code, 'The Šifra delatnosti') ?? (code && (touched || code.length >= 4) && !codeCheck.ok ? codeCheck.error : null);
-  const contactError = touched && contact === NEW_CONTACT && !contactName.trim() ? "Type the contact's name, or pick No contact." : null;
   const taken = cleanPib && !pibProblem(cleanPib) ? s.extraCompanies.find((c) => c.id && c.pib === cleanPib) : undefined;
   const existing = taken ? { id: taken.id!, name: taken.name } : failed?.existingId ? { id: failed.existingId, name: s.extraCompanies.find((c) => c.id === failed.existingId)?.name ?? 'another company' } : null;
 
@@ -56,7 +59,7 @@ export function NewCompanyDialog() {
   // over the dialog; Cancel doesn't ask. Escape on the confirm closes only the confirm.
   const [discarding, setDiscarding] = useState(false);
   const dismiss = () => {
-    if (![name, pib, mb, activityCode, industry, ownership, contact].some(Boolean)) close();
+    if (![name, pib, mb, activityCode, industry, ownership, contact].some(Boolean) && !draft) close();
     else setDiscarding(true);
   };
   const open = (id: string) => {
@@ -67,10 +70,10 @@ export function NewCompanyDialog() {
   const create = async () => {
     setTouched(true);
     setFailed(null);
-    const invalid = !name.trim() || !cleanPib || pibProblem(cleanPib) || !cleanMb || mbProblem(cleanMb) || !code || !codeCheck.ok || (contact === NEW_CONTACT && !contactName.trim());
+    const invalid = !name.trim() || !cleanPib || pibProblem(cleanPib) || !cleanMb || mbProblem(cleanMb) || !code || !codeCheck.ok;
     if (busy || invalid || taken) return;
     setBusy(true);
-    const picked = contact === NEW_CONTACT ? { name: contactName.trim() } : contact ? { id: contact } : undefined;
+    const picked = contact === NEW_CONTACT ? (draft ?? undefined) : contact ? { id: contact } : undefined;
     const result = await createCompany(
       { name: name.trim(), pib: cleanPib, mb: cleanMb, activityCode: code, industry: industry || null, ownershipType: ownership || null, ownerUserId: session.userId },
       picked,
@@ -131,14 +134,17 @@ export function NewCompanyDialog() {
           <Dropdown label="Industry" value={industry} placeholder="Pick an industry" options={[{ value: '', label: 'Not set' }, ...INDUSTRIES.map((i) => ({ value: i, label: i }))]} onChange={setIndustry} width="100%" testId="new-company-industry" />
         </Field>
         <Field label="Contact" div>
-          <Dropdown label="Contact" value={contact} placeholder="No contact" options={[{ value: '', label: 'No contact' }, { value: NEW_CONTACT, label: '+ New contact' }, ...contacts]} onChange={setContact} width="100%" testId="new-company-contact" />
+          <Dropdown
+            label="Contact"
+            value={contact}
+            placeholder="No contact"
+            options={[{ value: '', label: 'No contact' }, { value: ADD_CONTACT, label: draft ? 'Edit the new contact' : '+ New contact' }, ...(draft ? [{ value: NEW_CONTACT, label: `${draft.name} (new)` }] : []), ...contacts]}
+            onChange={(v) => (v === ADD_CONTACT ? setAddingContact(true) : setContact(v))}
+            width="100%"
+            testId="new-company-contact"
+          />
         </Field>
       </div>
-      {contact === NEW_CONTACT && (
-        <Field label="Contact's full name" required error={contactError}>
-          <input className="gs-input" data-testid="new-company-contact-name" aria-required="true" autoFocus placeholder="e.g. Marko Petrović" value={contactName} maxLength={200} aria-invalid={!!contactError} onChange={(e) => setContactName(e.target.value)} onKeyDown={onEnter} />
-        </Field>
-      )}
       {movesFrom && <span className="gs-sub">{`This contact moves from ${movesFrom} to the new company.`}</span>}
       {failed && !failed.existingId && (
         <span className="gs-error" role="alert" data-testid="new-company-error">
@@ -153,6 +159,17 @@ export function NewCompanyDialog() {
           {busy ? 'Creating…' : 'Create company'}
         </button>
       </div>
+      {addingContact && (
+        <NewContactSheet
+          initial={draft}
+          onClose={() => setAddingContact(false)}
+          onSave={(d) => {
+            setDraft(d);
+            setContact(NEW_CONTACT);
+            setAddingContact(false);
+          }}
+        />
+      )}
       {discarding && <Confirm title="Discard this company?" text="What you entered here is not saved." confirmLabel="Discard" onConfirm={close} onCancel={() => setDiscarding(false)} testId="new-company-discard" />}
     </Modal>
   );
@@ -179,4 +196,67 @@ function Field({ label, required, error, div, children }: { label: string; requi
     </>
   );
   return div ? <div className="gs-label">{body}</div> : <label className="gs-label">{body}</label>;
+}
+
+/** A contact added with "+ New contact": created with the company. */
+interface NewContactDraft {
+  name: string;
+  jobTitle: string;
+  email: string;
+  phone: string;
+  buyerRole: string;
+}
+
+/**
+ * "+ New contact" in New company: a glass sheet over the dialog (which stays behind it). The full
+ * name is required; a job title and a role in the decision make the contact count towards
+ * Opportunity. Add keeps the contact in the dialog until the company is created; Escape, Cancel
+ * and × close only this sheet.
+ */
+function NewContactSheet({ initial, onSave, onClose }: { initial: NewContactDraft | null; onSave: (d: NewContactDraft) => void; onClose: () => void }) {
+  const [d, setD] = useState<NewContactDraft>(initial ?? { name: '', jobTitle: '', email: '', phone: '', buyerRole: '' });
+  const [touched, setTouched] = useState(false);
+  const field = (k: keyof NewContactDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setD((x) => ({ ...x, [k]: e.target.value }));
+  const email = checkEmail(d.email);
+  const phone = checkPhone(d.phone);
+  const nameError = touched && !d.name.trim() ? "Enter the contact's full name." : null;
+  const emailError = touched && !email.ok ? email.error : null;
+  const phoneError = touched && !phone.ok ? phone.error : null;
+  const save = () => {
+    setTouched(true);
+    if (!d.name.trim() || !email.ok || !phone.ok) return;
+    onSave({ name: d.name.trim(), jobTitle: d.jobTitle.trim(), email: email.value, phone: phone.value, buyerRole: d.buyerRole });
+  };
+  const onEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && save();
+  return (
+    <Modal title="New contact" desc="They are added to the new company when you create it. A job title and a role in the decision complete the contact check." onClose={onClose} stacked testId="new-company-contact-sheet">
+      <Field label="Full name" required error={nameError}>
+        <input className="gs-input" data-testid="new-contact-name" aria-required="true" placeholder="e.g. Marko Petrović" value={d.name} maxLength={200} aria-invalid={!!nameError} onChange={field('name')} onKeyDown={onEnter} />
+      </Field>
+      <div className="td-dialog-row">
+        <Field label="Job title">
+          <input className="gs-input" data-testid="new-contact-job-title" placeholder="e.g. Marketing Director" value={d.jobTitle} maxLength={120} onChange={field('jobTitle')} onKeyDown={onEnter} />
+        </Field>
+        <Field label="Role in the decision" div>
+          <Dropdown label="Role in the decision" value={d.buyerRole} placeholder="Not set" options={[{ value: '', label: 'Not set' }, ...BUYER_ROLES.map((r) => ({ value: r, label: r }))]} onChange={(buyerRole) => setD((x) => ({ ...x, buyerRole }))} width="100%" testId="new-contact-buyer-role" />
+        </Field>
+      </div>
+      <div className="td-dialog-row">
+        <Field label="Email" error={emailError}>
+          <input className="gs-input" data-testid="new-contact-email" type="email" placeholder="name@company.com" value={d.email} aria-invalid={!!emailError} onChange={field('email')} onKeyDown={onEnter} />
+        </Field>
+        <Field label="Phone" error={phoneError}>
+          <input className="gs-input" data-testid="new-contact-phone" type="tel" placeholder="+381 …" value={d.phone} aria-invalid={!!phoneError} onChange={field('phone')} onKeyDown={onEnter} />
+        </Field>
+      </div>
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="gs-btn primary" data-testid="new-contact-add" onClick={save}>
+          {initial ? 'Save contact' : 'Add contact'}
+        </button>
+      </div>
+    </Modal>
+  );
 }
