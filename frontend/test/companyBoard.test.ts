@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { dropOutcome, readiness } from '../src/store/companyBoard.ts';
 
-const complete = { pib: '104532877', mb: '20084693', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000', activityCode: '4941' };
+const complete = { name: 'Vega Logistika', ownerId: 'u0', pib: '104532877', mb: '20084693', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000', activityCode: '4941' };
 const ceo = { name: 'Nikola Ilić', role: 'CEO', buyerRole: 'Decision maker', ownerId: 'u1' };
 
 describe('the readiness line', () => {
@@ -12,9 +12,9 @@ describe('the readiness line', () => {
     assert.deepEqual(readiness(complete, [ceo]), { ready: 7, total: 7, blockers: [], missing: [] });
   });
 
-  it('counts the address as three checks, shown as one item', () => {
+  it('counts the address as one check (CD-533), however many of its parts are missing', () => {
     const r = readiness({ ...complete, address: '', city: ' ', postalCode: '' }, [ceo]);
-    assert.equal(r.ready, 4);
+    assert.equal(r.ready, 6);
     assert.deepEqual(r.blockers, ['Address (street, city and postal code)']);
     assert.deepEqual(r.missing, ['address']);
   });
@@ -24,11 +24,12 @@ describe('the readiness line', () => {
     assert.equal(r.ready, 4);
     assert.deepEqual(r.missing, ['MB', 'activity code', 'contact role in the decision and owner']);
     assert.equal(r.blockers[2], 'A contact with a job title, a role in the decision and an owner: Ana has no role in the decision or owner yet.');
+    assert.deepEqual(readiness({ ...complete, ownerId: null }, [ceo]).missing, ['owner']);
     assert.deepEqual(readiness(undefined, []), {
       ready: 0,
       total: 7,
-      blockers: ['Company ID (PIB)', 'Matični broj', 'Address (street, city and postal code)', 'Šifra delatnosti', 'A contact with a job title, a role in the decision and an owner'],
-      missing: ['company ID', 'MB', 'address', 'activity code', 'a contact'],
+      blockers: ['Name', 'Company ID (PIB)', 'Matični broj', 'Address (street, city and postal code)', 'Šifra delatnosti', 'Company owner', 'A contact with a job title, a role in the decision and an owner'],
+      missing: ['name', 'company ID', 'MB', 'address', 'activity code', 'owner', 'a contact'],
     });
   });
 });

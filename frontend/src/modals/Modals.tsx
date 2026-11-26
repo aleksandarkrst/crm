@@ -220,7 +220,7 @@ function NewDealModal() {
           )}
         </div>
       )}
-      {!companyRec && <div className="hint-box">No company is an opportunity or a client yet. Complete a company first: its identity, address and a contact with a role, a role in the decision and an owner.</div>}
+      {!companyRec && <div className="hint-box">No company is an opportunity or a client yet. Complete a company first: its identity, address, owner and a contact with a job title, a role in the decision and an owner.</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Sale type</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 9 }} role="radiogroup" aria-label="Sale type">

@@ -62,10 +62,16 @@ describe('Lead → Opportunity, by itself', () => {
     expect((await company(c.id)).status).toBe('opportunity');
     expect((await history(c.id))[0]).toMatchObject({ from: 'lead', to: 'opportunity', reason: 'automatic', actorUserId: owner.userId });
 
+    // The company's owner is one of the checks (CD-533): without one it is a lead again.
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { ownerUserId: null } });
+    expect((await company(c.id)).status).toBe('lead');
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { ownerUserId: seller.userId } });
+    expect((await company(c.id)).status).toBe('opportunity');
+
     // Clearing a field takes it back.
     await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: null } });
     expect((await company(c.id)).status).toBe('lead');
-    // The name isn't one of the checks: a company can't be saved without one.
+    // The name is one of the checks, but a company can't be saved without one anyway.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { name: '   ' } })).status).toBe(400);
     // A postal code is five digits (CD-478); spaces are dropped.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: 'abc' } })).status).toBe(400);
@@ -208,5 +214,33 @@ describe('the companies list', () => {
     expect(await names('outcome=won')).toEqual(['Birch Studio', 'Kestrel Logistics', 'Orchard Dental']);
     expect(await names('outcome=lost')).toEqual(['Aspen Clinic', 'Linden Foods']);
     expect((await call('GET', '/crm/companies?status=customer', as())).status).toBe(400);
+  });
+
+  it('gives each company its latest activity on any of its opportunities (CD-533)', async () => {
+    type Row = { id: string; lastActivity: { channel: string; at: string } | null };
+    const quiet = await newCompany('Quiet Willow');
+    const busy = await readyCompany('Busy Maple');
+    const deal = await newDeal(busy.id);
+    const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
+    await ok('POST', `/crm/deals/${deal.id}/activities`, { ...as(), body: { channel: 'EM', title: 'Sent the offer', occurredAt: day(-5) } });
+    await ok('POST', `/crm/deals/${deal.id}/activities`, { ...as(), body: { channel: 'PH', title: 'Called the CFO', occurredAt: day(-2) } });
+    // One dated in the future doesn't count yet.
+    await ok('POST', `/crm/deals/${deal.id}/activities`, { ...as(), body: { channel: 'MT', title: 'Planned visit', occurredAt: day(3) } });
+    const rows = await ok<Row[]>('GET', '/crm/companies?limit=200', as());
+    expect(rows.find((r) => r.id === quiet.id)!.lastActivity).toBeNull();
+    const last = rows.find((r) => r.id === busy.id)!.lastActivity!;
+    expect(last.channel).toBe('PH');
+    expect(Math.abs(new Date(last.at).getTime() - new Date(day(-2)).getTime())).toBeLessThan(1000);
+
+    // A meeting with the company that was held is newer still: it is the last activity now.
+    const start = Date.now() - 2 * 3_600_000;
+    const meeting = await ok<{ id: string }>('POST', '/crm/meetings', {
+      ...as(),
+      body: { title: 'Site visit', type: 'visit', companyId: busy.id, dealId: deal.id, startsAt: new Date(start).toISOString(), endsAt: new Date(start + 3_600_000).toISOString() },
+    });
+    await ok('POST', `/crm/meetings/${meeting.id}/held`, as(), 200);
+    const after = (await ok<Row[]>('GET', '/crm/companies?limit=200', as())).find((r) => r.id === busy.id)!.lastActivity!;
+    expect(after.channel).toBe('MT');
+    expect(new Date(after.at).getTime()).toBeGreaterThan(new Date(day(-1)).getTime());
   });
 });

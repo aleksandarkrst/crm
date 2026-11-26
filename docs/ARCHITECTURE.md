@@ -2552,7 +2552,8 @@ A company's status is computed, never picked: `companies.status` (`lead`, `oppor
 `past_client`, `not_interested`), with `status_changed_at` and `status_set_manually`. The rules are
 plain functions in `crm/companies/company-status.ts` (unit tests in `test/company-status.spec.ts`):
 
-- **Lead** until 7 checks pass: PIB, matični broj, street, city, postal code, šifra delatnosti, and a
+- **Lead** until 7 checks pass: name, PIB, matični broj, address (street, city and postal code count as
+  one), šifra delatnosti, a company owner, and a
   contact with a job title, a role in the decision and an owner (`opportunityReadiness`, which also
   words what is missing). Then **Opportunity**.
 - **Client** once an opportunity is won or the company has a project that wasn't cancelled; **Past
@@ -2602,6 +2603,18 @@ further back is set by hand (`PATCH …/status`, if the person may); one further
 company page opens with a toast saying how it gets there (Past client → Client counts as further
 on, though its column is to the left). A lead without a PIB can't be dragged. A past client's
 "Last project done" month is its `status_changed_at`.
+
+**Companies list (CD-533)**, the glass table of board C-Companies: pinned filters Status, Company
+owner and Industry (`COMPANY_PINNED` in `store/filterFields.ts`), the top bar search on this page
+filters the rows (`s.listSearch`, `matchesSearch`), and the default order is client, opportunity,
+past client, lead, not interested, each by open value (`LIST_STATUS_ORDER`); a header click sorts by
+that column. A lead shows "N of 7 ready" and an amber "Incomplete record, no …" line
+(`store/companyList.ts`, unit-tested in `test/companyList.test.ts`). Last activity comes from the API:
+`GET /crm/companies` returns `lastActivity` (`{ channel, at }`), the newest timeline entry with a
+channel on any of the company's opportunities or a held meeting with it, never one dated in the
+future. New company (`modals/NewCompanyDialog.tsx`) asks for the name, PIB, matični broj and šifra
+delatnosti, and optionally the industry, ownership and a contact: an existing one moves to the new
+company, and "+ New contact" opens a stacked glass sheet whose contact is created with the company.
 
 ### Pipeline entry and sale type (CD-360)
 

@@ -636,13 +636,16 @@ function useOverlay(onClose: () => void) {
   return box;
 }
 
-/** A centred glass sheet with a title, a line and its content (portalled to body). */
-export function Modal({ title, desc, onClose, children, wide, testId }: { title: string; desc?: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; testId?: string }) {
+/**
+ * A centred glass sheet with a title, a line and its content (portalled to body). `stacked` opens
+ * it over another sheet (CD-533): its scrim then dims the sheet below.
+ */
+export function Modal({ title, desc, onClose, children, wide, stacked, testId }: { title: string; desc?: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; stacked?: boolean; testId?: string }) {
   const box = useOverlay(onClose);
   return createPortal(
     <div className="gs-tokens">
-      <div className="gs-scrim" onClick={onClose} />
-      <div className="gs-dialog-wrap">
+      <div className={'gs-scrim' + (stacked ? ' stacked' : '')} onClick={onClose} />
+      <div className={'gs-dialog-wrap' + (stacked ? ' stacked' : '')}>
         <div ref={box} className={'gs-sheet gs-glass' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label={title} data-testid={testId}>
           <h2>{title}</h2>
           {desc && <p className="gs-sub" style={{ margin: 0 }}>{desc}</p>}
