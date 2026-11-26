@@ -77,17 +77,20 @@ describe('new opportunity', () => {
     assert.equal(await saleType.evaluate((el) => el.value), 'transactional');
   });
 
-  step("fills in a lead's missing MB and job title right in the dialog, then creates the opportunity", async () => {
+  step("fills in a lead's missing MB and the contact's role in the decision right in the dialog, then creates the opportunity", async () => {
     const me = (await api(page, '/profile')).userId;
     const { mb: _mb, ...rest } = READY_IDENTITY;
     const id = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Orion Tech', pib: testPib(), ...rest }) })).id;
-    const person = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: id, fullName: 'Ana Petrović', buyerRole: 'Decision maker', ownerUserId: me }) })).id;
+    // "Not involved" doesn't count (CD-534): the form asks for the role, and doesn't offer Not involved.
+    const person = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: id, fullName: 'Ana Petrović', buyerRole: 'Not involved', ownerUserId: me }) })).id;
     await page.goto(`${BASE_URL}/contacts/${person}`, { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForSelector('[data-testid=new-deal-complete-form]');
     assert.equal(await page.$eval('[data-testid=new-deal-create]', (el) => el.disabled), true);
+    assert.equal(await page.$('[data-testid=new-deal-complete-form] input[aria-label="Job title"]'), null, 'no job title asked');
+    assert.ok(!(await page.$$eval('[data-testid=new-deal-complete-form] select[aria-label="Role in the decision"] option', (els) => els.map((o) => o.textContent))).includes('Not involved'));
     await setValue(page, '[data-testid=new-deal-complete-form] input[aria-label="Matični broj"]', READY_IDENTITY.mb);
-    await setValue(page, '[data-testid=new-deal-complete-form] input[aria-label="Job title"]', 'CEO');
+    await setValue(page, '[data-testid=new-deal-complete-form] select[aria-label="Role in the decision"]', 'Decision maker');
     await click(page, '[data-testid=new-deal-complete-save]');
     // Complete now: an opportunity, so the warning goes and Create works.
     await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-lead]'));

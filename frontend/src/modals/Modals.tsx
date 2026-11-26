@@ -9,11 +9,12 @@ import { deviceTimeZone } from '../lib/timeZones';
 import { DateRangePicker } from '../components/DateRangePicker';
 import { Dropdown, Modal as GlassModal } from '../screens/settings/parts';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
+import { countsInDecision, NOT_INVOLVED } from '../store/companyBoard';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, opportunityName, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
-import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
+import type { ChannelCode, CompanyStatus, Lead, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
@@ -273,11 +274,13 @@ function CompleteCompany({ companyId }: { companyId: string }) {
   const extra = s.extraCompanies.find((c) => c.id === companyId);
   const blank = (v: string | undefined) => !v || !v.trim();
   const fields = ([['mb', 'Matični broj', '8 digits'], ['address', 'Street', 'Street and number'], ['city', 'City', 'City'], ['postalCode', 'Postal code', '21000'], ['activityCode', 'Šifra delatnosti', '4 digits, e.g. 6201']] as const).filter(([k]) => blank(extra?.[k]));
+  // The company's owner is one of the checks (CD-533); without one the form asks for it, you first.
+  const needsOwner = !extra?.ownerId;
   const people = companyContacts(s, companyId);
-  const gaps = (p: Person) => [blank(p.role) && 'role', blank(p.buyerRole) && 'buyerRole', !p.ownerId && 'ownerId'].filter((g): g is 'role' | 'buyerRole' | 'ownerId' => !!g);
-  const ready = people.some((p) => gaps(p).length === 0);
-  const person = ready ? undefined : [...people].sort((a, b) => gaps(a).length - gaps(b).length)[0];
-  const contactGaps = ready ? [] : person ? gaps(person) : (['role', 'buyerRole', 'ownerId'] as const).slice();
+  // A contact counts by its role in the decision alone (CD-534): the one without any role is the
+  // smallest step, else whoever is not involved; a company without contacts gets a new one.
+  const ready = people.some((p) => countsInDecision(p.buyerRole));
+  const person = ready ? undefined : (people.find((p) => blank(p.buyerRole)) ?? people[0]);
   const [values, setValues] = useState<Record<string, string>>({ ownerId: session.userId });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -294,13 +297,17 @@ function CompleteCompany({ companyId }: { companyId: string }) {
       if (v && checked && !checked.ok) errs[k] = checked.error;
       company[k] = checked?.ok ? checked.value : v;
     }
+    if (needsOwner) {
+      if (!values.ownerId) errs.ownerId = 'Pick the company owner';
+      else company.ownerUserId = values.ownerId;
+    }
     if (!ready && !person && !(values.fullName ?? '').trim()) errs.fullName = 'Name the contact';
-    for (const g of contactGaps) if (!(values[g] ?? '').trim()) errs[g] = g === 'role' ? 'Fill in the job title' : g === 'buyerRole' ? 'Pick the role in the decision' : 'Pick the owner';
+    if (!ready && !values.buyerRole) errs.buyerRole = 'Pick the role in the decision';
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    const details = { ...(contactGaps.includes('role') ? { jobTitle: values.role!.trim() } : {}), ...(contactGaps.includes('buyerRole') ? { buyerRole: values.buyerRole! } : {}), ...(contactGaps.includes('ownerId') ? { ownerUserId: values.ownerId! } : {}) };
+    const details = ready ? {} : { buyerRole: values.buyerRole! };
     setBusy(true);
-    await completeCompany(companyId, company, ready ? null : person?.contactId ? { id: person.contactId, patch: details } : { create: { fullName: values.fullName!.trim(), ...details } });
+    await completeCompany(companyId, company, ready ? null : person?.contactId ? { id: person.contactId, patch: details } : { create: { fullName: values.fullName!.trim(), ownerUserId: session.userId, ...details } });
     setBusy(false);
   };
 
@@ -317,9 +324,21 @@ function CompleteCompany({ companyId }: { companyId: string }) {
   );
   return (
     <div data-testid="new-deal-complete-form" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-      {fields.length > 0 && (
+      {(fields.length > 0 || needsOwner) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {fields.map(([k, label, ph]) => field(k, label, <input className="form-input" aria-label={label} placeholder={ph} value={values[k] ?? ''} onChange={set(k)} />))}
+          {needsOwner &&
+            field(
+              'ownerId',
+              'Company owner',
+              <select className="form-input" aria-label="Company owner" value={values.ownerId ?? ''} onChange={set('ownerId')}>
+                {members.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>,
+            )}
         </div>
       )}
       {!ready && (
@@ -327,30 +346,17 @@ function CompleteCompany({ companyId }: { companyId: string }) {
           <span style={{ fontSize: 12.5, fontWeight: 600 }}>{person ? person.name : 'A contact'}</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {!person && field('fullName', 'Full name', <input className="form-input" aria-label="Contact name" value={values.fullName ?? ''} onChange={set('fullName')} />)}
-            {contactGaps.includes('role') && field('role', 'Job title', <input className="form-input" aria-label="Job title" placeholder="e.g. CEO" value={values.role ?? ''} onChange={set('role')} />)}
-            {contactGaps.includes('buyerRole') &&
-              field(
-                'buyerRole',
-                'Role in the decision',
-                <select className="form-input" aria-label="Role in the decision" value={values.buyerRole ?? ''} onChange={set('buyerRole')}>
-                  <option value="">Pick one</option>
-                  {BUYER_ROLES.map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>,
-              )}
-            {contactGaps.includes('ownerId') &&
-              field(
-                'ownerId',
-                'Owner',
-                <select className="form-input" aria-label="Contact owner" value={values.ownerId ?? ''} onChange={set('ownerId')}>
-                  {members.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>,
-              )}
+            {field(
+              'buyerRole',
+              'Role in the decision',
+              <select className="form-input" aria-label="Role in the decision" value={values.buyerRole ?? ''} onChange={set('buyerRole')}>
+                <option value="">Pick one</option>
+                {/* Not involved wouldn't count: it isn't offered here. */}
+                {BUYER_ROLES.filter((r) => r !== NOT_INVOLVED).map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>,
+            )}
           </div>
         </>
       )}

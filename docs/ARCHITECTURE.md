@@ -2668,7 +2668,8 @@ company, and "+ New contact" opens a stacked glass sheet whose contact is create
   read).
 - The New opportunity dialog lists every company with its status (none when it isn't loaded);
   blocked ones are disabled. One passed in (from its contact's page) shows what it misses, with a form for just those fields (the
-  identity fields and the closest contact's details, or a new contact): "Save and continue", and
+  identity fields, the company owner when it has none, and a role in the decision for the contact closest to counting
+  ("Not involved" isn't offered there), or a new contact; CD-534): "Save and continue", and
   once it is an opportunity the dialog goes on. "Open the company instead" leaves for its page (not
   from a meeting form). "+ New company" closes it and opens the New company dialog. A company
   page's "+ Opportunity" is disabled while it is blocked. Sample companies always get a PIB
