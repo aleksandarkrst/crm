@@ -29,16 +29,19 @@ describe('deleting a company', () => {
     const gone = await ok<{ id: string; name: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Gone d.o.o.' } });
     const ana = await ok<Contact>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Ana Gone', companyId: gone.id, buyerRole: 'User' } });
     const boris = await ok<Contact>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Boris Gone', companyId: gone.id } });
-    // Ana is the primary contact of another company's opportunity (a consultant, say).
+    // Ana is the primary contact and Boris the sponsor and power sponsor (CD-362) of another
+    // company's opportunity (consultants, say): the deal stays and loses them (the sponsor
+    // foreign keys are ON DELETE SET NULL since 0117, the primary contact is cleared here).
     const other = await readyCompany(owner, tenant, 'Stays d.o.o.');
     const deal = await ok<{ id: string }>('POST', '/crm/deals', { ...as(), body: { title: 'Stays deal', funnelId: funnel.id, companyId: other.id, primaryContactId: ana.id } });
+    await ok('PATCH', `/crm/deals/${deal.id}`, { ...as(), body: { sponsorContactId: boris.id, powerSponsorContactId: boris.id } });
 
     await ok('DELETE', `/crm/companies/${gone.id}`, as(admin), 204);
     expect((await call('GET', `/crm/companies/${gone.id}`, as())).status).toBe(404);
     const left = await ok<Contact[]>('GET', '/crm/contacts?limit=200', as());
     expect(left.some((c) => c.id === ana.id || c.id === boris.id)).toBe(false);
     expect(left.some((c) => c.id === other.contactId)).toBe(true);
-    expect(await ok<{ primaryContactId: string | null }>('GET', `/crm/deals/${deal.id}`, as())).toMatchObject({ primaryContactId: null });
+    expect(await ok<{ primaryContactId: string | null; sponsorContactId: string | null; powerSponsorContactId: string | null }>('GET', `/crm/deals/${deal.id}`, as())).toMatchObject({ primaryContactId: null, sponsorContactId: null, powerSponsorContactId: null });
   });
 
   it('is refused with an opportunity or a project, naming why', async () => {
