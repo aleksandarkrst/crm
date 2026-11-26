@@ -35,8 +35,10 @@ describe('company and contact pages', () => {
     contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Alice Abernathy', companyId: company.id, email: 'alice@umbrella.test', jobTitle: 'COO', buyerRole: 'Decision maker' }) });
     deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Umbrella rollout', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
     empty = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Empty Shell d.o.o.' }) });
-    unowned = { id: await createReadyCompany(page, 'Nobody Owns d.o.o.', 'Petar Nikolić', { ownerUserId: null }) };
+    // An owner is one of the seven checks (CD-533): the opportunity is made first, then the owner cleared.
+    unowned = { id: await createReadyCompany(page, 'Nobody Owns d.o.o.', 'Petar Nikolić') };
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Unowned company opportunity', funnelId: funnels[0].id, companyId: unowned.id }) });
+    await api(page, `/crm/companies/${unowned.id}`, { method: 'PATCH', body: JSON.stringify({ ownerUserId: null }) });
     await page.reload({ waitUntil: 'networkidle0' });
   });
 
@@ -281,7 +283,7 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     const item = await page.waitForSelector('[data-testid=delete-company]');
-    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, title: el.title })), { disabled: true, title: 'Umbrella d.o.o. has an opportunity: delete them or move them to another company first' });
+    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, text: el.innerText })), { disabled: true, text: 'Delete company\nUmbrella d.o.o. has an opportunity: delete them or move them to another company first' });
     await page.keyboard.press('Escape');
   });
 

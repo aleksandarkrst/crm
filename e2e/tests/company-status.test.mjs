@@ -49,8 +49,10 @@ describe('company status', () => {
     await page.waitForFunction(() => /^Lead, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
     await click(page, '[data-testid=contact-role]');
     await click(page, '[role=option]::-p-text(Signs off budget)');
+    // The toast shows for five seconds once the status is read back: watch for it from the click on.
+    const toast = page.waitForFunction(() => document.body.innerText.includes('Vega Logistika is now an opportunity. You can add it to the Pipeline.'), { timeout: 15_000 });
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the API moved it');
-    await page.waitForFunction(() => document.body.innerText.includes('Vega Logistika is now an opportunity. You can add it to the Pipeline.'));
+    await toast;
     await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
     assert.equal(await page.$('[data-testid=company-blockers]'), null);
     await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity, automatic (was Lead)'));

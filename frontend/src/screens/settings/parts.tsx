@@ -474,8 +474,11 @@ export function Table({ cols, children, empty, minWidth, testId }: { cols: { lab
   );
 }
 
-/** An item of a ⋯ menu; `disabled` keeps it visible with `title` saying why (CD-534: a company with opportunities can't be deleted). */
-export type MenuItem = { label: string; onClick: () => void; danger?: boolean; disabled?: boolean; title?: string; testId?: string };
+/**
+ * An item of a ⋯ menu; `disabled` keeps it visible with `hint` under it saying why (CD-534: a company with
+ * opportunities can't be deleted), also as the item's tooltip.
+ */
+export type MenuItem = { label: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string; testId?: string };
 
 /** The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). `buttonClass` restyles the button (a record header's 32 px pill). */
 export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain' }: { label: string; items: MenuItem[]; testId?: string; buttonClass?: string }) {
@@ -498,16 +501,23 @@ export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain' }: { 
               key={it.label}
               type="button"
               role="menuitem"
-              className={'gs-opt' + (it.danger ? ' red' : '')}
+              className={'gs-opt' + (it.danger ? ' red' : '') + (it.hint ? ' with-hint' : '')}
               data-testid={it.testId}
               disabled={it.disabled}
-              title={it.title}
+              title={it.hint}
               onClick={() => {
                 setOpen(false);
                 it.onClick();
               }}
             >
-              {it.label}
+              {it.hint ? (
+                <span className="gs-opt-text">
+                  <span>{it.label}</span>
+                  <span className="gs-sub">{it.hint}</span>
+                </span>
+              ) : (
+                it.label
+              )}
             </button>
           ))}
         </FloatMenu>

@@ -558,15 +558,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const refreshCompanyStatus = async (ids: readonly string[]) => {
       try {
         const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
-        // A lead whose seventh check this tab's save completed is an opportunity now (CD-534): say so.
-        const promoted = cur().extraCompanies.filter((c) => c.id && c.status === 'lead' && rows.get(c.id)?.status === 'opportunity');
         set((x) => ({
           extraCompanies: x.extraCompanies.map((c) => {
             const r = c.id ? rows.get(c.id) : undefined;
             return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt, lastActivity: r.lastActivity ?? c.lastActivity } : c;
           }),
         }));
-        if (promoted.length === 1) flash(`${promoted[0]!.name} is now an opportunity. You can add it to the Pipeline.`, 5000);
       } catch {
         // the next refresh catches up
       }

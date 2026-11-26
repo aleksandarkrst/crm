@@ -53,7 +53,7 @@ export function CompanyContactDialog({ companyName, initial, onClose, onSave }: 
       <Field label="Job title">
         <input className="gs-input" data-testid="contact-dialog-title" placeholder="e.g. Finance director" value={d.role} maxLength={120} onChange={field('role')} onKeyDown={onEnter} />
       </Field>
-      <div className="td-dialog-row">
+      <div className="cp-dialog-row">
         <Field label="Email" error={emailError}>
           <input className="gs-input" data-testid="contact-dialog-email" type="email" placeholder="name@company.com" value={d.email} aria-invalid={!!emailError} onChange={field('email')} onKeyDown={onEnter} />
         </Field>

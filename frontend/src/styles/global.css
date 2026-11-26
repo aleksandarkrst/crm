@@ -2382,7 +2382,7 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cp-banner svg { flex: none; }
 .cp-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .cp-checks { display: flex; flex-wrap: wrap; gap: 6px; }
-.cp-check { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--gs-drop-hover); color: var(--gs-amber-ink); }
+.cp-check { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--gs-field); color: var(--gs-amber-ink); }
 .cp-check.done { background: var(--gs-check-bg); color: var(--gs-green); }
 /* Two columns: the main cards, and a right column that moves under them below 900 px. */
 .cp-cols { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
@@ -2444,3 +2444,9 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
   .cp-metric:nth-last-child(-n + 2) { border-bottom: 1px solid var(--gs-divider-2); }
   .cp-metric:last-child { border-bottom: 0; }
 }
+.cp-dialog-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+/* A menu item that is off with the reason under it (CD-534). */
+.gs-opt.with-hint { white-space: normal; max-width: 320px; }
+.gs-opt-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.gs-opt:disabled .gs-opt-text .gs-sub { color: var(--gs-muted); font-weight: 400; }
+

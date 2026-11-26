@@ -13,6 +13,7 @@ import { paths } from '../lib/paths';
 import { checkDomain } from '../lib/validate';
 import { Confirm, Dropdown, Modal, type Opt, RowMenu } from './settings/parts';
 import { CompanyProjects } from './CompanyProjects';
+import { useCompanyProjects } from '../store/projects';
 import { countsInDecision, READINESS_TAGS } from '../store/companyBoard';
 import { historyRows, visibleRows, whenText } from '../store/companyHistory';
 import { cleanValue, type CompanyTextField, contactLine, fieldProblem, metaLine, missingToast, NEEDED_FIELDS, opportunitiesLine, readyLine, STATUS_TAG_TONE, statusTagText } from '../store/companyPage';
@@ -51,6 +52,8 @@ export function Company() {
   const [domainInvalid, setDomainInvalid] = useState(false);
   const current = s.extraCompanies.find((c) => c.id === id);
   const statusKey = `${current?.status}:${current?.statusManual}`;
+  // Its projects (the Projects card loads them too): a company with one can't be deleted.
+  const { data: projects } = useCompanyProjects(id);
   useEffect(() => {
     let live = true;
     companyStatusHistory(id).then(
@@ -61,6 +64,14 @@ export function Company() {
       live = false;
     };
   }, [id, statusKey, companyStatusHistory]);
+  // A lead that becomes an opportunity while this page is open (its seventh check done here, or
+  // elsewhere and read back) gets the toast (CD-534), whichever path brought the status in.
+  const liveStatus = current?.status;
+  const seenStatus = useRef(liveStatus);
+  useEffect(() => {
+    if (seenStatus.current === 'lead' && liveStatus === 'opportunity' && current?.name) flash(`${current.name} is now an opportunity. You can add it to the Pipeline.`, 5000);
+    seenStatus.current = liveStatus;
+  }, [liveStatus, current?.name, flash]);
   if (!rec) return <Navigate to={paths.companies} replace />;
   const extra = s.extraCompanies.find((c) => c.id === rec.id);
   const status: CompanyStatus = extra?.status ?? 'lead';
@@ -108,12 +119,15 @@ export function Company() {
     store.setCompanyField(rec.id, 'source', v);
     flash(`Source changed to ${v}`);
   };
-  const deleteBlock = rec.leads.length ? `${rec.name} has ${rec.leads.length === 1 ? 'an opportunity' : rec.leads.length + ' opportunities'}: delete them or move them to another company first` : null;
+  // A company with opportunities or projects can't be deleted (the API refuses it too): the item stays, off, with why.
+  const projectCount = projects?.length ?? 0;
+  const has = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
+  const deleteBlock = rec.leads.length || projectCount ? `${rec.name} has ${[rec.leads.length ? has(rec.leads.length, 'an opportunity', 'opportunities') : '', projectCount ? has(projectCount, 'a project', 'projects') : ''].filter(Boolean).join(' and ')}: delete them or move them to another company first` : null;
   const ownContacts = people.filter((p) => p.companyId === rec.id);
   const menu = [
     ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setDialog({ kind: 'status' as const }), testId: 'status-set-back' }] : []),
     ...(canSetStatus && manual ? [{ label: 'Back to automatic', onClick: () => void store.setCompanyStatus(rec.id, null), testId: 'status-back-auto' }] : []),
-    ...(store.canDelete ? [{ label: 'Delete company', danger: true, disabled: !!deleteBlock, title: deleteBlock ?? undefined, onClick: () => setDialog({ kind: 'delete' as const }), testId: 'delete-company' }] : []),
+    ...(store.canDelete ? [{ label: 'Delete company', danger: true, disabled: !!deleteBlock, hint: deleteBlock ?? undefined, onClick: () => setDialog({ kind: 'delete' as const }), testId: 'delete-company' }] : []),
   ];
   const rev = JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, extra?.source, ownerId, extra?.domain, extra?.notes, extra?.pib, extra?.mb, extra?.activityCode, extra?.ownershipType, extra?.address, extra?.city, extra?.postalCode, people.map((p) => `${p.contactId ?? p.id}:${p.buyerRole ?? ''}`).join()]);
 
@@ -156,9 +170,7 @@ export function Company() {
 
         {status === 'lead' && (
           <div className="cp-banner" role="status" data-testid="company-blockers">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-            </svg>
+            <Icon name="warn" size={18} />
             <span className="cp-banner-text">
               <b>{readyLine(readiness, [...missingTags])}</b>
               <span className="cp-checks">
@@ -472,9 +484,10 @@ function CompanyHistory({ id, activity, rev, tz }: { id: string; activity: LogEn
         .catch(() => setFailed(true)),
     [id, loadChanges],
   );
-  // On open at once; after an edit or a live update shortly after (owner and source save at once).
+  // On open at once; after an edit or a live update once the store has sent it (typed fields and the
+  // source go out after a 600 ms pause; the owner at once).
   useEffect(() => {
-    const t = setTimeout(() => void load(shown.current), entries === null ? 0 : 500);
+    const t = setTimeout(() => void load(shown.current), entries === null ? 0 : 1100);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `entries` only picks the delay
   }, [load, touched, rev]);
