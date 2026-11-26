@@ -647,15 +647,20 @@ function useOverlay(onClose: () => void) {
   const box = useRef<HTMLDivElement>(null);
   // Escape closes only the top overlay (a confirm over the drawer closes the confirm).
   useEscape(true, onClose);
+  // What opened the overlay, read on the first render: a field inside with autoFocus has the focus
+  // by the time the effect runs, and the focus could never go back to the opener (CD-534).
+  const [before] = useState(() => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null));
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
     const first = box.current?.querySelector<HTMLElement>('input:not([disabled]), select, textarea, button:not([disabled])');
     first?.focus();
-    // Only to an element still on the page: a confirm closing with the sheet under it would
-    // otherwise send the focus to the sheet's field as it goes, and the page loses it (CD-534).
+    // Back to the opener, if it is still on the page and nothing else took the focus meanwhile (a
+    // confirm closing with the sheet under it, or the page that moved on).
     return () => {
-      if (before?.isConnected) before.focus?.();
+      const now = document.activeElement;
+      const lost = !now || now === document.body || !now.isConnected;
+      if (before?.isConnected && lost) before.focus?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, []);
   return box;
 }
