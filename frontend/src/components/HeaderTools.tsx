@@ -10,10 +10,33 @@ import { NewMenu } from './NewMenu';
 
 /** The middle of every screen's header (CD-80): search (opens the command palette) and "+" (not on Settings, where there is nothing to create). */
 export function HeaderCenter({ create = true }: { create?: boolean }) {
-  const { set, session } = useStore();
+  const { s, set, session } = useStore();
   const { pathname } = useLocation();
   // The Projects module searches its own records first (CD-229).
   const placeholder = currentModule(pathname, session.userId).id === 'projects' ? 'Search projects, tasks, opportunities' : 'Search opportunities, companies, contacts';
+  // On Companies the search filters the table as you type (CD-533); Ctrl K still opens the palette.
+  if (pathname === paths.companies)
+    return (
+      <div className="header-center">
+        <label className="search-trigger search-field">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m20 20-4.2-4.2" />
+          </svg>
+          <input
+            type="search"
+            className="search-input"
+            data-testid="list-search"
+            aria-label="Search companies"
+            placeholder="Search companies"
+            value={s.listSearch}
+            onChange={(e) => set({ listSearch: e.target.value })}
+          />
+          <kbd className="kbd">{SEARCH_SHORTCUT}</kbd>
+        </label>
+        {create && <NewMenu />}
+      </div>
+    );
   return (
     <div className="header-center">
       <button type="button" className="search-trigger" data-testid="global-search" aria-label="Search and commands" onClick={() => set({ paletteOpen: true })}>

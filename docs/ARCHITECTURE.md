@@ -2642,6 +2642,18 @@ company page opens with a toast saying how it gets there (Past client → Client
 on, though its column is to the left). A lead without a PIB can't be dragged. A past client's
 "Last project done" month is its `status_changed_at`.
 
+**Companies list (CD-533)**, the glass table of board C-Companies: pinned filters Status, Company
+owner and Industry (`COMPANY_PINNED` in `store/filterFields.ts`), the top bar search on this page
+filters the rows (`s.listSearch`, `matchesSearch`), and the default order is client, opportunity,
+past client, lead, not interested, each by open value (`LIST_STATUS_ORDER`); a header click sorts by
+that column. A lead shows "N of 7 ready" and an amber "Incomplete record, no …" line
+(`store/companyList.ts`, unit-tested in `test/companyList.test.ts`). Last activity comes from the API:
+`GET /crm/companies` returns `lastActivity` (`{ channel, at }`), the newest timeline entry with a
+channel on any of the company's opportunities or a held meeting with it, never one dated in the
+future. New company (`modals/NewCompanyDialog.tsx`) asks for the name, PIB, matični broj and šifra
+delatnosti, and optionally the industry, ownership and a contact: an existing one moves to the new
+company, and "+ New contact" opens a stacked glass sheet whose contact is created with the company.
+
 ### Pipeline entry and sale type (CD-360)
 
 - Only a company that is an **opportunity or a client** takes an opportunity: Opportunity, Client

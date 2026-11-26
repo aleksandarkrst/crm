@@ -30,7 +30,6 @@ describe('first-run onboarding', () => {
   step('each main screen has an empty state with the action that fills it', async () => {
     const screens = [
       ['/pipeline', 'No opportunities yet', 'New opportunity'],
-      ['/companies', 'No companies yet', 'Add company'],
       ['/contacts', 'No contacts yet', 'New contact'],
       ['/products', 'No products or services yet', 'New product'],
       ['/today', 'Nothing to do yet', 'New opportunity'],
@@ -43,6 +42,9 @@ describe('first-run onboarding', () => {
       const hasAction = await page.$$eval('[data-testid=empty-state] button', (bs, action) => bs.some((b) => b.textContent.trim() === action), action);
       assert.ok(hasAction, `${path}: ${action}`);
     }
+    // Companies has the glass list's own empty line and button (CD-533).
+    await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
+    assert.match(await page.$eval('[data-testid=companies-empty]', (el) => el.innerText), /No companies yet\. Add the first one\.\s+Add company/);
     // The action works: "New product" from the empty state opens the dialog.
     await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=empty-state] button.btn-primary');

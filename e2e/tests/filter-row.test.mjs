@@ -104,25 +104,48 @@ describe('filter row', () => {
     await clearFilters(page);
   });
 
-  step('Companies: + Filter lists every field, the new custom one tagged; Industry and Tier together', async () => {
+  step('Companies: Status, Company owner and Industry are pinned (CD-533); + Filter lists every other field, the new custom one tagged; Industry and Tier together', async () => {
+    const row = '[data-testid=company-row]';
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
-    await waitRows(page, 2);
+    await waitRows(page, 2, row);
+    assert.deepEqual((await chips(page)).slice(0, 3), ['status', 'owner', 'industry']);
     const offered = await offeredFields(page);
-    for (const id of ['name', 'industry', 'hq', 'size', 'source', 'pib', 'ownership', 'city', 'domain', 'openValue', 'lifetimeValue', 'cf:' + tier.id]) assert.ok(offered.includes(id), `offers ${id}`);
-    assert.ok(!offered.includes('owner'), 'the pinned Salesperson is not offered again');
+    for (const id of ['name', 'hq', 'size', 'source', 'pib', 'ownership', 'city', 'domain', 'openValue', 'lifetimeValue', 'cf:' + tier.id]) assert.ok(offered.includes(id), `offers ${id}`);
+    for (const id of ['owner', 'status', 'industry']) assert.ok(!offered.includes(id), `the pinned ${id} is not offered again`);
     // The custom field has the Custom tag and the list popover of its type, without any code for it.
     await addFilter(page, 'cf:' + tier.id);
     await pickOption(page, 'cf:' + tier.id, tier.options.find((o) => o.label === 'Gold').id);
     await closePopover(page);
     assert.equal(await chipText(page, 'cf:' + tier.id), 'Tier Gold');
-    await waitRows(page, 1);
-    assert.match((await rowsText(page))[0], /Acme Freight/);
-    await addFilter(page, 'industry');
+    await waitRows(page, 1, row);
+    assert.match((await rowsText(page, row))[0], /Acme Freight/);
+    await openChip(page, 'industry');
     await pickOption(page, 'industry', 'Wine');
     await closePopover(page);
-    assert.match(await emptyCard(page), /No companies match these filters/);
+    const empty = await page.waitForSelector('[data-testid=companies-no-match]');
+    assert.match(await empty.evaluate((x) => x.innerText), /No companies match these filters\.\s+Clear filters/);
     await clearFilters(page);
-    await waitRows(page, 2);
+    await waitRows(page, 2, row);
+  });
+
+  step('Companies: the top bar search filters the table as you type (CD-533); a column header sorts it', async () => {
+    const row = '[data-testid=company-row]';
+    const names = () => page.$$eval(`${row} .cl-co b`, (els) => els.map((el) => el.textContent));
+    await page.type('[data-testid=list-search]', 'bolt');
+    await waitRows(page, 1, row);
+    assert.match((await rowsText(page, row))[0], /Bolt Wine/);
+    await page.$eval('[data-testid=list-search]', (el) => el.select());
+    await page.type('[data-testid=list-search]', 'nothing like it');
+    await page.waitForSelector('[data-testid=companies-no-match]');
+    await click(page, '[data-testid=companies-no-match] button');
+    await waitRows(page, 2, row);
+    assert.equal(await page.$eval('[data-testid=list-search]', (el) => el.value), '');
+    // Company sorts by name, A to Z, then Z to A; the active header is the green one with an arrow.
+    await click(page, '.cl-table th:first-child .cl-sort');
+    assert.deepEqual(await names(), ['Acme Freight', 'Bolt Wine']);
+    await click(page, '.cl-table th:first-child .cl-sort');
+    assert.deepEqual(await names(), ['Bolt Wine', 'Acme Freight']);
+    assert.equal(await page.$eval('.cl-sort.on', (el) => el.textContent), 'Company↓');
   });
 
   step('Contacts: Buyer role and Email contains, then Email is empty; remembered after a reload', async () => {

@@ -122,12 +122,21 @@ describe('company and contact pages', () => {
     await page.waitForSelector('[data-testid=new-company-name]');
     await page.type('[data-testid=new-company-name]', 'TEST-CD490-esc');
     await page.keyboard.press('Escape');
-    // Cancel keeps the dialog and what was typed.
-    assert.equal(await confirmInApp(page, { ok: false }), 'Discard your changes?');
+    // The glass confirm (CD-533): Cancel keeps the dialog and what was typed.
+    await page.waitForSelector('[data-testid=new-company-discard]');
+    assert.equal(await page.$eval('[data-testid=new-company-discard] h2', (el) => el.textContent), 'Discard this company?');
+    await click(page, '[data-testid=new-company-discard] .gs-btn:not(.red)');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-company-discard]'));
     assert.equal(await page.$eval('[data-testid=new-company-name]', (el) => el.value), 'TEST-CD490-esc');
+    // Escape on the confirm closes only the confirm.
     await page.keyboard.press('Escape');
-    assert.equal(await confirmInApp(page), 'Discard your changes?');
-    await page.waitForFunction(() => !document.querySelector('.modal'));
+    await page.waitForSelector('[data-testid=new-company-discard]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-company-discard]'));
+    assert.ok(await page.$('[data-testid=new-company-dialog]'), 'the dialog stays');
+    await page.keyboard.press('Escape');
+    await click(page, '[data-testid=new-company-discard] [data-testid=gs-confirm]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-company-dialog]'));
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'new-menu');
   });
 

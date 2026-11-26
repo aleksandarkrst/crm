@@ -1,106 +1,188 @@
-import { useMemo, useState } from 'react';
-import { Board, BOARD_CARD, BoardColumn /* , ViewToggle */ } from '../components/Board';
-import { FilterBar, SortHeader, useSort } from '../components/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Board, BOARD_CARD, BoardColumn } from '../components/Board';
 import { DataActions } from '../components/DataActions';
-import { EmptyState } from '../components/EmptyState';
-import { FilterEmpty, FilterRow } from '../components/FilterRow';
+import { FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
+import { paths } from '../lib/paths';
 import { BOARD_STATUSES, dropOutcome } from '../store/companyBoard';
+import { incompleteNote, LIST_STATUS_ORDER, lastActivityText, matchesSearch } from '../store/companyList';
 import { companiesCsv } from '../store/exportCsv';
 import { companyPageFields, filterPeople } from '../store/filterFields';
 import { applyFilters, clearAll } from '../store/filters';
-import { COMPANY_STATUS_LABELS, companyReadiness, type CompanyRecord, companyRecords, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { COMPANY_STATUS_LABELS, companyReadiness, type CompanyRecord, companyRecords, initialsOf, isoInZone, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { CompanyStatus } from '../store/types';
-// import { useBoardView } from '../store/useBoardView';
 import { usePageFilters } from '../store/usePageFilters';
 
-// minmax(0, …): every row gets the same column widths whatever its content (CD-479); long text ends in "…".
-/** Column shares: each header (with its sort arrow) fits its column at the table's 1580px (CD-479 QA). */
-const COLS = [1.5, 1.05, 0.8, 1, 0.95, 0.75, 0.9, 0.9, 1.3, 1.05, 1.3, 1.15, 0.95, 1.05, 0.75].map((f) => `minmax(0, ${f}fr)`).join(' ');
-type Key = 'name' | 'pib' | 'status' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
-const HEADERS: { key: Key; label: string }[] = [
+/** The status tags (CD-530 colours): Lead amber, Opportunity blue, Client green, Past client grey, Not interested red. */
+const TAG: Record<CompanyStatus, string> = { lead: 'amber', opportunity: 'blue', client: 'green', past_client: '', not_interested: 'red' };
+
+type Key = 'name' | 'status' | 'owner' | 'open' | 'lifetime' | 'contacts' | 'last';
+const COLUMNS: { key: Key; label: string; num?: boolean }[] = [
   { key: 'name', label: 'Company' },
-  { key: 'pib', label: 'Company ID' },
   { key: 'status', label: 'Status' },
-  { key: 'ownership', label: 'Ownership' },
-  { key: 'industry', label: 'Industry' },
-  { key: 'hq', label: 'HQ' },
-  { key: 'size', label: 'Team size' },
-  { key: 'contactCount', label: 'Contacts' },
-  { key: 'oppCount', label: 'Opportunities' },
-  { key: 'value', label: 'Open value' },
-  { key: 'lifetimeValue', label: 'Lifetime value' },
-  { key: 'stageName', label: 'Latest stage' },
-  { key: 'owner', label: 'Owner' },
-  { key: 'lastTouch', label: 'Last touch' },
-  { key: 'source', label: 'Source' },
+  { key: 'owner', label: 'Company owner' },
+  { key: 'open', label: 'Open value', num: true },
+  { key: 'lifetime', label: 'Lifetime value', num: true },
+  { key: 'contacts', label: 'Contacts', num: true },
+  { key: 'last', label: 'Last activity' },
 ];
-const NUMERIC = new Set<Key>(['value', 'lifetimeValue', 'oppCount', 'contactCount']);
+/** Numbers and dates sort highest (newest) first on the first click. */
+const DESC_FIRST = new Set<Key>(['open', 'lifetime', 'contacts', 'last']);
 
+interface Row extends CompanyRecord {
+  /** "3 of 7 ready" for a lead (CD-533), and its amber note when its PIB, address or contact is missing. */
+  ready: string;
+  note: string | null;
+  lastText: string;
+}
+
+/**
+ * Companies (CD-533): every company with its automatic status, owner and value, in a glass table.
+ * The pinned filters are Status, Company owner and Industry, "+ Filter" adds any other; the top bar
+ * search filters the table as you type. By default clients come first, then opportunities, past
+ * clients, leads and not interested, each by open value; a column header sorts by that column.
+ */
 export function Companies() {
-  const { s, addCompany, openCompany, session } = useStore();
+  const { s, set, addCompany, openCompany, session } = useStore();
   const fields = useMemo(() => companyPageFields(s), [s]);
-  const [filters, setFilters] = usePageFilters('companies', { order: ['owner'], f: { owner: { vals: [] } } });
-  const { sort, toggle } = useSort<Key>('name');
-  // The Kanban is switched off for now (owner, 25 Oct): a drag that can't move a card felt odd. The
-  // table is the page; the toggle and CompaniesBoard below come back with it.
-  // const [view, setView] = useBoardView('crm.companiesView');
+  const [filters, setFilters] = usePageFilters('companies', clearAll(fields));
+  const [sort, setSort] = useState<{ key: Key; dir: 1 | -1 } | null>(null);
+  // The search belongs to this page: leaving it clears the top bar.
+  useEffect(() => () => set({ listSearch: '' }), [set]);
 
-  // Status sorts in its order (Not interested, Lead, Opportunity, Past client, Client), not by name.
-  const sortVal = (c: CompanyRecord) => (sort.key === 'status' ? c.statusRank : NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
-  const rows = applyFilters(companyRecords(s), fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth })
-    .sort((a, b) => {
-      const av = sortVal(a);
-      const bv = sortVal(b);
-      return (av > bv ? 1 : av < bv ? -1 : 0) * sort.dir;
+  const tz = s.workspace.timezone;
+  const today = todayIso(tz);
+  const all = companyRecords(s);
+  const rows: Row[] = applyFilters(all, fields, filters, { today, fiscalMonth: s.workspace.fiscalMonth })
+    .filter((c) => matchesSearch(s.listSearch, [c.name, c.pib, c.industry, c.city, c.companyOwner]))
+    .map((c) => {
+      const r = c.statusKey === 'lead' ? companyReadiness(s, c.id) : null;
+      return {
+        ...c,
+        ready: r ? `${r.ready} of ${r.total} ready` : '',
+        note: r ? incompleteNote({ pib: !c.pib, address: r.missing.includes('address'), contact: r.missing.includes('a contact') }) : null,
+        lastText: lastActivityText(c.lastActivity && { channel: c.lastActivity.channel, day: isoInZone(new Date(c.lastActivity.at), tz) }, today),
+      };
     });
+  const value = (c: Row, key: Key): string | number => {
+    if (key === 'name') return c.name.toLowerCase();
+    if (key === 'status') return LIST_STATUS_ORDER[c.statusKey];
+    if (key === 'owner') return c.companyOwner.toLowerCase();
+    if (key === 'open') return c.value;
+    if (key === 'lifetime') return c.lifetimeValue;
+    if (key === 'contacts') return c.contactCount;
+    return c.lastActivity?.at ?? '';
+  };
+  const cmp = (a: string | number, b: string | number) => (a > b ? 1 : a < b ? -1 : 0);
+  rows.sort((a, b) =>
+    sort
+      ? cmp(value(a, sort.key), value(b, sort.key)) * sort.dir || a.name.localeCompare(b.name)
+      : LIST_STATUS_ORDER[a.statusKey] - LIST_STATUS_ORDER[b.statusKey] || b.value - a.value || a.name.localeCompare(b.name),
+  );
+  const toggle = (key: Key) => setSort((cur) => (cur?.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: DESC_FIRST.has(key) ? -1 : 1 }));
+  const clear = () => {
+    setFilters(clearAll(fields));
+    set({ listSearch: '' });
+  };
 
   return (
     <Screen title="Companies">
-      <FilterBar
-        // lead={<ViewToggle value={view} onChange={setView} testId="companies-view" />}
-        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />}
-        meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
-        extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
-        action={{ label: 'New company', onClick: addCompany }}
-      />
-      {companyRecords(s).length === 0 ? (
-        <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
-      ) : rows.length === 0 ? (
-        <FilterEmpty noun="companies" onClear={() => setFilters(clearAll(fields))} />
-      ) : /* view === 'board' ? <CompaniesBoard rows={rows} /> : */ (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 1580 }}>
-            <div className="table-head cells-clip" style={{ gridTemplateColumns: COLS }}>
-              {HEADERS.map((h) => (
-                <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
-              ))}
-            </div>
-            {rows.map((c) => (
-              <div key={c.id} className="table-row clickable cells-clip" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
-                <span style={{ fontWeight: 600 }} title={c.name}>{c.name}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No company ID</span>}</span>
-                <span style={{ color: 'var(--text-2)' }} data-testid="company-row-status">
-                  {c.status}
-                </span>
-                <span style={{ color: 'var(--text-2)' }} title={c.ownership}>{c.ownership}</span>
-                <span style={{ color: 'var(--text-2)' }} title={c.industry}>{c.industry}</span>
-                <span style={{ color: 'var(--text-2)' }} title={c.hq}>{c.hq}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.size}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.contactCount}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.oppCount}</span>
-                <span style={{ color: 'var(--brand)' }}>{c.valueLabel}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.lifetimeLabel}</span>
-                <span style={{ fontSize: 12.5 }} title={c.stageName}>{c.stageName}</span>
-                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }} title={c.owner}>{c.owner}</span>
-                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.lastTouch}</span>
-                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }} title={c.source}>{c.source}</span>
-              </div>
-            ))}
+      <div className="ov-fbar cl-bar">
+        <FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />
+        <span className="cl-actions">
+          <button type="button" className="gs-btn primary cl-new" data-testid="companies-new" onClick={addCompany}>
+            Add company
+          </button>
+          <DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />
+        </span>
+      </div>
+
+      <section className="gs-glass cl-card">
+        {all.length === 0 ? (
+          <div className="cl-empty" data-testid="companies-empty">
+            <span>No companies yet. Add the first one.</span>
+            <button type="button" className="gs-btn primary" onClick={addCompany}>
+              Add company
+            </button>
           </div>
-        </div>
-      )}
+        ) : rows.length === 0 ? (
+          <div className="cl-empty" data-testid="companies-no-match">
+            <span>No companies match these filters.</span>
+            <button type="button" className="cl-link" onClick={clear}>
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="cl-scroll">
+            <table className="cl-table" data-testid="companies-table">
+              <thead>
+                <tr>
+                  {COLUMNS.map((col) => {
+                    const on = sort?.key === col.key;
+                    return (
+                      <th key={col.key} className={col.num ? 'num' : undefined} aria-sort={on ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+                        <button type="button" className={'cl-sort' + (on ? ' on' : '')} onClick={() => toggle(col.key)}>
+                          {col.label}
+                          {on && <span aria-hidden="true">{sort.dir === 1 ? '↑' : '↓'}</span>}
+                        </button>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => (
+                  <tr key={c.id} className="cl-row" data-testid="company-row" onClick={() => openCompany(c.id)}>
+                    <td>
+                      {/* The row opens the company; the link is there for keyboards and a new tab. */}
+                      <Link to={paths.company(c.id)} className="cl-co" onClick={(e) => e.stopPropagation()}>
+                        <span className="cl-tile" aria-hidden="true">
+                          {initialsOf(c.name)}
+                        </span>
+                        <span className="cl-text">
+                          <b>{c.name}</b>
+                          {(c.industry || c.city) && <span className="cl-sub">{[c.industry, c.city].filter(Boolean).join(', ')}</span>}
+                        </span>
+                      </Link>
+                    </td>
+                    <td>
+                      <span className="cl-status">
+                        <span className={'gs-badge ' + TAG[c.statusKey]} data-testid="company-row-status">
+                          {COMPANY_STATUS_LABELS[c.statusKey]}
+                        </span>
+                        {c.ready && <span className="cl-sub">{c.ready}</span>}
+                      </span>
+                    </td>
+                    <td>
+                      {c.companyOwner ? (
+                        <span className="cl-owner">
+                          <span className="gs-face ov-face-sm" aria-hidden="true">
+                            {initialsOf(c.companyOwner)}
+                          </span>
+                          {c.companyOwner}
+                        </span>
+                      ) : (
+                        <span className="cl-sub">No owner</span>
+                      )}
+                    </td>
+                    <td className="num">{c.value ? <b>{c.valueLabel}</b> : <span className="cl-none" role="img" aria-label="None" />}</td>
+                    <td className="num">{c.lifetimeLabel}</td>
+                    <td className="num">{c.contactCount}</td>
+                    <td>
+                      <span className="cl-text">
+                        <span className={c.lastActivity ? undefined : 'cl-sub'}>{c.lastText}</span>
+                        {c.note && <span className="cl-note">{c.note}</span>}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </Screen>
   );
 }
@@ -138,7 +220,7 @@ export function CompaniesBoard({ rows }: { rows: CompanyRecord[] }) {
   return (
     <>
       <div className="hint-box" style={{ marginBottom: 14 }}>
-        Statuses move by themselves: <b style={{ color: 'var(--ink)' }}>Lead → Opportunity</b> once identity, address and a complete contact are in, <b style={{ color: 'var(--ink)' }}>→ Client</b> when an opportunity is won,{' '}
+        Statuses move by themselves: <b style={{ color: 'var(--ink)' }}>Lead → Opportunity</b> once identity, address, owner and a complete contact are in, <b style={{ color: 'var(--ink)' }}>→ Client</b> when an opportunity is won,{' '}
         <b style={{ color: 'var(--ink)' }}>→ Past client</b> when the last project ends. Drag a card to the left to set it back by hand; dragging to the right opens what is still missing.
       </div>
       <Board tall testId="companies-board">

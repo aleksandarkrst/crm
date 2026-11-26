@@ -888,6 +888,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     /**
+     * The writes that move a contact to another company (CD-464, CD-533): the contact row, then the
+     * deals of their old company where they are the primary contact get another contact of that
+     * company, or none. Both the contact page and the New company dialog move a contact this way.
+     */
+    const moveContact = async (contactId: string, companyId: string) => {
+      const x = cur();
+      const p = allPeople(x).find((y) => y.contactId === contactId);
+      const oldCompanyId = p ? companyIdOfPerson(x, p) : null;
+      const affected = x.leads.filter((l) => l.contactId === contactId);
+      // Only a contact of the same company replaces them; a contact without a company has no colleagues.
+      const promoted = affected.length && oldCompanyId ? allPeople(x).find((y) => y.contactId && y.contactId !== contactId && companyIdOfPerson(x, y) === oldCompanyId) : undefined;
+      await crmApi.updateContact(contactId, { companyId }, ver('contact', contactId));
+      for (const l of affected) await crmApi.updateDeal(l.id, { primaryContactId: promoted?.contactId ?? null });
+    };
+
+    /**
      * Moves a contact to another company (CD-464), with no deal: any company, deals or not. A moved
      * primary contact is replaced on their old company's deals by another contact of that company, if
      * there is one.
@@ -898,15 +914,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const target = companyRecords(x).find((c) => c.id === companyId);
       const contactId = p?.contactId;
       if (!p || !target || !contactId || companyId === companyIdOfPerson(x, p)) return;
-      const oldCompanyId = companyIdOfPerson(x, p);
-      const affected = p.primary ? x.leads.filter((l) => l.contactId === contactId) : [];
-      // Only a contact of the same company replaces them; a contact without a company has no colleagues.
-      const promoted = affected.length && oldCompanyId ? allPeople(x).find((y) => y.contactId && y.contactId !== contactId && companyIdOfPerson(x, y) === oldCompanyId) : undefined;
       void save(
-        async () => {
-          await crmApi.updateContact(contactId, { companyId }, ver('contact', contactId));
-          for (const l of affected) await crmApi.updateDeal(l.id, { primaryContactId: promoted?.contactId ?? null });
-        },
+        () => moveContact(contactId, companyId),
         async () => {
           await reload();
           navigate(paths.contact(contactId), { replace: true });
@@ -1807,14 +1816,29 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       /**
        * Creates a company from the New company dialog and opens it. A PIB already in the workspace
        * comes back as the existing company's id, so the dialog can offer to open that one instead.
+       * A contact picked in the dialog moves to the new company (moveContact: their old company's deals
+       * lose them as primary contact, CD-533); one added with "+ New contact" is created there, owned by
+       * you. The company stays created if that second step fails.
        */
-      createCompany: async (input: CompanyInput & { name: string; pib: string }): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
+      createCompany: async (
+        input: CompanyInput & { name: string; pib: string },
+        contact?: { id: string } | { name: string; jobTitle: string; email: string; phone: string; buyerRole: string },
+      ): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
         try {
           const created = await crmApi.createCompany(input);
+          let contactFailed = false;
+          if (contact) {
+            try {
+              if ('id' in contact) await moveContact(contact.id, created.id);
+              else await crmApi.createContact({ fullName: contact.name, jobTitle: contact.jobTitle || null, email: contact.email || null, phone: contact.phone || null, buyerRole: contact.buyerRole || null, companyId: created.id, ownerUserId: session.userId });
+            } catch {
+              contactFailed = true;
+            }
+          }
           await reload();
           set({ newCompanyOpen: false });
           navigate(paths.company(created.id));
-          flash(input.name + ' added as a lead');
+          flash(input.name + ' created as a lead' + (contactFailed ? ', but the contact could not be added' : ''));
           return { ok: true };
         } catch (err) {
           const existingId = err instanceof ApiError && err.status === 409 ? (err.body as { existingCompanyId?: string } | null)?.existingCompanyId : undefined;

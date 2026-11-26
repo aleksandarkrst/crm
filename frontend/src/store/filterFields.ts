@@ -174,14 +174,21 @@ export function opportunityFields(s: State, funnel: SegKey | null, pinned: strin
   return fields.map((f) => (pinned.includes(f.id) ? { ...f, pinned: true } : f));
 }
 
-/** Companies: every company field, then the numbers of its opportunities. */
+/** The Companies list's pinned chips, in order (CD-533). */
+export const COMPANY_PINNED = ['status', 'owner', 'industry'];
+
+/** Companies: every company field, then the numbers of its opportunities. Status, Company owner and Industry are pinned (CD-533). */
 export function companyPageFields(s: State): FilterField<CompanyRecord>[] {
   const records = companyRecords(s);
   const unit = currencySymbol(curOf(s));
   const g = 'Opportunities';
+  const own = companyFields(s, (c: CompanyRecord) => c, { group: 'Company', prefix: '', records, own: true });
+  const owner: FilterField<CompanyRecord> = { id: 'owner', label: 'Company owner', group: 'Company', kind: 'person', get: (c) => c.companyOwnerId };
+  // The pinned ones first, in their order: the row's chips and Clear filters follow this order.
+  const pinned = COMPANY_PINNED.map((id) => [owner, ...own].find((f) => f.id === id)!).map((f) => ({ ...f, pinned: true }));
   return [
-    { id: 'owner', label: 'Salesperson', group: 'Company', kind: 'person', pinned: true, get: (c) => c.ownerId },
-    ...companyFields(s, (c: CompanyRecord) => c, { group: 'Company', prefix: '', records, own: true }),
+    ...pinned,
+    ...own.filter((f) => !COMPANY_PINNED.includes(f.id)),
     { id: 'stage', label: 'Latest stage', group: g, kind: 'list', icon: 'status', options: optionsOf([], records.map((c) => c.stageName)), get: (c) => c.stageName },
     { id: 'opps', label: 'Opportunities', group: g, kind: 'number', get: (c) => c.oppCount },
     { id: 'openValue', label: 'Open value', group: g, kind: 'number', icon: 'value', unit, get: (c) => c.value },
