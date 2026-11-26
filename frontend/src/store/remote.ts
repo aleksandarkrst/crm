@@ -445,6 +445,7 @@ export async function loadWorkspace(role: ApiRole, only?: ReadonlySet<Part>, cha
     status: c.status,
     statusManual: c.statusSetManually,
     statusChangedAt: c.statusChangedAt,
+    lastActivity: c.lastActivity ?? null,
   }));
 
   // Everyone who isn't already shown as a lead's primary contact.

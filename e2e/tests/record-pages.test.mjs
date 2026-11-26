@@ -2,9 +2,20 @@
 // has its own header with owner, "+ Deal" (starting from this company or contact) and Delete in
 // the menu, and sections for its details, deals, contacts, tasks and history. CD-209: the company's
 // domain (a link) and notes, and the contact's LinkedIn, edit in place and show in the history.
+// CD-534: the company page is the glass board C-Company (breadcrumb, status tag, Company
+// information, Contacts with their own dialog, Details with owner and source dropdowns, one History).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, confirmInApp, createNew, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+
+/** Presses the red button of a glass confirm on the company page (CD-534) and resolves to its title. */
+async function confirmCompanyGlass(page, testId) {
+  const dialog = await page.waitForSelector(`[data-testid=${testId}]`);
+  const title = await dialog.evaluate((el) => el.querySelector('h2').textContent);
+  await click(page, `[data-testid=${testId}] [data-testid=gs-confirm]`);
+  await page.waitForFunction((id) => !document.querySelector(`[data-testid=${id}]`), {}, testId);
+  return title;
+}
 
 describe('company and contact pages', () => {
   const browser = useBrowser();
@@ -31,10 +42,15 @@ describe('company and contact pages', () => {
 
   step('the company page: screen name in the header, the record below, its opportunities and contacts', async () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Umbrella d.o.o.');
+    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.textContent === 'Umbrella d.o.o.');
     assert.equal(await page.$eval('header.crm-topbar h1', (el) => el.textContent), 'Companies');
+    // The glass header (CD-534): breadcrumb, status tag and the meta line.
+    assert.equal(await page.$eval('[data-testid=company-status]', (el) => el.textContent), 'Opportunity, automatic');
+    assert.match(await page.$eval('[data-testid=company-meta]', (el) => el.textContent), /^Ready for the Pipeline, owner Rhea Records$/);
+    assert.equal(await page.$('[data-testid=company-blockers]'), null, 'no readiness banner on an opportunity');
     assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Open opportunities \(1\)[\s\S]*Umbrella rollout/);
-    assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Alice Abernathy/);
+    assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Alice Abernathy[\s\S]*COO, alice@umbrella.test/);
+    assert.equal(await page.$eval('[data-testid=company-opportunities]', (el) => el.textContent), '1 opportunity');
     assert.ok(!(await text(page)).includes('Delete company'), 'Delete is in the menu');
     assert.ok(await setByLabel(page, 'HQ', 'Beograd'), 'HQ field found');
     assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + company.id)).hq === 'Beograd'), 'HQ saved');
@@ -168,50 +184,105 @@ describe('company and contact pages', () => {
 
   step('a company without an owner shows "No owner", not the owner of its opportunity', async () => {
     await page.goto(`${BASE_URL}/companies/${unowned.id}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Nobody Owns d.o.o.');
-    assert.equal(await page.$eval('select[aria-label="Owner"]', (el) => el.value), '');
-    assert.equal(await page.$eval('select[aria-label="Owner"]', (el) => el.selectedOptions[0].textContent), 'No owner');
+    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.textContent === 'Nobody Owns d.o.o.');
+    assert.equal(await page.$eval('[data-testid=company-owner]', (el) => el.dataset.value), '');
+    assert.equal(await page.$eval('[data-testid=company-owner]', (el) => el.textContent), 'No owner');
+    // Without an owner it is a lead (CD-533): the banner names the missing check.
+    assert.equal(await page.$eval('[data-testid=company-status]', (el) => el.textContent), 'Lead, automatic');
+    assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /6 of 7 ready\. Missing: Owner\./);
   });
 
-  step('"Add a contact" on a company without opportunities adds the contact to that company', async () => {
+  step('"+ Contact" on a company without opportunities adds the contact to that company (CD-534)', async () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
-    await click(page, 'button[aria-label="Add a contact"]');
-    await page.waitForSelector('.modal input[placeholder="e.g. Ana Marković"]');
-    assert.equal(await page.$eval('.modal input[readonly]', (el) => el.value), 'Empty Shell d.o.o.');
-    await page.type('.modal input[placeholder="e.g. Ana Marković"]', 'Nora Newhire');
-    // A contact added here is complete (CD-361): job title and role in the decision.
-    await page.type('.modal input[placeholder="e.g. Marketing Director"]', 'Office manager');
-    await page.evaluate(() => {
-      const select = [...document.querySelectorAll('.modal select')].find((el) => [...el.options].some((o) => o.value === 'Champion'));
-      select.value = 'Champion';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await clickButton(page, 'Add contact');
-    await page.waitForFunction(() => !document.querySelector('.modal'));
+    await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('No contacts yet'));
+    await click(page, '[data-testid=company-add-contact]');
+    await page.waitForSelector('[data-testid=company-contact-dialog]');
+    assert.equal(await page.$eval('[data-testid=company-contact-dialog] h2', (el) => el.textContent), 'New contact at Empty Shell d.o.o.');
+    // The name is required: pressed empty, the dialog says so and stays.
+    await click(page, '[data-testid=contact-dialog-save]');
+    await page.waitForFunction(() => document.body.innerText.includes("Enter the contact's name."));
+    await page.type('[data-testid=contact-dialog-name]', 'Nora Newhire');
+    await page.type('[data-testid=contact-dialog-title]', 'Office manager');
+    await click(page, '[data-testid=contact-dialog-roles] button::-p-text(User)');
+    await click(page, '[data-testid=contact-dialog-save]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=company-contact-dialog]'));
     const added = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nora Newhire'));
     assert.equal(added?.companyId, empty.id);
+    assert.equal(added?.buyerRole, 'User');
     await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('Nora Newhire'));
+    assert.equal(await page.$eval('[data-testid=contact-role]', (el) => el.dataset.value), 'User');
+    assert.equal(await page.$('[data-testid=no-role-badge]'), null, 'a contact with a role has no Missing role tag');
+    // The toast and the history line come at once.
+    await page.waitForFunction(() => document.body.innerText.includes('Nora Newhire added to Empty Shell d.o.o.'));
+    assert.ok((await changesInclude('added Nora Newhire as a contact')).includes('Rhea Records added Nora Newhire as a contact'));
+  });
+
+  step('"Edit contact" changes the contact from the same dialog; "Remove from" unlinks them and keeps them in Contacts', async () => {
+    await click(page, '[data-testid=contact-menu]');
+    await click(page, '[data-testid=contact-edit]');
+    await page.waitForSelector('[data-testid=company-contact-dialog]');
+    assert.equal(await page.$eval('[data-testid=company-contact-dialog] h2', (el) => el.textContent), 'Edit Nora Newhire');
+    assert.equal(await page.$eval('[data-testid=contact-dialog-title]', (el) => el.value), 'Office manager');
+    await page.$eval('[data-testid=contact-dialog-title]', (el) => el.select());
+    await page.keyboard.type('Head of office');
+    await clickButton(page, 'Save');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=company-contact-dialog]'));
+    const nora = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nora Newhire'));
+    assert.equal(nora?.jobTitle, 'Head of office');
+    await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('Head of office'));
+
+    await click(page, '[data-testid=contact-menu]');
+    await click(page, '[data-testid=contact-remove]');
+    assert.equal(await confirmCompanyGlass(page, 'remove-contact-confirm'), 'Remove Nora Newhire from Empty Shell d.o.o.?');
+    await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('No contacts yet'));
+    const kept = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nora Newhire'));
+    assert.equal(kept?.companyId, null, 'the contact stays, without a company');
+    assert.ok((await changesInclude('removed Nora Newhire as a contact')).includes('removed Nora Newhire as a contact'));
   });
 
   step('a company with only a City (as imports fill it) still links to the map (CD-516)', async () => {
     await api(page, `/crm/companies/${empty.id}`, { method: 'PATCH', body: JSON.stringify({ city: 'Novi Sad' }) });
     await page.reload({ waitUntil: 'networkidle0' });
     assert.equal(await page.$eval('input[aria-label="HQ"]', (el) => el.value.replace('—', '')), '', 'no HQ');
-    const link = await page.waitForSelector('a[aria-label="Show Empty Shell d.o.o.\'s city on a map"]');
+    const link = await page.waitForSelector('a[aria-label="Open in Maps"]');
     assert.deepEqual(await link.evaluate((a) => ({ text: a.innerText.trim(), href: a.getAttribute('href'), target: a.target })), {
-      text: 'Novi Sad',
+      text: 'Open in Maps',
       href: 'https://www.google.com/maps/search/?api=1&query=Empty%20Shell%20d.o.o.%2C%20Novi%20Sad',
       target: '_blank',
     });
+  });
+
+  step('a wrong PIB turns the field red and is not saved; the source dropdown saves with a toast', async () => {
+    await page.$eval('[data-testid=company-field-pib]', (el) => el.select());
+    await page.keyboard.type('1234');
+    await page.waitForFunction(() => document.body.innerText.includes('A PIB has 9 digits.'));
+    assert.equal(await page.$eval('[data-testid=company-field-pib]', (el) => el.getAttribute('aria-invalid')), 'true');
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.equal((await api(page, '/crm/companies/' + empty.id)).pib, empty.pib, 'the wrong PIB was not sent');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction((pib) => document.querySelector('[data-testid=company-field-pib]')?.value === pib, {}, empty.pib);
+    await click(page, '[data-testid=company-source]');
+    await click(page, '[role=option]::-p-text(Trade fair)');
+    await page.waitForFunction(() => document.body.innerText.includes('Source changed to Trade fair'));
+    assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + empty.id)).source === 'Trade fair'), 'source saved');
+    assert.ok((await changesInclude('changed Source')).includes('changed Source from empty to Trade fair'));
   });
 
   step('the owner deletes an empty company from the menu', async () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     await clickButton(page, 'Delete company');
-    assert.equal(await confirmInApp(page), `Delete ${empty.name}?`);
+    assert.equal(await confirmCompanyGlass(page, 'delete-company-confirm'), `Delete ${empty.name}?`);
     await page.waitForFunction(() => location.pathname === '/companies');
     assert.ok(await eventually(async () => !(await api(page, '/crm/companies')).some((c) => c.id === empty.id)), 'company deleted');
+  });
+
+  step('a company with an opportunity cannot be deleted: the menu item is off and says why', async () => {
+    await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
+    await click(page, 'button[aria-label="More actions"]');
+    const item = await page.waitForSelector('[data-testid=delete-company]');
+    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, title: el.title })), { disabled: true, title: 'Umbrella d.o.o. has an opportunity: delete them or move them to another company first' });
+    await page.keyboard.press('Escape');
   });
 
   it('throws no uncaught errors in the page', () => {

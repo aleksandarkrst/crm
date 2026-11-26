@@ -558,12 +558,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const refreshCompanyStatus = async (ids: readonly string[]) => {
       try {
         const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
+        // A lead whose seventh check this tab's save completed is an opportunity now (CD-534): say so.
+        const promoted = cur().extraCompanies.filter((c) => c.id && c.status === 'lead' && rows.get(c.id)?.status === 'opportunity');
         set((x) => ({
           extraCompanies: x.extraCompanies.map((c) => {
             const r = c.id ? rows.get(c.id) : undefined;
-            return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt } : c;
+            return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt, lastActivity: r.lastActivity ?? c.lastActivity } : c;
           }),
         }));
+        if (promoted.length === 1) flash(`${promoted[0]!.name} is now an opportunity. You can add it to the Pipeline.`, 5000);
       } catch {
         // the next refresh catches up
       }
@@ -1569,6 +1572,46 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       cancelSaves(contactId);
       await remove(() => crmApi.deleteContact(contactId), paths.contacts, p.name + ' deleted');
     };
+    /**
+     * "Remove from [company]" on the company page (CD-534): the contact stays in Contacts with their
+     * history, no longer at this company nor on its opportunities (primary contact cleared, links dropped).
+     */
+    const removeContactFromCompany = async (personId: string, companyId: string) => {
+      const x = cur();
+      const p = personById(x, personId);
+      const contactId = p?.contactId;
+      const company = companyRecords(x).find((c) => c.id === companyId);
+      if (!p || !contactId || !company) return;
+      cancelSaves(contactId);
+      try {
+        for (const l of company.leads) {
+          if (l.contactId === contactId) await crmApi.updateDeal(l.id, { primaryContactId: null }, ver('deal', l.id));
+          else if ((x.links[l.id] ?? []).includes(p.id)) await crmApi.unlinkContact(l.id, contactId);
+        }
+        if (companyIdOfPerson(x, p) === companyId) await crmApi.updateContact(contactId, { companyId: null }, ver('contact', contactId));
+        await reload();
+        flash(`${p.name} removed from ${company.name}`);
+      } catch (err) {
+        flash('Not removed: ' + errText(err), 7000);
+        await reload();
+      }
+    };
+    /** "Edit contact" on the company page (CD-534): one save of the dialog's fields, then "Contact saved". */
+    const saveContactDetails = async (personId: string, details: { name: string; role: string; email: string; phone: string; buyerRole: string }) => {
+      const p = personById(cur(), personId);
+      const contactId = p?.contactId;
+      if (!p || !contactId || !details.name.trim()) return false;
+      cancelSaves(contactId);
+      try {
+        await crmApi.updateContact(contactId, { fullName: details.name.trim(), jobTitle: details.role.trim() || null, email: details.email.trim() || null, phone: details.phone.trim() || null, buyerRole: details.buyerRole || null }, ver('contact', contactId));
+        await reload();
+        flash('Contact saved');
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err), 7000);
+        return false;
+      }
+    };
 
     // ------------------------------------------------------------ visit plans (CD-134; owners and admins edit)
     const mapPlan = (id: string, fn: (p: VisitPlan) => VisitPlan) => set((x) => ({ visitPlans: x.visitPlans.map((p) => (p.id === id ? fn(p) : p)) }));
@@ -1792,6 +1835,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       completeCompany,
       companyStatusHistory,
       deleteContact,
+      removeContactFromCompany,
+      saveContactDetails,
 
       // ---------------------------------------------------------- creating records
       /**
@@ -1841,9 +1886,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
+          // Named after the company it was added to (the company page, CD-534), else the opportunity.
+          const company = companyId ? companyRecords(cur()).find((x) => x.id === companyId)?.name : undefined;
           await reload();
           set({ contactOpen: false, contactCompanyId: null, contactDealId: '', newContact: EMPTY_CONTACT });
-          flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
+          flash(draft.name + ' added' + (company ? ' to ' + company : lead ? ' to ' + lead.company : ''));
           return c.id;
         } catch (err) {
           flash('Not saved: ' + errText(err));

@@ -4,31 +4,40 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { dropOutcome, readiness } from '../src/store/companyBoard.ts';
 
-const complete = { pib: '104532877', mb: '20084693', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000', activityCode: '4941' };
+const complete = { name: 'Vega Logistika', ownerId: 'u0', pib: '104532877', mb: '20084693', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000', activityCode: '4941' };
 const ceo = { name: 'Nikola Ilić', role: 'CEO', buyerRole: 'Decision maker', ownerId: 'u1' };
+const all = [true, true, true, true, true, true, true];
 
 describe('the readiness line', () => {
   it('is 7 of 7 with nothing missing for a complete company and a qualified contact', () => {
-    assert.deepEqual(readiness(complete, [ceo]), { ready: 7, total: 7, blockers: [], missing: [] });
+    assert.deepEqual(readiness(complete, [ceo]), { ready: 7, total: 7, blockers: [], missing: [], done: all });
   });
 
-  it('counts the address as three checks, shown as one item', () => {
+  it('counts the address as one check (CD-533), however many of its parts are missing', () => {
     const r = readiness({ ...complete, address: '', city: ' ', postalCode: '' }, [ceo]);
-    assert.equal(r.ready, 4);
+    assert.equal(r.ready, 6);
     assert.deepEqual(r.blockers, ['Address (street, city and postal code)']);
     assert.deepEqual(r.missing, ['address']);
+    assert.deepEqual(r.done, [true, true, true, false, true, true, true]);
   });
 
-  it('names what the closest contact lacks, or asks for a contact', () => {
+  it('counts a contact by its role alone (CD-534): not involved or no role does not count', () => {
     const r = readiness({ ...complete, mb: '', activityCode: '' }, [{ name: 'Ana', role: 'CFO', buyerRole: '', ownerId: null }]);
     assert.equal(r.ready, 4);
-    assert.deepEqual(r.missing, ['MB', 'activity code', 'contact role in the decision and owner']);
-    assert.equal(r.blockers[2], 'A contact with a job title, a role in the decision and an owner: Ana has no role in the decision or owner yet.');
+    assert.deepEqual(r.missing, ['MB', 'activity code', 'contact role in the decision']);
+    assert.equal(r.blockers[2], 'A contact with a role in the decision: Ana has no role yet.');
+    assert.deepEqual(readiness(complete, [{ name: 'Ana', buyerRole: 'Not involved' }]).blockers, ['A contact with a role in the decision: Ana is not involved.']);
+    assert.deepEqual(readiness(complete, [{ name: 'Ana', buyerRole: 'Not involved' }, { name: 'Boris' }]).blockers, ['A contact with a role in the decision: Boris has no role yet.']);
+    // No job title or owner needed; an older role still counts.
+    assert.deepEqual(readiness(complete, [{ name: 'Ana', buyerRole: 'User' }]).blockers, []);
+    assert.deepEqual(readiness(complete, [{ name: 'Ana', buyerRole: 'Champion' }]).blockers, []);
+    assert.deepEqual(readiness({ ...complete, ownerId: null }, [ceo]).missing, ['owner']);
     assert.deepEqual(readiness(undefined, []), {
       ready: 0,
       total: 7,
-      blockers: ['Company ID (PIB)', 'Matični broj', 'Address (street, city and postal code)', 'Šifra delatnosti', 'A contact with a job title, a role in the decision and an owner'],
-      missing: ['company ID', 'MB', 'address', 'activity code', 'a contact'],
+      blockers: ['Name', 'Company ID (PIB)', 'Matični broj', 'Address (street, city and postal code)', 'Šifra delatnosti', 'Company owner', 'A contact with a role in the decision'],
+      missing: ['name', 'company ID', 'MB', 'address', 'activity code', 'owner', 'a contact'],
+      done: [false, false, false, false, false, false, false],
     });
   });
 });
