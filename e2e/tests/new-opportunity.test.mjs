@@ -48,13 +48,14 @@ describe('new opportunity', () => {
     // The company page is a lazily loaded screen (CD-24): it renders a moment after the URL changes.
     // Until it does, the contact page's own (enabled) + Opportunity is still there: wait for a
     // field only the company page has.
-    await page.waitForSelector('input[aria-label="Matični broj"]');
+    await page.waitForSelector('[data-testid=company-field-mb]');
     const plus = await page.waitForSelector('[data-testid=record-new-deal]');
-    assert.equal(await plus.evaluate((el) => el.disabled), true, '+ Opportunity is off for a lead');
-    // A checked field saves when it loses the focus, so it takes the focus first.
-    await page.focus('input[aria-label="Matični broj"]');
-    await setValue(page, 'input[aria-label="Matični broj"]', READY_IDENTITY.mb);
-    await page.$eval('input[aria-label="Matični broj"]', (el) => el.blur());
+    // On a lead the button is dimmed (CD-534): it stays clickable and says what is missing.
+    assert.equal(await plus.evaluate((el) => el.getAttribute('aria-disabled')), 'true', '+ Opportunity is off for a lead');
+    // The field saves as it is typed (CD-534), once the value is right.
+    await page.focus('[data-testid=company-field-mb]');
+    await setValue(page, '[data-testid=company-field-mb]', READY_IDENTITY.mb);
+    await page.$eval('[data-testid=company-field-mb]', (el) => el.blur());
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the company is an opportunity');
     await page.waitForFunction(() => /^Opportunity/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
   });

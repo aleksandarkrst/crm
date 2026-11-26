@@ -651,7 +651,11 @@ function useOverlay(onClose: () => void) {
     const before = document.activeElement as HTMLElement | null;
     const first = box.current?.querySelector<HTMLElement>('input:not([disabled]), select, textarea, button:not([disabled])');
     first?.focus();
-    return () => before?.focus?.();
+    // Only to an element still on the page: a confirm closing with the sheet under it would
+    // otherwise send the focus to the sheet's field as it goes, and the page loses it (CD-534).
+    return () => {
+      if (before?.isConnected) before.focus?.();
+    };
   }, []);
   return box;
 }
