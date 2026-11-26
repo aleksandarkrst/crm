@@ -115,6 +115,27 @@ describe('company and contact history', () => {
     expect(p.entries.find((e) => e.field === 'companyId')).toMatchObject({ oldValue: null, newValue: company.id, newLabel: 'History Company' });
     expect(p.entries.find((e) => e.field === 'jobTitle')).toMatchObject({ newValue: 'CFO' });
   });
+
+  it("lists a company's contacts coming, going and changing their role on the company (CD-534)", async () => {
+    const a = await ok('POST', '/crm/companies', { ...asOwner(), body: { pib: testPib(), name: 'Alpha Contacts' } });
+    const b = await ok('POST', '/crm/companies', { ...asOwner(), body: { pib: testPib(), name: 'Beta Contacts' } });
+    const contact = await ok('POST', '/crm/contacts', { ...asSeller(), body: { fullName: 'Mira Mover', companyId: a.id } });
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...asSeller(), body: { buyerRole: 'User' } });
+    // A changed job title is the contact's history, not the company's.
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...asSeller(), body: { jobTitle: 'Buyer' } });
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...asOwner(), body: { companyId: b.id } });
+    const person = { id: contact.id, name: 'Mira Mover' };
+    const onA = (await history('company', a.id)).entries.filter((e) => e.field === 'contact' || e.field === 'contactRole');
+    expect(onA.map((e) => [e.field, e.oldValue, e.newValue, e.label, e.actor?.name])).toEqual([
+      ['contact', person, null, 'Mira Mover', owner.name],
+      ['contactRole', null, 'User', 'Mira Mover', seller.name],
+      ['contact', null, person, 'Mira Mover', seller.name],
+    ]);
+    const onB = () => history('company', b.id).then((h) => h.entries.filter((e) => e.field === 'contact'));
+    expect(await onB()).toMatchObject([{ oldValue: null, newValue: person, actor: { name: owner.name } }]);
+    await ok('DELETE', `/crm/contacts/${contact.id}`, asOwner(), 204);
+    expect((await onB())[0]).toMatchObject({ oldValue: person, newValue: null });
+  });
 });
 
 describe('tenant isolation', () => {

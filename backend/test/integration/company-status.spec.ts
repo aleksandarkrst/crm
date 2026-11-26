@@ -55,17 +55,26 @@ describe('Lead → Opportunity, by itself', () => {
     await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: identity });
     expect((await company(c.id)).status).toBe('lead');
 
-    // A contact without an owner doesn't count; giving it one does.
-    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { ...as(), body: { companyId: c.id, fullName: 'Nikola Ilić', jobTitle: 'Managing director', buyerRole: 'Decision maker', ownerUserId: null } });
+    // A contact counts by its role in the decision alone (CD-534): "Not involved" or no role doesn't,
+    // any other role does, with or without a job title or an owner.
+    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { ...as(), body: { companyId: c.id, fullName: 'Nikola Ilić', buyerRole: 'Not involved', ownerUserId: null } });
     expect((await company(c.id)).status).toBe('lead');
-    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { ownerUserId: seller.userId } });
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { buyerRole: null } });
+    expect((await company(c.id)).status).toBe('lead');
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { buyerRole: 'Signs off budget' } });
     expect((await company(c.id)).status).toBe('opportunity');
     expect((await history(c.id))[0]).toMatchObject({ from: 'lead', to: 'opportunity', reason: 'automatic', actorUserId: owner.userId });
+
+    // The company's owner is one of the checks (CD-533): without one it is a lead again.
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { ownerUserId: null } });
+    expect((await company(c.id)).status).toBe('lead');
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { ownerUserId: seller.userId } });
+    expect((await company(c.id)).status).toBe('opportunity');
 
     // Clearing a field takes it back.
     await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: null } });
     expect((await company(c.id)).status).toBe('lead');
-    // The name isn't one of the checks: a company can't be saved without one.
+    // The name is one of the checks, but a company can't be saved without one anyway.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { name: '   ' } })).status).toBe(400);
     // A postal code is five digits (CD-478); spaces are dropped.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: 'abc' } })).status).toBe(400);

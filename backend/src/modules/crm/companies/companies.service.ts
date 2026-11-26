@@ -1,12 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
+import { activities, companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetingParticipants, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
@@ -67,6 +67,23 @@ export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
 
 /**
+ * The company's latest activity for the Companies list (CD-533): the newest timeline entry with a
+ * channel on any of its opportunities, or a meeting with it that was held. `channel` is the
+ * activity's (MT for a meeting), `at` an ISO time; null when nothing happened yet. Entries dated in
+ * the future (a planned call) don't count.
+ */
+// Qualified by hand: in a select from one table drizzle writes `${companies.id}` as a bare "id",
+// which the subquery would read as its own tables' id.
+const companyId = sql`${companies}.${sql.identifier('id')}`;
+const lastActivityOf = sql<{ channel: string; at: string } | null>`(
+  select json_build_object('channel', x.channel, 'at', x.at) from (
+    select a.channel, a.occurred_at as at from ${activities} a join ${deals} d on d.id = a.deal_id
+      where d.company_id = ${companyId} and a.channel is not null and a.occurred_at <= now()
+    union all
+    select 'MT', coalesce(m.held_at, m.ends_at) from ${meetings} m where m.company_id = ${companyId} and m.status = 'held'
+  ) x order by x.at desc limit 1)`;
+
+/**
  * Two companies in one workspace never share a PIB (CD-357): a 409 that names the existing one, so
  * the New company dialog can offer to open it. The unique index catches a race (a plain 409).
  */
@@ -106,7 +123,7 @@ export class CompaniesService {
           : undefined;
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
+        .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId), lastActivity: lastActivityOf })
         .from(companies)
         .where(
           and(
@@ -179,7 +196,9 @@ export class CompaniesService {
   /**
    * A company with deals or meetings can't be deleted (409): they would lose their customer, so
    * they have to be deleted or moved first. The same goes for a company in a visit plan (CD-134).
-   * Its contacts are kept and no longer belong to a company.
+   * Its contacts go with it (CD-534, as the Delete dialog says): off the deals of other companies
+   * they are the primary contact of and off upcoming meetings, as deleting one contact does
+   * (ContactsService.remove), then deleted. Their history rows stay (record_changes is append-only).
    */
   remove(ctx: TenantContext, id: string) {
     return this.database
@@ -208,9 +227,18 @@ export class CompaniesService {
           const what = planned.n === 1 ? '1 visit plan' : `${planned.n} visit plans`;
           throw new ConflictException(`${company.name} is in ${what}. Remove it from the plans first.`);
         }
-        const detached = await tx.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id)).returning({ id: contacts.id });
+        const own = (await tx.select({ id: contacts.id }).from(contacts).where(eq(contacts.companyId, id))).map((c) => c.id);
+        if (own.length > 0) {
+          await tx.update(deals).set({ primaryContactId: null }).where(inArray(deals.primaryContactId, own));
+          const upcoming = tx
+            .select({ id: meetings.id })
+            .from(meetings)
+            .where(and(eq(meetings.status, 'planned'), gt(meetings.startsAt, new Date())));
+          await tx.delete(meetingParticipants).where(and(inArray(meetingParticipants.contactId, own), inArray(meetingParticipants.meetingId, upcoming)));
+          await tx.delete(contacts).where(inArray(contacts.id, own));
+        }
         await tx.delete(companies).where(eq(companies.id, id));
-        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id, data: { detachedContacts: detached.length } });
+        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id, data: { deletedContacts: own } });
       })
       .catch(mapDbError);
   }

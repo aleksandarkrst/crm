@@ -132,7 +132,12 @@ export const companies = pgTable(
   ],
 );
 
-export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'] as const;
+/**
+ * Roles in the decision (CD-534): the five the app offers, then the four older values contacts may
+ * still carry (kept until someone picks a new role). "Not involved" is a role that doesn't count
+ * towards Opportunity (company-status.ts).
+ */
+export const BUYER_ROLES = ['Decision maker', 'Signs off budget', 'Influencer', 'User', 'Not involved', 'Economic buyer', 'Champion', 'Gatekeeper', 'End user'] as const;
 export type BuyerRole = (typeof BUYER_ROLES)[number];
 
 export const contacts = pgTable(

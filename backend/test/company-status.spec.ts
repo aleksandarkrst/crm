@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeStatus, factsFingerprint, opportunityReadiness, type StatusCompany, type StatusContact } from '../src/modules/crm/companies/company-status';
+import { computeStatus, countsInDecision, factsFingerprint, opportunityReadiness, type StatusCompany, type StatusContact } from '../src/modules/crm/companies/company-status';
 
-const complete: StatusCompany = { name: 'Vega Logistika', pib: '104532877', mb: '21345678', address: 'Bulevar 12', city: 'Beograd', postalCode: '11000', activityCode: '4941' };
+const complete: StatusCompany = { name: 'Vega Logistika', pib: '104532877', mb: '21345678', address: 'Bulevar 12', city: 'Beograd', postalCode: '11000', activityCode: '4941', ownerUserId: 'u0' };
 const qualified: StatusContact = { fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole: 'Champion', ownerUserId: 'u1' };
 const status = (over: Partial<Parameters<typeof computeStatus>[0]> = {}) => computeStatus({ company: complete, contacts: [qualified], opportunities: [], projects: [], ...over });
 
@@ -12,15 +12,30 @@ describe('opportunityReadiness (CD-358)', () => {
 
   it('lists what is missing, the address parts as one line', () => {
     const r = opportunityReadiness({ ...complete, mb: null, address: ' ', postalCode: null, activityCode: '' }, [qualified]);
-    expect(r).toEqual({ ready: 3, total: 7, blockers: ['Matični broj', 'Address (street and postal code)', 'Šifra delatnosti'] });
+    expect(r).toEqual({ ready: 4, total: 7, blockers: ['Matični broj', 'Address (street and postal code)', 'Šifra delatnosti'] });
   });
 
-  it('names the contact closest to qualifying and what it misses', () => {
-    const nikola: StatusContact = { fullName: 'Nikola Ilić', jobTitle: 'Managing director', buyerRole: 'Decision maker', ownerUserId: null };
-    const ana: StatusContact = { fullName: 'Ana Petrović', jobTitle: null, buyerRole: null, ownerUserId: null };
-    expect(opportunityReadiness(complete, [ana, nikola]).blockers).toEqual(['A contact with a job title, a role in the decision and an owner: Nikola Ilić has no owner yet.']);
-    expect(opportunityReadiness(complete, [ana]).blockers[0]).toBe('A contact with a job title, a role in the decision and an owner: Ana Petrović has no job title, role in the decision or owner yet.');
-    expect(opportunityReadiness(complete, []).blockers).toEqual(['A contact with a job title, a role in the decision and an owner']);
+  it('counts the company owner and the name as checks (CD-533)', () => {
+    expect(opportunityReadiness({ ...complete, ownerUserId: null }, [qualified])).toEqual({ ready: 6, total: 7, blockers: ['Company owner'] });
+    expect(opportunityReadiness({ ...complete, name: ' ' }, [qualified]).blockers).toEqual(['Name']);
+    expect(computeStatus({ company: { ...complete, ownerUserId: null }, contacts: [qualified], opportunities: [], projects: [] })).toBe('lead');
+  });
+
+  it('counts a contact by its role in the decision alone (CD-534): not involved or no role does not count', () => {
+    const noTitleNoOwner: StatusContact = { fullName: 'Nikola Ilić', jobTitle: null, buyerRole: 'User', ownerUserId: null };
+    const notInvolved: StatusContact = { fullName: 'Ana Petrović', jobTitle: 'CFO', buyerRole: 'Not involved', ownerUserId: 'u1' };
+    const noRole: StatusContact = { fullName: 'Marko Stanić', jobTitle: 'Purchasing', buyerRole: null, ownerUserId: 'u1' };
+    expect(opportunityReadiness(complete, [noTitleNoOwner]).blockers).toEqual([]);
+    for (const role of ['Decision maker', 'Signs off budget', 'Influencer', 'User', 'Economic buyer', 'Champion', 'Gatekeeper', 'End user']) expect(countsInDecision(role)).toBe(true);
+    expect(countsInDecision('Not involved')).toBe(false);
+    expect(countsInDecision(null)).toBe(false);
+    expect(countsInDecision('  ')).toBe(false);
+    // The one without a role is named first (picking a role is the smallest step), else whoever is not involved.
+    expect(opportunityReadiness(complete, [notInvolved, noRole]).blockers).toEqual(['A contact with a role in the decision: Marko Stanić has no role yet.']);
+    expect(opportunityReadiness(complete, [notInvolved]).blockers).toEqual(['A contact with a role in the decision: Ana Petrović is not involved.']);
+    expect(opportunityReadiness(complete, []).blockers).toEqual(['A contact with a role in the decision']);
+    expect(computeStatus({ company: complete, contacts: [notInvolved, noRole], opportunities: [], projects: [] })).toBe('lead');
+    expect(computeStatus({ company: complete, contacts: [notInvolved, noTitleNoOwner], opportunities: [], projects: [] })).toBe('opportunity');
   });
 });
 

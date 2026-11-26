@@ -1,7 +1,7 @@
 /**
  * Automatic company status (CD-358), as plain rules. The status is computed from the company's data
- * and what happened with it, never picked: Lead until its identity, address and a qualified contact
- * are complete, then Opportunity; Client once an opportunity is won (or it has a project); Past client
+ * and what happened with it, never picked: Lead until its identity, address, owner and a qualified
+ * contact are complete, then Opportunity; Client once an opportunity is won (or it has a project); Past client
  * when its last project is completed and nothing is open; Not interested when every opportunity was
  * lost. A person can only set it back (a lower rank); it stays there until the facts change, and
  * then the automation takes over again (CD-478).
@@ -29,6 +29,8 @@ export interface StatusCompany {
   city: string | null;
   postalCode: string | null;
   activityCode: string | null;
+  /** The company's owner (CD-533: one of the 7 checks). */
+  ownerUserId: string | null;
 }
 
 export interface StatusContact {
@@ -52,32 +54,44 @@ export interface Readiness {
 
 const filled = (v: string | null | undefined) => !!v && v.trim() !== '';
 
-/** The contact closest to qualifying, and what it still misses (job title, role in the decision, owner). */
+/** The one role in the decision that doesn't count (CD-534): the contact is known, but has no say. */
+export const NOT_INVOLVED = 'Not involved';
+
+/**
+ * Whether a contact "has a role in the decision" (CD-534): any role but "Not involved" (Decision
+ * maker, Signs off budget, Influencer, User, or an older value a contact still carries). No role
+ * doesn't count. The job title and the contact's owner are no longer part of the check.
+ */
+export const countsInDecision = (buyerRole: string | null | undefined): boolean => filled(buyerRole) && buyerRole!.trim() !== NOT_INVOLVED;
+
+/** Why no contact counts yet: none, or who has no role (or is not involved). */
 function contactBlocker(contacts: StatusContact[]): string | null {
-  const missing = (c: StatusContact) => [!filled(c.jobTitle) && 'job title', !filled(c.buyerRole) && 'role in the decision', !c.ownerUserId && 'owner'].filter((m): m is string => !!m);
-  if (contacts.some((c) => missing(c).length === 0)) return null;
-  const want = 'A contact with a job title, a role in the decision and an owner';
-  const best = [...contacts].sort((a, b) => missing(a).length - missing(b).length)[0];
-  if (!best) return want;
-  const gaps = missing(best);
-  const list = gaps.length > 1 ? `${gaps.slice(0, -1).join(', ')} or ${gaps[gaps.length - 1]}` : gaps[0];
-  return `${want}: ${best.fullName} has no ${list} yet.`;
+  if (contacts.some((c) => countsInDecision(c.buyerRole))) return null;
+  const want = 'A contact with a role in the decision';
+  if (contacts.length === 0) return want;
+  // The one without any role first: picking a role for them is the smallest step.
+  const named = contacts.find((c) => !filled(c.buyerRole)) ?? contacts[0]!;
+  return filled(named.buyerRole) ? `${want}: ${named.fullName} is not involved.` : `${want}: ${named.fullName} has no role yet.`;
 }
 
-/** The 7 checks: PIB, matični broj, street, city, postal code, šifra delatnosti and a qualified contact. */
+/**
+ * The 7 checks (CD-533): name, PIB, matični broj, address (street, city and postal code together),
+ * šifra delatnosti, the company's owner and a qualified contact. Each counts once ("5 of 7 ready").
+ */
 export function opportunityReadiness(company: StatusCompany, contacts: StatusContact[]): Readiness {
   const address = [!filled(company.address) && 'street', !filled(company.city) && 'city', !filled(company.postalCode) && 'postal code'].filter((p): p is string => !!p);
   const contact = contactBlocker(contacts);
-  // The address is three of the checks, shown as one line.
-  const checks: [missing: number, message: string][] = [
-    [filled(company.pib) ? 0 : 1, 'Company ID (PIB)'],
-    [filled(company.mb) ? 0 : 1, 'Matični broj'],
-    [address.length, `Address (${address.length > 1 ? `${address.slice(0, -1).join(', ')} and ${address[address.length - 1]}` : address[0]})`],
-    [filled(company.activityCode) ? 0 : 1, 'Šifra delatnosti'],
-    [contact ? 1 : 0, contact ?? ''],
+  const checks: [passed: boolean, message: string][] = [
+    [filled(company.name), 'Name'],
+    [filled(company.pib), 'Company ID (PIB)'],
+    [filled(company.mb), 'Matični broj'],
+    [address.length === 0, `Address (${address.length > 1 ? `${address.slice(0, -1).join(', ')} and ${address[address.length - 1]}` : address[0]})`],
+    [filled(company.activityCode), 'Šifra delatnosti'],
+    [!!company.ownerUserId, 'Company owner'],
+    [!contact, contact ?? ''],
   ];
-  const failed = checks.reduce((n, [missing]) => n + missing, 0);
-  return { ready: 7 - failed, total: 7, blockers: checks.filter(([missing]) => missing > 0).map(([, message]) => message) };
+  const blockers = checks.filter(([passed]) => !passed).map(([, message]) => message);
+  return { ready: checks.length - blockers.length, total: checks.length, blockers };
 }
 
 /** The status the facts support. */

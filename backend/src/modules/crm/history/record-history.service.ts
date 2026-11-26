@@ -69,6 +69,9 @@ const FIELD_NAMES: Record<string, string> = {
   phone: 'the phone',
   linkedin: 'the LinkedIn profile',
   buyerRole: 'the buyer role',
+  // A company's contacts (CD-534): written by the contacts trigger onto the company's history.
+  contact: 'the contacts',
+  contactRole: "a contact's role in the decision",
   // contact details and personal details (CD-361)
   orgUnit: 'the org unit',
   influence: 'the influence on the opportunity',
