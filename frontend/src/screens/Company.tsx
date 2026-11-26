@@ -53,7 +53,7 @@ export function Company() {
   const current = s.extraCompanies.find((c) => c.id === id);
   const statusKey = `${current?.status}:${current?.statusManual}`;
   // Its projects (the Projects card loads them too): a company with one can't be deleted.
-  const { data: projects } = useCompanyProjects(id);
+  const { data: projects, error: projectsError } = useCompanyProjects(id);
   useEffect(() => {
     let live = true;
     companyStatusHistory(id).then(
@@ -65,13 +65,14 @@ export function Company() {
     };
   }, [id, statusKey, companyStatusHistory]);
   // A lead that becomes an opportunity while this page is open (its seventh check done here, or
-  // elsewhere and read back) gets the toast (CD-534), whichever path brought the status in.
+  // elsewhere and read back) gets the toast (CD-534), whichever path brought the status in. The
+  // status is remembered with its company, so opening another company from here says nothing.
   const liveStatus = current?.status;
-  const seenStatus = useRef(liveStatus);
+  const seenStatus = useRef({ id, status: liveStatus });
   useEffect(() => {
-    if (seenStatus.current === 'lead' && liveStatus === 'opportunity' && current?.name) flash(`${current.name} is now an opportunity. You can add it to the Pipeline.`, 5000);
-    seenStatus.current = liveStatus;
-  }, [liveStatus, current?.name, flash]);
+    if (seenStatus.current.id === id && seenStatus.current.status === 'lead' && liveStatus === 'opportunity' && current?.name) flash(`${current.name} is now an opportunity. You can add it to the Pipeline.`, 5000);
+    seenStatus.current = { id, status: liveStatus };
+  }, [id, liveStatus, current?.name, flash]);
   if (!rec) return <Navigate to={paths.companies} replace />;
   const extra = s.extraCompanies.find((c) => c.id === rec.id);
   const status: CompanyStatus = extra?.status ?? 'lead';
@@ -120,9 +121,15 @@ export function Company() {
     flash(`Source changed to ${v}`);
   };
   // A company with opportunities or projects can't be deleted (the API refuses it too): the item stays, off, with why.
+  // While its projects are still loading the item waits too; if they can't be read, the API's own check decides.
   const projectCount = projects?.length ?? 0;
   const has = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
-  const deleteBlock = rec.leads.length || projectCount ? `${rec.name} has ${[rec.leads.length ? has(rec.leads.length, 'an opportunity', 'opportunities') : '', projectCount ? has(projectCount, 'a project', 'projects') : ''].filter(Boolean).join(' and ')}: delete them or move them to another company first` : null;
+  const deleteBlock =
+    rec.leads.length || projectCount
+      ? `${rec.name} has ${[rec.leads.length ? has(rec.leads.length, 'an opportunity', 'opportunities') : '', projectCount ? has(projectCount, 'a project', 'projects') : ''].filter(Boolean).join(' and ')}: delete them or move them to another company first`
+      : !projects && !projectsError
+        ? 'Checking its projects'
+        : null;
   const ownContacts = people.filter((p) => p.companyId === rec.id);
   const menu = [
     ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setDialog({ kind: 'status' as const }), testId: 'status-set-back' }] : []),
@@ -193,12 +200,12 @@ export function Company() {
                 <span className="cp-sub">Changes save as you type</span>
               </div>
               <TextRow label="Name" field="name" value={value('name')} placeholder="Company name" onSave={field('name')} />
-              <TextRow label="PIB" field="pib" value={value('pib')} placeholder="9 digits" numeric onSave={field('pib')} />
-              <TextRow label="MB" field="mb" value={value('mb')} placeholder="8 digits" numeric onSave={field('mb')} />
-              <TextRow label="Street" field="address" value={value('address')} placeholder="Street and number" onSave={field('address')} link={map ? { href: map, label: 'Open in Maps' } : undefined} />
-              <TextRow label="City" field="city" value={value('city')} placeholder="City" onSave={field('city')} />
-              <TextRow label="Postal code" field="postalCode" value={value('postalCode')} placeholder="5 digits" numeric onSave={field('postalCode')} />
-              <TextRow label="Activity code" field="activityCode" value={value('activityCode')} placeholder="4 digits, for example 2223" numeric onSave={field('activityCode')} />
+              <TextRow label="PIB" field="pib" value={value('pib')} placeholder="9 digits" numeric lead={status === 'lead'} onSave={field('pib')} />
+              <TextRow label="MB" field="mb" value={value('mb')} placeholder="8 digits" numeric lead={status === 'lead'} onSave={field('mb')} />
+              <TextRow label="Street" field="address" value={value('address')} placeholder="Street and number" lead={status === 'lead'} onSave={field('address')} link={map ? { href: map, label: 'Open in Maps' } : undefined} />
+              <TextRow label="City" field="city" value={value('city')} placeholder="City" lead={status === 'lead'} onSave={field('city')} />
+              <TextRow label="Postal code" field="postalCode" value={value('postalCode')} placeholder="5 digits" numeric lead={status === 'lead'} onSave={field('postalCode')} />
+              <TextRow label="Activity code" field="activityCode" value={value('activityCode')} placeholder="4 digits, for example 2223" numeric lead={status === 'lead'} onSave={field('activityCode')} />
               <Row label="Industry">
                 <Dropdown label="Industry" value={industry} placeholder="Not set" options={[{ value: '', label: 'Not set' }, ...withCurrent(INDUSTRIES, industry)]} onChange={field('industry')} width="100%" testId="company-industry" />
               </Row>
@@ -319,7 +326,8 @@ export function Company() {
               <div className="cp-card-head">
                 <h2>History</h2>
               </div>
-              <CompanyHistory id={rec.id} activity={activities} rev={rev} tz={tz} />
+              {/* Keyed by company: opening another company from here starts its history afresh. */}
+              <CompanyHistory key={rec.id} id={rec.id} activity={activities} rev={rev} tz={tz} />
             </div>
           </aside>
         </div>
@@ -406,17 +414,17 @@ function Row({ label, hint, link, top, error, children }: { label: string; hint?
 
 /**
  * A text field that saves as it is typed (the store debounces), unless the value is wrong: then the
- * field turns red with the message under it and nothing is sent. A field a lead needs shows "Needed
- * for Opportunity" with an amber outline while it is empty.
+ * field turns red with the message under it and nothing is sent. On a lead, a field it needs shows
+ * "Needed for Opportunity" with an amber outline while it is empty (`lead`).
  */
-function TextRow({ label, field, value, placeholder, numeric, link, onSave }: { label: string; field: CompanyTextField; value: string; placeholder?: string; numeric?: boolean; link?: { href: string; label: string }; onSave: (v: string) => void }) {
+function TextRow({ label, field, value, placeholder, numeric, lead, link, onSave }: { label: string; field: CompanyTextField; value: string; placeholder?: string; numeric?: boolean; lead?: boolean; link?: { href: string; label: string }; onSave: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
     if (!focused.current) setDraft(value);
   }, [value]);
   const problem = fieldProblem(field, draft);
-  const needed = NEEDED_FIELDS.includes(field) && !draft.trim();
+  const needed = !!lead && NEEDED_FIELDS.includes(field) && !draft.trim();
   return (
     <Row label={label} hint={needed ? 'Needed for Opportunity' : undefined} link={link} error={problem}>
       <input
@@ -466,9 +474,19 @@ function CompanyHistory({ id, activity, rev, tz }: { id: string; activity: LogEn
   const [expanded, setExpanded] = useState(false);
   const shown = useRef(30);
   const touched = s.changedAt[id] ?? 0;
+  // A read that is still running when the next starts (or the card goes) is dropped, so an older
+  // answer never overwrites a newer one.
+  const latest = useRef(0);
+  useEffect(
+    () => () => {
+      latest.current = -1;
+    },
+    [],
+  );
   const load = useCallback(
-    (count: number) =>
-      loadChanges('company', id, 0)
+    (count: number) => {
+      const run = ++latest.current;
+      return loadChanges('company', id, 0)
         .then(async (first) => {
           let all = first.entries;
           let hasMore = first.more;
@@ -477,11 +495,13 @@ function CompanyHistory({ id, activity, rev, tz }: { id: string; activity: LogEn
             all = [...all, ...next.entries];
             hasMore = next.more;
           }
+          if (latest.current !== run) return;
           setEntries(all);
           setMore(hasMore);
           setFailed(false);
         })
-        .catch(() => setFailed(true)),
+        .catch(() => latest.current === run && setFailed(true));
+    },
     [id, loadChanges],
   );
   // On open at once; after an edit or a live update once the store has sent it (typed fields and the

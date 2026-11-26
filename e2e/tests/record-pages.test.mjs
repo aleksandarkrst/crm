@@ -263,6 +263,21 @@ describe('company and contact pages', () => {
     });
   });
 
+  step("Industry offers today's options and Ownership offers Private and Public (CD-534)", async () => {
+    const options = async (testId) => {
+      await click(page, `[data-testid=${testId}]`);
+      const list = await page.$$eval('[role=option]', (els) => els.map((el) => el.textContent));
+      await page.keyboard.press('Escape');
+      return list;
+    };
+    assert.deepEqual(await options('company-industry'), ['Not set', 'Architecture', 'Banking', 'Design agency', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Healthcare', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other']);
+    assert.deepEqual(await options('company-ownership'), ['Not set', 'Private', 'Public']);
+    await click(page, '[data-testid=company-ownership]');
+    await click(page, '[role=option]::-p-text(Public)');
+    assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + empty.id)).ownershipType === 'state'), 'Public is stored as state');
+    await page.waitForFunction(() => document.querySelector('[data-testid=company-ownership]')?.textContent === 'Public');
+  });
+
   step('a wrong PIB turns the field red and is not saved; the source dropdown saves with a toast', async () => {
     await page.$eval('[data-testid=company-field-pib]', (el) => el.select());
     await page.keyboard.type('1234');
