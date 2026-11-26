@@ -75,6 +75,13 @@ export interface Lead {
   /** The primary contact's details and personal details (CD-361). */
   contactExtra?: ContactExtra;
   contactOwner?: string;
+  /**
+   * The primary contact's own company (the contact row's), which is where they belong and count. It
+   * differs from the deal's company once the contact moved to another company (CD-533); null when the
+   * contact has none.
+   */
+  contactCompanyId?: string | null;
+  contactCompany?: string;
   /** Last known name of the deal owner, from the API. Show it with ownerOf(), match by ownerId. */
   owner?: string;
   /** User id of the deal owner. */

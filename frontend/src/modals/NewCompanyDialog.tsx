@@ -103,7 +103,9 @@ export function NewCompanyDialog() {
       </div>
       {existing && (
         <span className="gs-error" role="alert" data-testid="new-company-pib-taken">
-          This PIB belongs to {existing.name}.{' '}
+          {/* No second full stop after a name that ends with one ("d.o.o.", QA on CD-533). */}
+          This PIB belongs to {existing.name}
+          {existing.name.endsWith('.') ? '' : '.'}{' '}
           <button type="button" className="cl-link" onClick={() => open(existing.id)}>
             Open it
           </button>

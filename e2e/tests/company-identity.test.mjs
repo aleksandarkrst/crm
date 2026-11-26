@@ -5,7 +5,7 @@
 // with its readiness.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, testPib, text, useBrowser } from '../lib/harness.mjs';
 
 describe('company identity', () => {
   const browser = useBrowser();
@@ -86,6 +86,26 @@ describe('company identity', () => {
     assert.equal((await api(page, '/crm/companies')).length, 1, 'no second company');
   });
 
+  /** The Companies list's rows by company name: the row's text and its cells (Company, Status, Owner, Open, Lifetime, Contacts, Last activity). */
+  const listRows = async () => {
+    await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=company-row]');
+    const rows = await page.$$eval('[data-testid=company-row]', (els) => els.map((el) => ({ name: el.querySelector('.cl-co b')?.innerText.trim(), text: el.innerText, cells: [...el.querySelectorAll('td')].map((td) => td.innerText.trim()) })));
+    return Object.fromEntries(rows.map((r) => [r.name, r]));
+  };
+
+  let vegaId;
+  let vegaDealId;
+  step('Vega becomes an opportunity with Marko as its primary contact', async () => {
+    // The address completes the seven checks (CD-358); an opportunity names Marko as its primary contact (QA 4e's case).
+    vegaId = (await api(page, '/crm/companies')).find((c) => c.name === 'Vega Logistika d.o.o.').id;
+    const marko = (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Marko Petrović');
+    await api(page, `/crm/companies/${vegaId}`, { method: 'PATCH', body: JSON.stringify({ address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000' }) });
+    assert.equal((await api(page, `/crm/companies/${vegaId}`)).status, 'opportunity');
+    const funnels = await api(page, '/crm/funnels');
+    vegaDealId = (await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Vega fleet licence', funnelId: funnels[0].id, companyId: vegaId, primaryContactId: marko.id }) })).id;
+  });
+
   step('an existing contact picked in the dialog moves to the new company', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=companies-new]');
@@ -99,5 +119,36 @@ describe('company identity', () => {
     await page.waitForFunction(() => /Brightline Studio created as a lead/.test(document.querySelector('.toast')?.textContent ?? ''));
     const made = (await api(page, '/crm/companies')).find((c) => c.name === 'Brightline Studio');
     assert.equal((await api(page, '/crm/contacts')).find((c) => c.fullName === 'Marko Petrović').companyId, made.id);
+    // Vega's opportunity loses him as primary contact (CD-464's rule, the same as a move from the contact page).
+    assert.equal((await api(page, `/crm/deals/${vegaDealId}`)).primaryContactId, null);
+  });
+
+  step('the moved contact counts for the new company in the app, not for the opportunity he was on (QA 4e)', async () => {
+    // The company page he moved to: a lead missing only the address, with him under Contacts.
+    await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
+    await page.waitForSelector('[data-testid=company-status]');
+    assert.match(await page.$eval('[data-testid=company-status]', (el) => el.innerText), /Lead · 6 of 7 ready/);
+    assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /Address/);
+    assert.doesNotMatch(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /A contact with/);
+    assert.match(await text(page), /Contacts \(1\)[\s\S]*Marko Petrović/);
+    // The list: Brightline has the contact, Vega none; both are leads six of seven ready (Vega now has an address but no contact).
+    const rows = await listRows();
+    assert.equal(rows['Brightline Studio'].cells[5], '1');
+    assert.match(rows['Brightline Studio'].text, /Lead\s+6 of 7 ready[\s\S]*Incomplete record, no address/);
+    assert.equal(rows['Vega Logistika d.o.o.'].cells[5], '0');
+    assert.match(rows['Vega Logistika d.o.o.'].text, /Lead\s+6 of 7 ready[\s\S]*Incomplete record, no contact/);
+    // The Contacts list and his page show the new company.
+    await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.table-row.clickable');
+    assert.match(await page.$eval('.table-row.clickable', (el) => el.innerText), /Marko Petrović[\s\S]*Brightline Studio/);
+    await click(page, '.table-row.clickable');
+    await page.waitForFunction(() => /^\/contacts\/[0-9a-f-]+$/.test(location.pathname));
+    // The contact screen is a lazy chunk: wait for its Company row before reading the page.
+    await page.waitForFunction(() => /Company\s+\S/.test(document.body.innerText));
+    const contactPage = await text(page);
+    // The Summary's first row is his company; the company card repeats it after its initials tile.
+    assert.match(contactPage, /Summary\s+Brightline Studio/);
+    assert.match(contactPage, /Company\s+(?:BS\s+)?Brightline Studio/);
+    assert.doesNotMatch(contactPage, /Vega Logistika/);
   });
 });

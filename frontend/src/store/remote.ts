@@ -381,6 +381,9 @@ export async function loadWorkspace(role: ApiRole, only?: ReadonlySet<Part>, cha
       contactOwnerId: ct?.ownerUserId,
       contactExtra: ct ? contactExtraOf(ct) : undefined,
       contactOwner: ct?.ownerName ?? undefined,
+      // The contact row's company, not the deal's: a moved primary contact belongs to their new company (CD-533).
+      contactCompanyId: ct?.companyId ?? null,
+      contactCompany: ct?.companyId ? companyById.get(ct.companyId)?.name : undefined,
       owner: ownerName ?? undefined,
       ownerId: deal.ownerUserId,
       segment,

@@ -3,7 +3,7 @@ import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals, num } from './dealMath';
 import { readiness, STATUS_RANK } from './companyBoard';
-import { uniquePeople } from './companyPeople';
+import { primaryPerson, uniquePeople } from './companyPeople';
 import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, CompanyStatus, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
@@ -261,31 +261,15 @@ export function billedShare(s: State, lead: Lead): number {
 
 // ---------------------------------------------------------------- people & companies
 
-/** Primary contacts (shown inline on their leads) plus everyone else. */
+/**
+ * Primary contacts (shown inline on their leads) plus everyone else. A primary contact belongs to
+ * their own company (companyPeople.ts primaryPerson), not to the deal's (CD-533).
+ */
 export function allPeople(s: State): Person[] {
   const seen = new Set<string>();
   return s.leads
     .filter((l) => l.contactId && !seen.has(l.contactId) && seen.add(l.contactId))
-    .map<Person>((l) => ({
-      id: l.id + ':p',
-      leadId: l.id,
-      contactId: l.contactId ?? undefined,
-      companyId: l.companyId,
-      company: l.company,
-      primary: true,
-      name: l.contact,
-      role: l.role,
-      email: l.email,
-      phone: l.phone,
-      initials: l.initials,
-      // No guessed role: an empty one is what the "No role in decision" badge is for (CD-361).
-      buyerRole: l.buyerRole ?? '',
-      linkedin: l.contactLinkedin ?? '',
-      notes: l.contactNotes ?? '',
-      ownerId: l.contactOwnerId,
-      ownerName: l.contactOwner,
-      ...l.contactExtra,
-    }))
+    .map(primaryPerson)
     .concat(s.extraPeople);
 }
 export const personById = (s: State, id: string | null | undefined): Person | undefined => allPeople(s).find((p) => p.id === id);
