@@ -324,10 +324,10 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     const item = await page.waitForSelector('[data-testid=delete-company]');
-    // The items that open a dialog end with an ellipsis, as on the C-Company board (CD-534 staging QA, case 3).
+    // Plain labels, no trailing "…" (frontend/CLAUDE.md; the C-Company board has one, CD-534 staging QA case 3 waits for Aleksandar).
     const labels = await page.$$eval('[role=menu] [role=menuitem]', (els) => els.map((el) => (el.querySelector('.gs-opt-text > span') ?? el).textContent));
-    assert.deepEqual(labels, ['Set status back…', 'Delete company…']);
-    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, text: el.innerText })), { disabled: true, text: 'Delete company…\nUmbrella d.o.o. has an opportunity: delete them or move them to another company first' });
+    assert.deepEqual(labels, ['Set status back', 'Delete company']);
+    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, text: el.innerText })), { disabled: true, text: 'Delete company\nUmbrella d.o.o. has an opportunity: delete them or move them to another company first' });
     await page.keyboard.press('Escape');
   });
 

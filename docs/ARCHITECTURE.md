@@ -2591,7 +2591,7 @@ In the app the status is the header's tag ("Lead, automatic", "Not interested, s
 a meta line ("5 of 7 ready, owner Ana"; "Ready for the Pipeline, owner Ana"), a lead's amber
 readiness banner names the seven checks as tags (`companyReadiness` in `store/selectors.ts` mirrors
 the API's checks through `store/companyBoard.ts`, so it updates as fields are filled in), and the
-⋯ menu has "Set status back…" and, after a manual change, "Back to automatic". The status follows the
+⋯ menu has "Set status back" and, after a manual change, "Back to automatic". The status follows the
 API: a field save applies the status the saved row comes back with, both ways (so "New opportunity"
 opens the moment the last check is done, and a cleared check makes it a lead with its banner at once,
 no reload; the row is kept in the last load, so a colleague's change elsewhere doesn't put the old
@@ -2613,7 +2613,7 @@ shows its old value until someone picks a new one (owner's decision, 26 Nov: no 
 breadcrumb, a 52 px initials tile, the name, the status tag and meta line ("N of 7 ready, owner X"
 on a lead, "Ready for the Pipeline" on an opportunity, "Client since 2 Sep 2025" on a client),
 "New opportunity" (dimmed on a lead, with "Complete the company first" and a toast naming the
-missing checks) and the ⋯ menu (Set status back…, Back to automatic, Delete company…, which is
+missing checks) and the ⋯ menu (Set status back, Back to automatic, Delete company, which is
 disabled with a tooltip while the company has opportunities or projects; the API also refuses
 meetings, projects and visit plans with a 409). A lead's readiness banner lists the seven checks.
 Five KPIs follow (Open value and Lifetime value, always a figure in the workspace currency, "€0"
