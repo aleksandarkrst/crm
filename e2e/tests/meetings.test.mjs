@@ -268,7 +268,9 @@ describe('meeting calendar', () => {
 
   step('"Show all" on the company opens the table filtered to it', async () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=meetings-card]');
+    // The company page has tabs (CD-534): the link is in the Meetings tab's header.
+    await click(page, '[data-testid=tab-meetings]');
+    await page.waitForSelector('[data-testid=company-meetings]');
     await click(page, '[data-testid=meetings-show-all]');
     await page.waitForFunction(() => location.pathname === '/calendar');
     assert.equal(new URL(page.url()).searchParams.get('view'), 'table');

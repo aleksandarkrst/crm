@@ -25,7 +25,7 @@ const xIcon = (size = 13) => (
  * one, so closing a dropdown inside a modal leaves the modal open.
  */
 const escapeStack: object[] = [];
-function useEscape(active: boolean, onEscape: () => void) {
+export function useEscape(active: boolean, onEscape: () => void) {
   const latest = useRef(onEscape);
   latest.current = onEscape;
   useEffect(() => {

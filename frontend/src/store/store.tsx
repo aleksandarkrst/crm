@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
+import { type ApiCompany, type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, hasLiveProposal, type PlaceholderReference, type UploadType } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -555,15 +555,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       queueRefresh(ALL_PARTS, logRequested.current);
     };
     /** The status of these companies from the API, leaving their other fields as they are here (CD-358). */
+    const applyStatusRows = (list: readonly ApiCompany[]) => {
+      const rows = new Map(list.map((r) => [r.id, r]));
+      set((x) => ({
+        extraCompanies: x.extraCompanies.map((c) => {
+          const r = c.id ? rows.get(c.id) : undefined;
+          return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt, lastActivity: r.lastActivity ?? c.lastActivity } : c;
+        }),
+      }));
+    };
+    /** The status (and last activity) a saved company came back with, nothing else of it. */
+    const applyStatus = (row: ApiCompany) => applyStatusRows([row]);
     const refreshCompanyStatus = async (ids: readonly string[]) => {
       try {
-        const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
-        set((x) => ({
-          extraCompanies: x.extraCompanies.map((c) => {
-            const r = c.id ? rows.get(c.id) : undefined;
-            return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt, lastActivity: r.lastActivity ?? c.lastActivity } : c;
-          }),
-        }));
+        applyStatusRows(await crmApi.companies(ids));
       } catch {
         // the next refresh catches up
       }
@@ -1411,7 +1416,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const field = key === 'size' ? 'teamSize' : key;
       // An empty name or PIB is never sent (the API refuses both); no ownership is null.
       const value = key === 'ownershipType' ? v || null : v;
-      if (!((key === 'name' || key === 'pib') && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: value }, ver('company', companyId)), `the company ${COMPANY_FIELD_LABELS[key] ?? key}`);
+      // The saved row carries the status the API computed from the change (CD-534): a lead whose
+      // last missing field was filled in is an opportunity at once, and "New opportunity" opens.
+      if (!((key === 'name' || key === 'pib') && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: value }, ver('company', companyId)).then(applyStatus), `the company ${COMPANY_FIELD_LABELS[key] ?? key}`);
       // Industry, HQ and team size are shown on its opportunities too; the identity stays on the company.
       const onDeals = key === 'name' || key === 'industry' || key === 'hq' || key === 'size' || key === 'source';
       set((x) => ({

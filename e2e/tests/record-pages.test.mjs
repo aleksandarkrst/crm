@@ -122,11 +122,12 @@ describe('company and contact pages', () => {
 
   step('Escape closes New opportunity from the + menu, a labelled dialog (CD-490)', async () => {
     await createNew(page, 'deal');
-    await page.waitForSelector('.modal[role=dialog][aria-modal=true]');
-    assert.equal(await page.$eval('.modal[role=dialog]', (el) => document.getElementById(el.getAttribute('aria-labelledby'))?.textContent), 'New opportunity');
-    assert.ok(await page.$eval('.modal[role=dialog]', (el) => el.contains(document.activeElement)), 'focus moved into the dialog');
+    // A glass sheet since CD-534, labelled by its title.
+    await page.waitForSelector('[data-testid=new-deal-dialog][role=dialog][aria-modal=true]');
+    assert.equal(await page.$eval('[data-testid=new-deal-dialog]', (el) => el.getAttribute('aria-label')), 'New opportunity');
+    assert.ok(await page.$eval('[data-testid=new-deal-dialog]', (el) => el.contains(document.activeElement)), 'focus moved into the dialog');
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('.modal'));
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-dialog]'));
     // Focus goes back to what opened it, the + button (CD-490 QA).
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'new-menu');
   });

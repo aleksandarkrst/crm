@@ -20,7 +20,7 @@ import { useCompanyProjects } from '../store/projects';
 import { BUYER_ROLES, COMPANY_SOURCES, INDUSTRIES, TEAM_SIZES } from '../store/seed';
 import { COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyPeople, companyReadiness, companyRecords, initialsOf, isoInZone, isoLabel, memberLabels, memberName, moneyTotal, pipelineBlocked, stageOf, timelineFor, todayIso, valueNum } from '../store/selectors';
 import { type CompanyFieldKey, useStore } from '../store/store';
-import { instantToZoned } from '../store/time';
+import { addDays, instantToZoned } from '../store/time';
 import { dueTag } from '../store/today';
 import type { CompanyStatus, LogEntry, Person } from '../store/types';
 import { useMeetingList } from '../store/useMeetings';
@@ -170,8 +170,10 @@ export function Company() {
   const nextMeeting = nextMeetingKpi(meetings.filter((m) => m.status === 'planned'), Date.now(), dayOf, today);
   const lastActivity = lastActivityKpi(extra?.lastActivity, activities, dayOf, today);
   const kpis: { label: string; value: string; sub: string; red?: boolean; testId: string }[] = [
-    { label: 'Open value', value: rec.value ? rec.valueLabel : '—', sub: openValueLine(open), testId: 'kpi-open-value' },
-    { label: 'Lifetime value', value: rec.lifetimeValue ? rec.lifetimeLabel : '—', sub: lifetimeLine(won, lost), testId: 'kpi-lifetime-value' },
+    // Both values are figures, "€0" included (Aleksandar, 28 Nov), in the workspace currency; an
+    // opportunity that kept another currency is listed apart (moneyTotal never adds currencies).
+    { label: 'Open value', value: rec.valueLabel, sub: openValueLine(open), testId: 'kpi-open-value' },
+    { label: 'Lifetime value', value: rec.lifetimeLabel, sub: lifetimeLine(won, lost), testId: 'kpi-lifetime-value' },
     { label: 'Open tasks', value: String(taskStats.open), sub: taskStats.kpiSub, red: taskStats.late > 0, testId: 'kpi-open-tasks' },
     { label: 'Next meeting', value: nextMeeting.value, sub: nextMeeting.sub, testId: 'kpi-next-meeting' },
     { label: 'Last activity', value: lastActivity.value, sub: lastActivity.sub, testId: 'kpi-last-activity' },
@@ -433,6 +435,10 @@ export function Company() {
           <div className="gs-glass cp-card" role="tabpanel" data-testid="company-meetings">
             <div className="cp-card-head">
               <h2>Meetings</h2>
+              {/* Every meeting of the company in the Calendar's table (as the old card's "Show all"), from 2000 to five years ahead. */}
+              <Link to={paths.calendar({ view: 'table', user: 'all', from: '2000-01-01', to: addDays(today, 5 * 366), company: rec.id })} className="cp-link" data-testid="meetings-show-all">
+                Show all
+              </Link>
               <button type="button" className="cp-iconb" aria-label="Schedule a meeting" title="Schedule a meeting" data-testid="company-add-meeting" onClick={() => store.meetings.openDialog({ companyId: rec.id })}>
                 <Icon name="plus" size={15} />
               </button>

@@ -2537,3 +2537,22 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
   .cp-task-add .gs-input { flex-basis: 100%; }
   .cp-kpi-value { font-size: 22px; line-height: 28px; }
 }
+
+/* The New opportunity dialog in the glass kit (CD-534): the company picker's list, the lead notice, the sale type and funnel cards. */
+.nd-pop { width: 320px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px; border-radius: 14px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); display: flex; flex-direction: column; gap: 4px; font-family: var(--gs-font); color: var(--gs-ink); }
+.nd-list { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
+.nd-list .gs-opt { flex: none; max-width: none; }
+.nd-none { padding: 10px 8px; font-size: 13px; color: var(--gs-text-2); }
+.nd-link { align-self: flex-start; font-size: 12.5px; }
+.nd-sub { display: flex; flex-direction: column; gap: 6px; }
+.nd-warn { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--gs-amber-card); box-shadow: inset 0 0 0 1px var(--gs-amber-line); font-size: 13.5px; line-height: 19px; color: var(--gs-ink); }
+.nd-warn > b { color: var(--gs-amber-ink); }
+.nd-warn > span { color: var(--gs-text-2); }
+.nd-complete { display: flex; flex-direction: column; gap: 10px; margin-top: 2px; }
+.nd-person { font-size: 13px; font-weight: 600; color: var(--gs-ink); }
+.nd-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.nd-choice { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; text-align: left; color: var(--gs-ink); cursor: pointer; }
+.nd-choice:hover { background: var(--white); }
+.nd-choice.on { background: var(--gs-green-soft); box-shadow: inset 0 0 0 1.5px var(--gs-green); }
+.nd-choice > b { font-size: 13.5px; font-weight: 600; }
+.nd-choice > span { font-size: 12.5px; line-height: 17px; color: var(--gs-text-2); }

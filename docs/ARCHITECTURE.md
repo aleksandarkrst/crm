@@ -2587,8 +2587,10 @@ a meta line ("5 of 7 ready, owner Ana"; "Ready for the Pipeline, owner Ana"), a 
 readiness banner names the seven checks as tags (`companyReadiness` in `store/selectors.ts` mirrors
 the API's checks through `store/companyBoard.ts`, so it updates as fields are filled in), and the
 ⋯ menu has "Set status back" and, after a manual change, "Back to automatic". The status follows the
-API: live updates re-read it, also after this tab's own saves (`refreshCompanyStatus` in the store
-reads only the status fields back, so a field still being edited isn't overwritten; a lead that
+API: a field save applies the status the saved row comes back with (so "New opportunity" opens the
+moment the last check is done, no reload), and live updates re-read it, also after this tab's other
+saves (`refreshCompanyStatus` in the store reads only the status fields back, so a field still
+being edited isn't overwritten; a lead that
 became an opportunity through this tab's save gets the toast "[name] is now an opportunity. You can
 add it to the Pipeline.").
 
@@ -2607,8 +2609,9 @@ on a lead, "Ready for the Pipeline" on an opportunity, "Client since 2 Sep 2025"
 missing checks) and the ⋯ menu (Set status back, Back to automatic, Delete company, which is
 disabled with a tooltip while the company has opportunities or projects; the API also refuses
 meetings, projects and visit plans with a 409). A lead's readiness banner lists the seven checks.
-Five KPIs follow (Open value, Lifetime value, Open tasks with the late count in red, Next meeting,
-Last activity from `GET /crm/companies` `lastActivity`), then seven tabs with counts, Details
+Five KPIs follow (Open value and Lifetime value, always a figure in the workspace currency, "€0"
+included; Open tasks with the late count in red; Next meeting; Last activity from
+`GET /crm/companies` `lastActivity`), then seven tabs with counts, Details
 first (`store/companyTabs.ts` holds the pure parts, unit-tested in `test/companyTabs.test.ts`):
 
 - *Details*: the Company information card saves as you type (`TextRow`: PIB 9 digits, MB 8,
@@ -2629,7 +2632,8 @@ first (`store/companyTabs.ts` holds the pure parts, unit-tested in `test/company
   or "Won 14 Mar 2026" / "Lost 20 Jun 2026", "Closes 18 Dec" or "Reason: Price", the owner and
   the value (grey when lost). A lead without any says "Leads cannot have opportunities yet".
 - *Meetings*: planned and held meetings with the company, newest first (`useMeetingList` with
-  `companyId`), a date block, "Planned" / "Held" tags; "+" opens the meeting dialog with the company.
+  `companyId`), a date block, "Planned" / "Held" tags; "Show all" in the header opens the Calendar's
+  table filtered to the company (as the old card did); "+" opens the meeting dialog with the company.
 - *Tasks*: "N open, M late"; the to-dos of the company's opportunities, open ones first, ticked
   here; "+" opens an inline row that adds the to-do on the company's open opportunity (its current
   stage, due today). Without an opportunity the "+" is off with a toast: to-dos belong to
@@ -2686,8 +2690,10 @@ company, and "+ New contact" opens a stacked glass sheet whose contact is create
   blockers. The CSV import makes the same rule a row error: no company, a company the file would
   create (a lead), a lead, or an incomplete Not interested company (only those the file names are
   read).
-- The New opportunity dialog lists every company with its status (none when it isn't loaded);
-  blocked ones are disabled. One passed in (from its contact's page) shows what it misses, with a form for just those fields (the
+- The New opportunity dialog (a glass sheet since CD-534: the kit of `screens/settings/parts.tsx`,
+  with the sale type and the target customer type as cards) lists every company with its status
+  (none when it isn't loaded); blocked ones are marked "Not eligible". One passed in (from its
+  contact's page) shows what it misses, with a form for just those fields (the
   identity fields, the company owner when it has none, and a role in the decision for the contact closest to counting
   ("Not involved" isn't offered there), or a new contact; CD-534): "Save and continue", and
   once it is an opportunity the dialog goes on. "Open the company instead" leaves for its page (not
