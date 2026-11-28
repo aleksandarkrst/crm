@@ -14,7 +14,12 @@ export const SYSTEM_CHANNEL = 'SY';
 /** The badge of a timeline entry. */
 export const activityChannelLabel = (channel: string) => (channel === SYSTEM_CHANNEL ? 'System' : CHANNEL_LABELS[channel] || channel);
 export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
-export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
+/** Roles in the decision (CD-534); "Not involved" doesn't count towards Opportunity (companyBoard.ts). */
+export const BUYER_ROLES = ['Decision maker', 'Signs off budget', 'Influencer', 'User', 'Not involved'];
+/** Roles contacts may still carry from before CD-534; kept until someone picks a new one, and they still count. */
+export const LEGACY_BUYER_ROLES = ['Economic buyer', 'Champion', 'Gatekeeper', 'End user'];
+/** A company's source (CD-534, board C-Company); an older value a company has stays offered on its page. */
+export const COMPANY_SOURCES = ['Trade fair', 'Referral', 'Website', 'LinkedIn', 'Cold outreach', 'Existing client', 'Partner', 'Other'];
 /** Custom field types (CD-15) and how they are labelled. */
 export const FIELD_TYPES = [
   { value: 'text', label: 'Text' },

@@ -2,7 +2,7 @@
 // once its contact is complete; it can be set back by hand and handed back to the automation.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, setValue, steps, testPib, text, useBrowser } from '../lib/harness.mjs';
 
 describe('company status', () => {
   const browser = useBrowser();
@@ -11,6 +11,12 @@ describe('company status', () => {
   let companyId;
   let contactId;
   const statusText = () => page.$eval('[data-testid=company-status]', (el) => el.innerText);
+  const metaText = () => page.$eval('[data-testid=company-meta]', (el) => el.innerText);
+  /** Opens one of the company page's tabs (CD-534, 28 Nov boards). */
+  const openTab = async (key) => {
+    await click(page, `[data-testid=tab-${key}]`);
+    await page.waitForFunction((key) => document.querySelector(`[data-testid=tab-${key}]`)?.getAttribute('aria-selected') === 'true', {}, key);
+  };
 
   step('sets up a lead with its identity and a contact without a role in the decision', async () => {
     page = await browser.person('stella');
@@ -25,20 +31,54 @@ describe('company status', () => {
     contactId = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId, fullName: 'Nikola Ilić', jobTitle: 'Managing director', ownerUserId: me }) })).id;
   });
 
-  step('the company page says it is a lead and what is missing', async () => {
+  step('the company page says it is a lead and what is missing (the readiness banner, CD-534)', async () => {
     await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
-    assert.match(await statusText(), /^Lead · 6 of 7 ready$/);
-    assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /Nikola Ilić has no role in the decision yet/);
+    assert.equal(await statusText(), 'Lead, automatic');
+    assert.match(await metaText(), /^6 of 7 ready, owner Stella Status$/);
+    const banner = await page.$eval('[data-testid=company-blockers]', (el) => el.innerText);
+    assert.match(banner, /6 of 7 ready\. Missing: A contact with a role in the decision\./);
+    const checks = await page.$$eval('[data-testid=readiness-check]', (els) => els.map((el) => [el.textContent, el.dataset.done]));
+    assert.deepEqual(checks, [['Name', 'true'], ['PIB', 'true'], ['MB', 'true'], ['Address', 'true'], ['Activity code', 'true'], ['Owner', 'true'], ['A contact with a role in the decision', 'false']]);
+    // "New opportunity" is dimmed and says what is missing instead of opening the dialog.
+    assert.ok((await text(page)).includes('Complete the company first'));
+    await click(page, '[data-testid=record-new-deal]');
+    await page.waitForFunction(() => document.body.innerText.includes('Complete the company first. Missing: A contact with a role in the decision.'));
+    assert.equal(await page.$('[data-testid=new-deal-company]'), null, 'the New opportunity dialog did not open');
+    // The Opportunities tab says why a lead has none.
+    await openTab('opportunities');
+    assert.match(await page.$eval('[data-testid=opportunities-empty]', (el) => el.innerText), /Leads cannot have opportunities yet\s+Complete the 1 missing item in the banner above\. Vega Logistika then becomes an opportunity by itself\./);
   });
 
-  step('completing the contact makes it an opportunity, without a click on the company', async () => {
+  step('"Not involved" does not count; a role in the decision does, and the page says so with a toast (CD-534)', async () => {
+    await openTab('contacts');
+    await click(page, '[data-testid=contact-role]');
+    await click(page, '[role=option]::-p-text(Not involved)');
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal((await api(page, `/crm/companies/${companyId}`)).status, 'lead', 'still a lead');
+    await page.waitForFunction(() => /^Lead, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    await click(page, '[data-testid=contact-role]');
+    await click(page, '[role=option]::-p-text(Signs off budget)');
+    // The toast shows for five seconds once the status is read back: watch for it from the click on.
+    const toast = page.waitForFunction(() => document.body.innerText.includes('Vega Logistika is now an opportunity. You can add it to the Pipeline.'), { timeout: 15_000 });
+    assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the API moved it');
+    await toast;
+    await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    assert.equal(await page.$('[data-testid=company-blockers]'), null);
+    // The status change is a line of the company's History tab.
+    await openTab('history');
+    await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity, automatic (was Lead)'));
+    // The role change is a line of the company's History too.
+    await page.waitForFunction(() => document.body.innerText.includes("changed Nikola Ilić's role in the decision from Not involved to Signs off budget"));
+  });
+
+  step('a role picked on the contact page counts the same way', async () => {
     await page.goto(`${BASE_URL}/contacts/${contactId}`, { waitUntil: 'networkidle0' });
+    await setValue(page, 'select[aria-label="Role in the decision"]', '');
+    assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'lead'), 'no role: a lead again');
     await setValue(page, 'select[aria-label="Role in the decision"]', 'Decision maker');
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the API moved it');
     await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
-    assert.match(await statusText(), /^Opportunity$/);
-    assert.equal(await page.$('[data-testid=company-blockers]'), null);
-    await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity · automatic'));
+    assert.equal(await statusText(), 'Opportunity, automatic');
   });
 
   // There is no "Back to automatic" any more (CD-478): a status set by hand holds until the company's
@@ -48,9 +88,13 @@ describe('company status', () => {
     await click(page, 'button[aria-label="More actions"]');
     await click(page, '[data-testid=status-set-back]');
     await click(page, '[data-testid=status-set-back-save]');
-    await page.waitForFunction(() => /^Lead · set by hand$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    await page.waitForFunction(() => /^Lead, set by hand$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
     await page.reload({ waitUntil: 'networkidle0' });
-    assert.match(await statusText(), /^Lead · set by hand$/, 'it holds while nothing changes');
+    assert.equal(await statusText(), 'Lead, set by hand', 'it holds while nothing changes');
+    // "Back to automatic" is offered now (CD-534); the lead's banner is back too.
+    await click(page, 'button[aria-label="More actions"]');
+    await page.waitForSelector('[data-testid=status-back-auto]');
+    await page.keyboard.press('Escape');
     const companyNow = async () => api(page, `/crm/companies/${companyId}`);
     // The contact loses its role: the facts change, so the automation takes over (still a lead).
     await page.goto(`${BASE_URL}/contacts/${contactId}`, { waitUntil: 'networkidle0' });
@@ -60,7 +104,24 @@ describe('company status', () => {
     await setValue(page, 'select[aria-label="Role in the decision"]', 'Decision maker');
     assert.ok(await eventually(async () => (await companyNow()).status === 'opportunity'), 'the API moved it');
     await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => /^Opportunity$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+  });
+
+  step('a lead is marked not interested with the board\'s dialog, and comes back with "Back to automatic"', async () => {
+    const lead = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Quiet Lead', pib: testPib() }) });
+    await page.goto(`${BASE_URL}/companies/${lead.id}`, { waitUntil: 'networkidle0' });
+    await click(page, 'button[aria-label="More actions"]');
+    await click(page, '[data-testid=status-set-back]');
+    const dialog = await page.waitForSelector('[data-testid=set-status-dialog]');
+    assert.equal(await dialog.evaluate((el) => el.querySelector('h2').textContent), 'Mark Quiet Lead as not interested?');
+    assert.ok((await dialog.evaluate((el) => el.innerText)).includes('It leaves the lead list. Pultly will not raise it again by itself until you choose Back to automatic.'));
+    await clickButton(page, 'Mark not interested');
+    await page.waitForFunction(() => /^Not interested, set by hand$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    assert.equal(await page.$('[data-testid=company-blockers]'), null, 'no banner once it is not a lead');
+    await click(page, 'button[aria-label="More actions"]');
+    await click(page, '[data-testid=status-back-auto]');
+    await page.waitForFunction(() => /^Lead, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    assert.ok(await eventually(async () => (await api(page, `/crm/companies/${lead.id}`)).statusSetManually === false), 'automatic again');
   });
 
   it('throws no uncaught errors in the page', () => {

@@ -25,7 +25,7 @@ const xIcon = (size = 13) => (
  * one, so closing a dropdown inside a modal leaves the modal open.
  */
 const escapeStack: object[] = [];
-function useEscape(active: boolean, onEscape: () => void) {
+export function useEscape(active: boolean, onEscape: () => void) {
   const latest = useRef(onEscape);
   latest.current = onEscape;
   useEffect(() => {
@@ -253,7 +253,8 @@ export function Segmented<T extends string>({
   );
 }
 
-export type Opt<T extends string = string> = { value: T; label: string };
+/** A dropdown option; `icon` (an avatar, CD-534) shows before the label, in the list and on the button. */
+export type Opt<T extends string = string> = { value: T; label: string; icon?: ReactNode };
 
 /**
  * A button with the current value; its list is a glass menu with a check on the chosen option. Arrows, Enter and Escape work.
@@ -303,14 +304,20 @@ export function Dropdown<T extends string>({ value, options, onChange, label, wi
         }}
         onKeyDown={onKey}
       >
-        <span className={'v' + (!current && placeholder ? ' gs-placeholder' : '')}>{current?.label ?? placeholder ?? '—'}</span>
+        <span className={'v' + (!current && placeholder ? ' gs-placeholder' : '') + (current?.icon ? ' gs-opt-icon' : '')}>
+          {current?.icon}
+          {current?.label ?? placeholder ?? '—'}
+        </span>
         {chevron}
       </button>
       {open && (
         <FloatMenu anchor={ref} menu={menu} role="listbox" id={listId} label={label}>
           {options.map((o, i) => (
             <button key={o.value} type="button" role="option" aria-selected={o.value === value} className={'gs-opt' + (o.value === value ? ' on' : '') + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(o.value)}>
-              <span>{o.label}</span>
+              <span className={o.icon ? 'gs-opt-icon' : undefined}>
+                {o.icon}
+                {o.label}
+              </span>
               <span className="ok">
                 <Icon name="check" size={12} />
               </span>
@@ -467,16 +474,20 @@ export function Table({ cols, children, empty, minWidth, testId }: { cols: { lab
   );
 }
 
-export type MenuItem = { label: string; onClick: () => void; danger?: boolean; testId?: string };
+/**
+ * An item of a ⋯ menu; `disabled` keeps it visible with `hint` under it saying why (CD-534: a company with
+ * opportunities can't be deleted), also as the item's tooltip.
+ */
+export type MenuItem = { label: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string; testId?: string };
 
-/** The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). */
-export function RowMenu({ label, items, testId }: { label: string; items: MenuItem[]; testId?: string }) {
+/** The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). `buttonClass` restyles the button (a record header's 32 px pill). */
+export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain' }: { label: string; items: MenuItem[]; testId?: string; buttonClass?: string }) {
   const [open, setOpen] = useState(false);
   const { ref, menu } = useDismiss(open, () => setOpen(false));
   if (!items.length) return null;
   return (
     <div className="gs-dd" ref={ref}>
-      <button type="button" className="gs-x plain" aria-label={label} aria-haspopup="menu" aria-expanded={open} data-testid={testId} onClick={() => setOpen(!open)}>
+      <button type="button" className={buttonClass} aria-label={label} aria-haspopup="menu" aria-expanded={open} data-testid={testId} onClick={() => setOpen(!open)}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <circle cx="5" cy="12" r="1.7" />
           <circle cx="12" cy="12" r="1.7" />
@@ -490,14 +501,23 @@ export function RowMenu({ label, items, testId }: { label: string; items: MenuIt
               key={it.label}
               type="button"
               role="menuitem"
-              className={'gs-opt' + (it.danger ? ' red' : '')}
+              className={'gs-opt' + (it.danger ? ' red' : '') + (it.hint ? ' with-hint' : '')}
               data-testid={it.testId}
+              disabled={it.disabled}
+              title={it.hint}
               onClick={() => {
                 setOpen(false);
                 it.onClick();
               }}
             >
-              {it.label}
+              {it.hint ? (
+                <span className="gs-opt-text">
+                  <span>{it.label}</span>
+                  <span className="gs-sub">{it.hint}</span>
+                </span>
+              ) : (
+                it.label
+              )}
             </button>
           ))}
         </FloatMenu>
@@ -627,11 +647,20 @@ function useOverlay(onClose: () => void) {
   const box = useRef<HTMLDivElement>(null);
   // Escape closes only the top overlay (a confirm over the drawer closes the confirm).
   useEscape(true, onClose);
+  // What opened the overlay, read on the first render: a field inside with autoFocus has the focus
+  // by the time the effect runs, and the focus could never go back to the opener (CD-534).
+  const [before] = useState(() => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null));
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
     const first = box.current?.querySelector<HTMLElement>('input:not([disabled]), select, textarea, button:not([disabled])');
     first?.focus();
-    return () => before?.focus?.();
+    // Back to the opener, if it is still on the page and nothing else took the focus meanwhile (a
+    // confirm closing with the sheet under it, or the page that moved on).
+    return () => {
+      const now = document.activeElement;
+      const lost = !now || now === document.body || !now.isConnected;
+      if (before?.isConnected && lost) before.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, []);
   return box;
 }

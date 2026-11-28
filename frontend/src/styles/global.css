@@ -1287,7 +1287,9 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   --gs-border: rgba(60, 60, 67, 0.16); --gs-outline: rgba(60, 60, 67, 0.14); --gs-divider: rgba(60, 60, 67, 0.08); --gs-divider-2: rgba(60, 60, 67, 0.06);
   --gs-chip: rgba(120, 120, 128, 0.12); --gs-chip-2: rgba(120, 120, 128, 0.22); --gs-bg: #EEF2F0;
   --gs-danger: #D70015; --gs-danger-dark: #B0001A; --gs-danger-soft: #FDE7EA; --gs-danger-field: #FFF7F8;
-  --gs-amber-bg: #FDF1DE; --gs-amber: #9A5B00; --gs-blue-bg: #E5EEFD; --gs-blue: #1550B8; --gs-violet-bg: #EFE9FC; --gs-violet: #5B3CC4;
+  /* Opportunity group headers on the company page (board C-Company-Client): a fainter row tint than --gs-drop. */
+  --gs-drop-faint: rgba(255, 255, 255, 0.35);
+  --gs-amber-bg: #FDF1DE; --gs-amber: #9A5B00; --gs-amber-card: rgba(253, 241, 222, 0.85); --gs-amber-ink: #6E3D00; --gs-amber-line: rgba(154, 91, 0, 0.15); --gs-amber-outline: rgba(154, 91, 0, 0.45); --gs-check-bg: rgba(231, 242, 238, 0.9); --gs-blue-bg: #E5EEFD; --gs-blue: #1550B8; --gs-violet-bg: #EFE9FC; --gs-violet: #5B3CC4;
   --gs-glass: rgba(255, 255, 255, 0.58); --gs-glass-strong: rgba(255, 255, 255, 0.92); --gs-glass-line: rgba(255, 255, 255, 0.75);
   --gs-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(13, 36, 28, 0.07);
   --gs-pop-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 16px 40px rgba(13, 36, 28, 0.16);
@@ -2368,6 +2370,78 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
   .td-check, .td-suggest-btn, a.td-row { transition: none !important; }
 }
 
+/* ---------------------------------------------------------------- Company page (CD-534, board C-Company) */
+.cp { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cp-crumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gs-text-2); }
+.cp-crumb-here { color: var(--gs-ink); }
+.cp-sub { font-size: 12.5px; line-height: 18px; color: var(--gs-text-2); }
+.cp-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: -6px; }
+.cp-tile { flex: none; width: 52px; height: 52px; border-radius: 14px; background: var(--white); box-shadow: inset 0 0 0 1px var(--gs-outline); display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: var(--gs-ink-3); }
+.cp-title { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cp-name { margin: 0; font-family: var(--gs-font-display); font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.cp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cp-meta .cp-sub { font-size: 13.5px; }
+.cp-actions { display: flex; align-items: flex-start; gap: 8px; }
+.cp-new-opp { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.cp-complete-first { font-size: 11.5px; }
+.gs-btn.off { opacity: 0.45; }
+.cp-iconb { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 999px; background: var(--gs-tile-hover); box-shadow: inset 0 0 0 1px var(--gs-outline); color: var(--gs-ink); cursor: pointer; }
+.cp-iconb:hover, .cp-iconb[aria-expanded='true'] { background: var(--white); }
+/* The readiness banner: the amber card of the board. */
+.cp-banner { display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--gs-amber-card); color: var(--gs-amber-ink); font-size: 13.5px; line-height: 19px; box-shadow: inset 0 0 0 1px var(--gs-amber-line); }
+.cp-banner svg { flex: none; }
+.cp-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.cp-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-check { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--gs-field); color: var(--gs-amber-ink); }
+.cp-check.done { background: var(--gs-check-bg); color: var(--gs-green); }
+/* Two columns: the main cards, and a right column that moves under them below 900 px. */
+.cp-card { border-radius: 18px; min-width: 0; overflow: hidden; }
+.cp-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px 6px; }
+.cp-card-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.cp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-height: 52px; box-sizing: border-box; padding: 10px 18px; border-top: 1px solid var(--gs-divider); }
+.cp-row.top { align-items: flex-start; }
+.cp-card-head + .cp-row { border-top: 0; }
+.cp-label { flex: 0 0 150px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; font-weight: 500; }
+.cp-hint { font-size: 11.5px; font-weight: 400; color: var(--gs-amber); }
+.cp-control { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cp-control .gs-input, .cp-control .gs-dd { width: 100%; }
+.cp-control .ghost-wrap, .cp-control .checked-field { width: 100%; }
+.cp-needed { box-shadow: inset 0 0 0 1.5px var(--gs-amber-outline); }
+.cp-notes { height: auto; min-height: 58px; padding: 8px 12px; line-height: 19px; resize: vertical; font-size: 13.5px; }
+.cp-link { padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; white-space: nowrap; color: var(--gs-green); cursor: pointer; text-decoration: none; }
+.cp-link:hover { color: var(--gs-green-dark); text-decoration: underline; }
+.cp-custom { padding: 0 18px 8px; }
+.cp-custom .field-row { border-top: 1px solid var(--gs-divider); }
+.cp-empty { padding: 14px 18px 18px; font-size: 13px; color: var(--gs-text-2); border-top: 1px solid var(--gs-divider); }
+/* Contacts. */
+.cp-face-sm { width: 22px; height: 22px; font-size: 9.5px; }
+.cp-face-lg { width: 36px; height: 36px; font-size: 12.5px; }
+.cp-contact-text { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-contact-name { padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--gs-ink); text-align: left; cursor: pointer; }
+.cp-contact-name:hover { color: var(--gs-green); }
+.cp-role.missing .gs-ddb { box-shadow: inset 0 0 0 1.5px var(--gs-amber-outline); }
+.cp-role.missing .gs-ddb .v { color: var(--gs-amber); }
+.cp-role .gs-ddb { height: 32px; }
+/* The right column. */
+.cp-hist { align-items: flex-start; min-height: 46px; flex-wrap: nowrap; }
+.cp-hist .gs-face { margin-top: 2px; }
+.cp-hist-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.cp-hist-text .cp-sub { font-size: 11.5px; line-height: 16px; }
+.cp-more { justify-content: center; min-height: 44px; }
+.gs-opt-icon { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+/* The Set status back sheet. */
+.cp-ask { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--gs-chip); font-size: 13.5px; }
+.cp-radio { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+@media (max-width: 560px) {
+  .cp-label, .cp-label.narrow { flex-basis: 100%; }
+  .cp-actions { flex-basis: 100%; justify-content: flex-end; }
+}
+.cp-dialog-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+/* A menu item that is off with the reason under it (CD-534). */
+.gs-opt.with-hint { white-space: normal; max-width: 320px; }
+.gs-opt-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.gs-opt:disabled .gs-opt-text .gs-sub { color: var(--gs-muted); font-weight: 400; }
+
 /* ---------------------------------------------------------------- Companies list (CD-533, board C-Companies) */
 .cl-bar { margin-bottom: 12px; }
 .cl-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
@@ -2405,3 +2479,80 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 @media (max-width: 560px) {
   .cl-actions { margin-left: 0; flex-basis: 100%; justify-content: flex-end; }
 }
+/* The 28 Nov boards (C-Company, C-Company-Client): five KPIs over tabs. */
+.cp-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.cp-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 14px 18px; border-radius: 18px; }
+.cp-kpi-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gs-ink-3); }
+.cp-kpi-value { font-family: var(--gs-font-display); font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-kpi-sub.red { color: var(--gs-danger-dark); font-weight: 500; }
+.cp-kpi-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-tabs { align-self: flex-start; gap: 2px; }
+.cp-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; font-size: 13.5px; }
+.cp-tabs button.on { font-weight: 600; }
+.cp-tab-n { font-size: 12px; font-weight: 500; color: var(--gs-muted); }
+.cp-dgrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.cp-dcol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cp-label.narrow { flex-basis: 96px; }
+.cp-text { font-size: 13.5px; }
+.cp-empty-big { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 34px 18px 38px; text-align: center; border-top: 1px solid var(--gs-divider); }
+.cp-empty-big b { font-size: 14.5px; font-weight: 600; }
+.cp-ogh { display: flex; align-items: center; gap: 8px; padding: 12px 18px 8px; border-top: 1px solid var(--gs-divider); background: var(--gs-drop-faint); }
+.cp-ogh b { font-size: 13.5px; font-weight: 600; }
+.cp-ogd { width: 8px; height: 8px; border-radius: 999px; }
+.cp-ogh.open b, .cp-ogh.open .cp-ogh-sum { color: var(--gs-blue); }
+.cp-ogh.open .cp-ogd { background: var(--gs-blue); }
+.cp-ogh.won b, .cp-ogh.won .cp-ogh-sum { color: var(--gs-green); }
+.cp-ogh.won .cp-ogd { background: var(--gs-green); }
+.cp-ogh.lost b, .cp-ogh.lost .cp-ogh-sum { color: var(--gs-danger-dark); }
+.cp-ogh.lost .cp-ogd { background: var(--gs-danger-dark); }
+.cp-grow { flex: 1; }
+.gs a.cp-mrow, .cp-mrow { color: var(--gs-ink); text-decoration: none; min-height: 58px; flex-wrap: nowrap; }
+.gs a.cp-mrow:hover, .cp-mrow:hover { background: var(--gs-drop); color: var(--gs-ink); }
+.cp-mrow b { font-weight: 600; }
+.cp-nw { white-space: nowrap; }
+.cp-who { display: inline-flex; align-items: center; gap: 8px; width: 170px; font-size: 13.5px; }
+.cp-val { width: 90px; text-align: right; font-size: 14px; white-space: nowrap; }
+.cp-val.muted { color: var(--gs-muted); }
+.cp-dblk { flex: none; width: 44px; display: flex; flex-direction: column; align-items: center; line-height: 16px; }
+.cp-dblk b { font-size: 19px; line-height: 22px; }
+.cp-dblk span { font-size: 11.5px; color: var(--gs-text-2); }
+.cp-iconb.off { opacity: 0.45; }
+.cp-task { min-height: 56px; flex-wrap: nowrap; }
+.cp-task-add { min-height: 56px; background: var(--gs-drop); flex-wrap: nowrap; }
+.cp-task-add .gs-input { flex: 1 1 240px; }
+.cp-chk { flex: none; width: 22px; height: 22px; border-radius: 999px; border: 1.5px solid var(--gs-chip-2); background: var(--gs-field); color: transparent; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; transition: background 0.15s ease, transform 0.1s ease-out; }
+.cp-chk:active { transform: scale(0.9); }
+.cp-chk.on { background: var(--gs-green); border-color: var(--gs-green); color: var(--white); }
+.cp-task-title { padding: 0; border: 0; background: none; font: inherit; font-size: 14.5px; color: var(--gs-ink); text-align: left; cursor: pointer; }
+.cp-task-title.done { text-decoration: line-through; color: var(--gs-muted); }
+.cp-task-title:hover { color: var(--gs-green); }
+@media (max-width: 1100px) {
+  .cp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cp-dgrid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .cp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cp-who { width: auto; }
+  .cp-mrow, .cp-task, .cp-task-add { flex-wrap: wrap; }
+  .cp-task-add .gs-input { flex-basis: 100%; }
+  .cp-kpi-value { font-size: 22px; line-height: 28px; }
+}
+
+/* The New opportunity dialog in the glass kit (CD-534): the company picker's list, the lead notice, the sale type and funnel cards. */
+.nd-pop { width: 320px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px; border-radius: 14px; background: var(--gs-glass-strong); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--gs-pop-shadow); display: flex; flex-direction: column; gap: 4px; font-family: var(--gs-font); color: var(--gs-ink); }
+.nd-list { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
+.nd-list .gs-opt { flex: none; max-width: none; }
+.nd-none { padding: 10px 8px; font-size: 13px; color: var(--gs-text-2); }
+.nd-link { align-self: flex-start; font-size: 12.5px; }
+.nd-sub { display: flex; flex-direction: column; gap: 6px; }
+.nd-warn { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--gs-amber-card); box-shadow: inset 0 0 0 1px var(--gs-amber-line); font-size: 13.5px; line-height: 19px; color: var(--gs-ink); }
+.nd-warn > b { color: var(--gs-amber-ink); }
+.nd-warn > span { color: var(--gs-text-2); }
+.nd-complete { display: flex; flex-direction: column; gap: 10px; margin-top: 2px; }
+.nd-person { font-size: 13px; font-weight: 600; color: var(--gs-ink); }
+.nd-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.nd-choice { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--gs-field); box-shadow: inset 0 0 0 1px var(--gs-outline); font: inherit; text-align: left; color: var(--gs-ink); cursor: pointer; }
+.nd-choice:hover { background: var(--white); }
+.nd-choice.on { background: var(--gs-green-soft); box-shadow: inset 0 0 0 1.5px var(--gs-green); }
+.nd-choice > b { font-size: 13.5px; font-weight: 600; }
+.nd-choice > span { font-size: 12.5px; line-height: 17px; color: var(--gs-text-2); }

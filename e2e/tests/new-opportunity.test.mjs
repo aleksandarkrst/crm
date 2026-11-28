@@ -48,13 +48,14 @@ describe('new opportunity', () => {
     // The company page is a lazily loaded screen (CD-24): it renders a moment after the URL changes.
     // Until it does, the contact page's own (enabled) + Opportunity is still there: wait for a
     // field only the company page has.
-    await page.waitForSelector('input[aria-label="Matični broj"]');
+    await page.waitForSelector('[data-testid=company-field-mb]');
     const plus = await page.waitForSelector('[data-testid=record-new-deal]');
-    assert.equal(await plus.evaluate((el) => el.disabled), true, '+ Opportunity is off for a lead');
-    // A checked field saves when it loses the focus, so it takes the focus first.
-    await page.focus('input[aria-label="Matični broj"]');
-    await setValue(page, 'input[aria-label="Matični broj"]', READY_IDENTITY.mb);
-    await page.$eval('input[aria-label="Matični broj"]', (el) => el.blur());
+    // On a lead the button is dimmed (CD-534): it stays clickable and says what is missing.
+    assert.equal(await plus.evaluate((el) => el.getAttribute('aria-disabled')), 'true', '+ Opportunity is off for a lead');
+    // The field saves as it is typed (CD-534), once the value is right.
+    await page.focus('[data-testid=company-field-mb]');
+    await setValue(page, '[data-testid=company-field-mb]', READY_IDENTITY.mb);
+    await page.$eval('[data-testid=company-field-mb]', (el) => el.blur());
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the company is an opportunity');
     await page.waitForFunction(() => /^Opportunity/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
   });
@@ -77,17 +78,20 @@ describe('new opportunity', () => {
     assert.equal(await saleType.evaluate((el) => el.value), 'transactional');
   });
 
-  step("fills in a lead's missing MB and job title right in the dialog, then creates the opportunity", async () => {
+  step("fills in a lead's missing MB and the contact's role in the decision right in the dialog, then creates the opportunity", async () => {
     const me = (await api(page, '/profile')).userId;
     const { mb: _mb, ...rest } = READY_IDENTITY;
     const id = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Orion Tech', pib: testPib(), ...rest }) })).id;
-    const person = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: id, fullName: 'Ana Petrović', buyerRole: 'Decision maker', ownerUserId: me }) })).id;
+    // "Not involved" doesn't count (CD-534): the form asks for the role, and doesn't offer Not involved.
+    const person = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: id, fullName: 'Ana Petrović', buyerRole: 'Not involved', ownerUserId: me }) })).id;
     await page.goto(`${BASE_URL}/contacts/${person}`, { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForSelector('[data-testid=new-deal-complete-form]');
     assert.equal(await page.$eval('[data-testid=new-deal-create]', (el) => el.disabled), true);
+    assert.equal(await page.$('[data-testid=new-deal-complete-form] input[aria-label="Job title"]'), null, 'no job title asked');
+    assert.ok(!(await page.$$eval('[data-testid=new-deal-complete-form] select[aria-label="Role in the decision"] option', (els) => els.map((o) => o.textContent))).includes('Not involved'));
     await setValue(page, '[data-testid=new-deal-complete-form] input[aria-label="Matični broj"]', READY_IDENTITY.mb);
-    await setValue(page, '[data-testid=new-deal-complete-form] input[aria-label="Job title"]', 'CEO');
+    await setValue(page, '[data-testid=new-deal-complete-form] select[aria-label="Role in the decision"]', 'Decision maker');
     await click(page, '[data-testid=new-deal-complete-save]');
     // Complete now: an opportunity, so the warning goes and Create works.
     await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-lead]'));

@@ -50,7 +50,7 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     { key: 'jobTitle', label: 'Job title', required: false, aliases: ['title', 'position', 'role'], example: 'Managing Director' },
     { key: 'phone', label: 'Phone', required: false, aliases: ['telephone', 'mobile', 'phone number', 'tel'], example: '+381 60 000 0000' },
     { key: 'linkedin', label: 'LinkedIn', required: false, aliases: ['linkedin url', 'linkedin profile'], example: '' },
-    { key: 'buyerRole', label: 'Buyer role', required: false, aliases: [], hint: 'Decision maker, Economic buyer, Champion, Influencer, Gatekeeper or End user', example: 'Decision maker' },
+    { key: 'buyerRole', label: 'Buyer role', required: false, aliases: [], hint: 'Decision maker, Signs off budget, Influencer, User or Not involved', example: 'Decision maker' },
     { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
     companyPib,
     owner,

@@ -23,23 +23,41 @@ export interface ReadinessContact {
 const filled = (v: string | null | undefined) => !!v && v.trim() !== '';
 const list = (items: string[], and: string) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]}` : (items[0] ?? ''));
 
+/** The one role in the decision that doesn't count (CD-534). */
+export const NOT_INVOLVED = 'Not involved';
+/** Whether a contact has a role in the decision (CD-534): any role but "Not involved"; none doesn't count. */
+export const countsInDecision = (buyerRole: string | null | undefined): boolean => filled(buyerRole) && buyerRole!.trim() !== NOT_INVOLVED;
+
+/** The seven checks as the readiness banner tags them (CD-534), in order. */
+export const READINESS_TAGS = ['Name', 'PIB', 'MB', 'Address', 'Activity code', 'Owner', 'A contact with a role in the decision'] as const;
+
+export interface ReadinessResult {
+  ready: number;
+  total: number;
+  /** The company page's sentences for what is missing. */
+  blockers: string[];
+  /** The card's short words for what is missing. */
+  missing: string[];
+  /** Each of READINESS_TAGS, done or not. */
+  done: boolean[];
+}
+
 /**
  * What a lead still needs before it becomes an opportunity, as the API checks it
  * (opportunityReadiness in crm/companies/company-status.ts): 7 checks (CD-533), each counted once:
- * name, PIB, MB, address (street, city and postal code), activity code, owner and a qualified contact.
- * `blockers` are the company page's sentences, `missing` the card's short words.
+ * name, PIB, MB, address (street, city and postal code), activity code, owner and a contact with a
+ * role in the decision (CD-534: any role but "Not involved"; a job title or an owner isn't needed).
  */
-export function readiness(c: ReadinessCompany | undefined, people: ReadinessContact[]): { ready: number; total: number; blockers: string[]; missing: string[] } {
+export function readiness(c: ReadinessCompany | undefined, people: ReadinessContact[]): ReadinessResult {
   const address = [!filled(c?.address) && 'street', !filled(c?.city) && 'city', !filled(c?.postalCode) && 'postal code'].filter((x): x is string => !!x);
-  const gapsOf = (p: ReadinessContact) => [!filled(p.role) && 'job title', !filled(p.buyerRole) && 'role in the decision', !p.ownerId && 'owner'].filter((x): x is string => !!x);
   let contact: string | null = null;
   let contactShort = '';
-  if (!people.some((p) => gapsOf(p).length === 0)) {
-    const want = 'A contact with a job title, a role in the decision and an owner';
-    const best = [...people].sort((a, b) => gapsOf(a).length - gapsOf(b).length)[0];
-    const gaps = best ? gapsOf(best) : [];
-    contact = best ? `${want}: ${best.name} has no ${list(gaps, 'or')} yet.` : want;
-    contactShort = best ? `contact ${list(gaps, 'and')}` : 'a contact';
+  if (!people.some((p) => countsInDecision(p.buyerRole))) {
+    const want = 'A contact with a role in the decision';
+    // The one without any role first: picking a role for them is the smallest step.
+    const named = people.find((p) => !filled(p.buyerRole)) ?? people[0];
+    contact = named ? (filled(named.buyerRole) ? `${want}: ${named.name} is not involved.` : `${want}: ${named.name} has no role yet.`) : want;
+    contactShort = named ? 'contact role in the decision' : 'a contact';
   }
   const checks: [passed: boolean, string, string][] = [
     [filled(c?.name), 'Name', 'name'],
@@ -51,7 +69,7 @@ export function readiness(c: ReadinessCompany | undefined, people: ReadinessCont
     [!contact, contact ?? '', contactShort],
   ];
   const open = checks.filter(([passed]) => !passed);
-  return { ready: checks.length - open.length, total: checks.length, blockers: open.map(([, msg]) => msg), missing: open.map(([, , short]) => short) };
+  return { ready: checks.length - open.length, total: checks.length, blockers: open.map(([, msg]) => msg), missing: open.map(([, , short]) => short), done: checks.map(([passed]) => passed) };
 }
 
 /** The Kanban's columns, left to right. */

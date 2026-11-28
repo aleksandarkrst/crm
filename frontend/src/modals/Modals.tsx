@@ -7,13 +7,16 @@ import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
 import { deviceTimeZone } from '../lib/timeZones';
 import { DateRangePicker } from '../components/DateRangePicker';
-import { Dropdown, Modal as GlassModal } from '../screens/settings/parts';
+import { Icon } from '../components/icons';
+import { Confirm, Dropdown, Modal as GlassModal, useEscape } from '../screens/settings/parts';
+import { STATUS_TAG_TONE } from '../store/companyPage';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
+import { countsInDecision, NOT_INVOLVED } from '../store/companyBoard';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, opportunityName, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
-import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
+import type { ChannelCode, CompanyStatus, Lead, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
@@ -54,10 +57,10 @@ export function Modals() {
 const NEW_CT = '\u0000new-contact';
 
 /**
- * New opportunity (CD-360): only for a company that is an opportunity or a client. Leads are
- * listed but can't be picked; one passed in (from its page) shows what it still misses, with a link
- * to complete it. "+ New company" opens the New company dialog (a new company is a lead). The sale
- * type is required; the funnel choice and custom fields are as before.
+ * New opportunity (CD-360; the glass kit of the redesign, CD-534): only for a company that is an
+ * opportunity or a client. Leads are listed but can't be picked; one passed in (from its page) shows
+ * what it still misses, with a link to complete it. "+ New company" opens the New company dialog (a
+ * new company is a lead). The sale type is required; the funnel choice and custom fields are as before.
  */
 function NewDealModal() {
   const { s, set, flash, createDeal, openCompany } = useStore();
@@ -76,6 +79,7 @@ function NewDealModal() {
   const [contactName, setContactName] = useState('');
   const [saleType, setSaleType] = useState<SaleType | null>(null);
   const [saleTypeMissing, setSaleTypeMissing] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
   // The company list (CD-360 QA): searchable by name or PIB; a lead is listed and pickable, so the dialog can say what it misses.
   const [pickOpen, setPickOpen] = useState(false);
@@ -87,8 +91,14 @@ function NewDealModal() {
     setPickOpen(false);
     setQ('');
   };
+  // While the list is open it is the top of the glass Escape stack: Escape closes it, not the sheet.
+  useEscape(pickOpen, () => {
+    closePick();
+    pickRef.current?.focus();
+  });
 
   const companyRec = records.find((c) => c.id === company);
+  const companyStatus = companyRec ? statusOf(companyRec.id) : undefined;
   // A lead, or a Not interested company that isn't complete: listed, not eligible.
   const isLead = !!companyRec && pipelineBlocked(s, companyRec.id);
   const missing = isLead ? companyReadiness(s, companyRec.id).blockers : [];
@@ -102,6 +112,8 @@ function NewDealModal() {
   // From the meeting form (CD-213): the meeting's company stays, and the dialog shows above the meeting's.
   const forMeeting = s.newLeadForMeeting && !!s.newLeadCompanyId && company === s.newLeadCompanyId;
   const close = () => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false });
+  // Escape, the backdrop and × ask before dropping what was typed (a new contact's name, custom fields); Cancel doesn't.
+  const dismiss = () => (contactName.trim() || Object.keys(custom).length ? setDiscarding(true) : close());
 
   const create = async () => {
     if (!companyRec || isLead) return;
@@ -121,29 +133,45 @@ function NewDealModal() {
     setBusy(false);
   };
 
+  const companyLabel = companyRec ? (labels.get(companyRec.id) ?? companyRec.name) : companies.length ? 'Pick a company' : 'No companies yet';
   return (
-    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined} onClose={close}>
-      <ModalHeader title="New opportunity" sub="Pick the company and the funnel; activities and documents come with it. Only a company in status Opportunity or Client can enter the Pipeline." />
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
-        <div className="form-label">
-          Company
-          <button ref={pickRef} type="button" className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} aria-haspopup="dialog" aria-expanded={pickOpen} onClick={() => (pickOpen ? closePick() : setPickOpen(true))} style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: forMeeting ? 'default' : 'pointer' }}>
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {companyRec ? (labels.get(companyRec.id) ?? companyRec.name) : companies.length ? 'Pick a company' : 'No companies yet'}
+    <GlassModal title="New opportunity" desc="Only a company in status Opportunity or Client can enter the Pipeline. The funnel's activities and documents come with it." onClose={dismiss} wide stacked={s.newLeadForMeeting} testId="new-deal-dialog">
+      <div className="td-dialog-row">
+        <div className="gs-label">
+          <span>
+            Company
+            <span className="gs-req" aria-hidden="true">
+              *
             </span>
-            {!forMeeting && <Chevron />}
-          </button>
+          </span>
+          <div className="gs-dd" style={{ width: '100%' }}>
+            <button
+              ref={pickRef}
+              type="button"
+              className="gs-ddb"
+              style={{ width: '100%' }}
+              data-testid="new-deal-company"
+              value={company}
+              disabled={forMeeting}
+              aria-haspopup="dialog"
+              aria-expanded={pickOpen}
+              aria-label={`Company: ${companyRec ? companyLabel : 'not set'}`}
+              onClick={() => (pickOpen ? closePick() : setPickOpen(true))}
+            >
+              <span className={'v' + (companyRec ? '' : ' gs-placeholder')}>{companyLabel}</span>
+              {companyStatus && <span className={'gs-badge ' + STATUS_TAG_TONE[companyStatus]}>{COMPANY_STATUS_LABELS[companyStatus]}</span>}
+              {!forMeeting && <Chevron />}
+            </button>
+          </div>
           {pickOpen && (
-            <Popover anchor={pickRef} onClose={closePick} className="fr-pop" label="Pick the company" testId="new-deal-company-pop">
-              <div className="fr-search">
-                <input className="fr-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or company ID" aria-label="Search companies" data-testid="new-deal-company-search" autoFocus />
-              </div>
-              <div className="fr-list">
+            <Popover anchor={pickRef} onClose={closePick} className="gs-tokens nd-pop" label="Pick the company" testId="new-deal-company-pop">
+              <input className="gs-input s" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or company ID" aria-label="Search companies" data-testid="new-deal-company-search" autoFocus />
+              <div className="nd-list">
                 {shown.map((o) => (
                   <button
                     key={o.value}
                     type="button"
-                    className="fr-opt"
+                    className={'gs-opt with-hint' + (o.value === company ? ' on' : '')}
                     value={o.value}
                     data-testid="new-deal-company-option"
                     aria-current={o.value === company}
@@ -153,113 +181,139 @@ function NewDealModal() {
                       closePick();
                     }}
                   >
-                    <span className="fr-opt-text">
-                      <span style={{ fontWeight: o.value === company ? 600 : 400 }}>{o.label}</span>
-                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{[o.status && COMPANY_STATUS_LABELS[o.status], o.pib && 'Company ID ' + o.pib].filter(Boolean).join(' · ')}</span>
+                    <span className="gs-opt-text">
+                      <span>{o.label}</span>
+                      <span className="gs-sub">{[o.status && COMPANY_STATUS_LABELS[o.status], o.pib && 'Company ID ' + o.pib].filter(Boolean).join(' · ')}</span>
                     </span>
-                    {o.blocked && <span className="fr-tag">Not eligible</span>}
+                    {o.blocked ? (
+                      <span className="gs-badge amber">Not eligible</span>
+                    ) : (
+                      <span className="ok">
+                        <Icon name="check" size={12} />
+                      </span>
+                    )}
                   </button>
                 ))}
+                {!shown.length && <span className="nd-none">{query ? `No company matches “${q.trim()}”.` : 'No companies yet.'}</span>}
               </div>
-              {!shown.length && <span className="fr-none">{query ? `No company matches “${q.trim()}”.` : 'No companies yet.'}</span>}
             </Popover>
           )}
           {!forMeeting && (
             // A new company is a lead: it is made (and completed) first, then it can take an opportunity.
-            <button type="button" className="btn-link" data-testid="new-deal-add-company" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newCompanyOpen: true })}>
+            <button type="button" className="cl-link nd-link" data-testid="new-deal-add-company" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newCompanyOpen: true })}>
               + New company
             </button>
           )}
         </div>
-        <div className="form-label">
-          Primary contact
+        <div className="gs-label">
+          <span>Primary contact</span>
           {contact === NEW_CT ? (
-            <div className="subform" data-testid="new-deal-new-contact">
-              <div className="subform-head">
-                <span>New contact</span>
+            <div className="nd-sub" data-testid="new-deal-new-contact">
+              <input className="gs-input s" placeholder="Full name" aria-label="New contact's full name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+              <span className="gs-sub">
+                Added to {companyRec?.name ?? 'the company'}.
                 {people.length > 0 && (
-                  <button type="button" className="btn-link" onClick={() => setContactPick(people[0]!.name)}>
-                    Pick an existing one
-                  </button>
+                  <>
+                    {' '}
+                    <button type="button" className="cl-link nd-link" onClick={() => setContactPick(people[0]!.name)}>
+                      Pick an existing one
+                    </button>
+                  </>
                 )}
-              </div>
-              <input className="form-input" placeholder="Full name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-              <span className="subform-hint">Added to {companyRec?.name ?? 'the company'}.</span>
+              </span>
             </div>
           ) : (
-            <>
-              <select className="form-input" data-testid="new-deal-contact" value={contact} onChange={(e) => setContactPick(e.target.value)}>
-                {people.map((p) => (
-                  <option key={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <button type="button" className="btn-link" data-testid="new-deal-add-contact" onClick={() => setContactPick(NEW_CT)}>
-                + New contact
-              </button>
-            </>
+            <Dropdown label="Primary contact" value={contact} options={[...people.map((p) => ({ value: p.name, label: p.name })), { value: NEW_CT, label: '+ New contact' }]} onChange={setContactPick} width="100%" testId="new-deal-contact" />
           )}
         </div>
       </div>
       {isLead && companyRec && (
-        <div className="notice-warn" data-testid="new-deal-lead" role="alert">
-          <span style={{ fontWeight: 600 }}>
-            {companyRec.name} {statusOf(companyRec.id) === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
-          </span>
-          <span style={{ color: 'var(--text-2)' }}>
-            {fillHere ? 'Fill in what is missing here, and it can take the opportunity. ' : missing.length ? 'Complete it on its page, and it can take the opportunity. ' : "Pick another company, or change its status on its page. "}
+        <div className="nd-warn" data-testid="new-deal-lead" role="alert">
+          <b>
+            {companyRec.name} {companyStatus === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
+          </b>
+          <span>
+            {fillHere ? 'Fill in what is missing here, and it can take the opportunity. ' : missing.length ? 'Complete it on its page, and it can take the opportunity. ' : 'Pick another company, or change its status on its page. '}
             {missing.length ? `Missing for Opportunity: ${missing.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
           {fillHere && <CompleteCompany companyId={companyRec.id} />}
           {/* From a meeting form, leaving would drop the meeting. */}
           {!s.newLeadForMeeting && (
             <span>
-              <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
+              <button
+                type="button"
+                className="cl-link"
+                data-testid="new-deal-complete-company"
+                onClick={() => {
+                  close();
+                  openCompany(companyRec.id);
+                }}
+              >
                 Open the company instead
               </button>
             </span>
           )}
         </div>
       )}
-      {!companyRec && <div className="hint-box">No company is an opportunity or a client yet. Complete a company first: its identity, address, owner and a contact with a job title, a role in the decision and an owner.</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <span className="caps">Sale type</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 9 }} role="radiogroup" aria-label="Sale type">
+      {!companyRec && <span className="gs-sub">No company is an opportunity or a client yet. Complete a company first: its identity, address, owner and a contact with a role in the decision.</span>}
+      <div className="gs-label">
+        <span>
+          Sale type
+          <span className="gs-req" aria-hidden="true">
+            *
+          </span>
+        </span>
+        <div className="nd-choices" role="radiogroup" aria-label="Sale type">
           {SALE_TYPES.map((t) => (
-            <button key={t.id} type="button" role="radio" aria-checked={saleType === t.id} data-testid={'new-deal-sale-' + t.id} className={saleType === t.id ? 'choice on' : 'choice'} onClick={() => { setSaleType(t.id); setSaleTypeMissing(false); }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{t.note}</span>
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={saleType === t.id}
+              data-testid={'new-deal-sale-' + t.id}
+              className={'nd-choice' + (saleType === t.id ? ' on' : '')}
+              onClick={() => {
+                setSaleType(t.id);
+                setSaleTypeMissing(false);
+              }}
+            >
+              <b>{t.name}</b>
+              <span>{t.note}</span>
             </button>
           ))}
         </div>
         {saleTypeMissing && (
-          <span role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>
+          <span className="gs-error" role="alert">
             Pick the sale type.
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <span className="caps">Target customer type</span>
-        {Object.values(s.funnels).map((f) => (
-          <button key={f.id} type="button" className={f.id === type ? 'choice on' : 'choice'} onClick={() => set({ newLeadType: f.id })}>
-            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{f.label}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{f.note}</span>
-          </button>
-        ))}
+      <div className="gs-label">
+        <span>Target customer type</span>
+        <div className="nd-choices" role="radiogroup" aria-label="Target customer type">
+          {Object.values(s.funnels).map((f) => (
+            <button key={f.id} type="button" role="radio" aria-checked={f.id === type} className={'nd-choice' + (f.id === type ? ' on' : '')} onClick={() => set({ newLeadType: f.id })}>
+              <b>{f.label}</b>
+              <span>{f.note}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <CustomFieldInputs entity="deal" values={custom} onChange={setCustom} />
-      <div className="hint-box">
+      <CustomFieldInputs entity="deal" values={custom} onChange={setCustom} glass />
+      <span className="gs-sub">
         {/* Counted as Settings and the Pipeline show it to people: the stages before Won (CD-518). */}
         Assigns the {funnel.stages.filter((st) => !st.won).length}-stage funnel, then Won. First task: {funnel.stages[0]?.activity}.
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={close}>
+      </span>
+      <div className="gs-sheet-actions">
+        <button type="button" className="gs-btn" onClick={close}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" data-testid="new-deal-create" disabled={busy || !companyRec || isLead} title={isLead ? 'A lead can\'t enter the Pipeline yet' : undefined} onClick={() => void create()}>
+        <button type="button" className="gs-btn primary" data-testid="new-deal-create" disabled={busy || !companyRec || isLead} title={isLead ? "A lead can't enter the Pipeline yet" : undefined} onClick={() => void create()}>
           {busy ? 'Creating…' : <>Create &amp; start funnel</>}
         </button>
       </div>
-    </Modal>
+      {discarding && <Confirm title="Discard this opportunity?" text="What you entered here is not saved." confirmLabel="Discard" onConfirm={close} onCancel={() => setDiscarding(false)} testId="new-deal-discard" />}
+    </GlassModal>
   );
 }
 
@@ -273,11 +327,13 @@ function CompleteCompany({ companyId }: { companyId: string }) {
   const extra = s.extraCompanies.find((c) => c.id === companyId);
   const blank = (v: string | undefined) => !v || !v.trim();
   const fields = ([['mb', 'Matični broj', '8 digits'], ['address', 'Street', 'Street and number'], ['city', 'City', 'City'], ['postalCode', 'Postal code', '21000'], ['activityCode', 'Šifra delatnosti', '4 digits, e.g. 6201']] as const).filter(([k]) => blank(extra?.[k]));
+  // The company's owner is one of the checks (CD-533); without one the form asks for it, you first.
+  const needsOwner = !extra?.ownerId;
   const people = companyContacts(s, companyId);
-  const gaps = (p: Person) => [blank(p.role) && 'role', blank(p.buyerRole) && 'buyerRole', !p.ownerId && 'ownerId'].filter((g): g is 'role' | 'buyerRole' | 'ownerId' => !!g);
-  const ready = people.some((p) => gaps(p).length === 0);
-  const person = ready ? undefined : [...people].sort((a, b) => gaps(a).length - gaps(b).length)[0];
-  const contactGaps = ready ? [] : person ? gaps(person) : (['role', 'buyerRole', 'ownerId'] as const).slice();
+  // A contact counts by its role in the decision alone (CD-534): the one without any role is the
+  // smallest step, else whoever is not involved; a company without contacts gets a new one.
+  const ready = people.some((p) => countsInDecision(p.buyerRole));
+  const person = ready ? undefined : (people.find((p) => blank(p.buyerRole)) ?? people[0]);
   const [values, setValues] = useState<Record<string, string>>({ ownerId: session.userId });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -294,68 +350,72 @@ function CompleteCompany({ companyId }: { companyId: string }) {
       if (v && checked && !checked.ok) errs[k] = checked.error;
       company[k] = checked?.ok ? checked.value : v;
     }
+    if (needsOwner) {
+      if (!values.ownerId) errs.ownerId = 'Pick the company owner';
+      else company.ownerUserId = values.ownerId;
+    }
     if (!ready && !person && !(values.fullName ?? '').trim()) errs.fullName = 'Name the contact';
-    for (const g of contactGaps) if (!(values[g] ?? '').trim()) errs[g] = g === 'role' ? 'Fill in the job title' : g === 'buyerRole' ? 'Pick the role in the decision' : 'Pick the owner';
+    if (!ready && !values.buyerRole) errs.buyerRole = 'Pick the role in the decision';
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    const details = { ...(contactGaps.includes('role') ? { jobTitle: values.role!.trim() } : {}), ...(contactGaps.includes('buyerRole') ? { buyerRole: values.buyerRole! } : {}), ...(contactGaps.includes('ownerId') ? { ownerUserId: values.ownerId! } : {}) };
+    const details = ready ? {} : { buyerRole: values.buyerRole! };
     setBusy(true);
-    await completeCompany(companyId, company, ready ? null : person?.contactId ? { id: person.contactId, patch: details } : { create: { fullName: values.fullName!.trim(), ...details } });
+    await completeCompany(companyId, company, ready ? null : person?.contactId ? { id: person.contactId, patch: details } : { create: { fullName: values.fullName!.trim(), ownerUserId: session.userId, ...details } });
     setBusy(false);
   };
 
+  // The role and the owner stay native selects: the glass Dropdown is a button, and these are driven by tests as fields.
   const field = (k: string, label: string, input: React.ReactNode) => (
-    <label key={k} className="form-label">
-      {label}
+    <label key={k} className="gs-label">
+      <span>{label}</span>
       {input}
       {errors[k] && (
-        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)', textTransform: 'none', letterSpacing: 0 }}>
+        <span role="alert" className="gs-error">
           {errors[k]}
         </span>
       )}
     </label>
   );
   return (
-    <div data-testid="new-deal-complete-form" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-      {fields.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-          {fields.map(([k, label, ph]) => field(k, label, <input className="form-input" aria-label={label} placeholder={ph} value={values[k] ?? ''} onChange={set(k)} />))}
+    <div data-testid="new-deal-complete-form" className="nd-complete">
+      {(fields.length > 0 || needsOwner) && (
+        <div className="td-dialog-row">
+          {fields.map(([k, label, ph]) => field(k, label, <input className="gs-input s" aria-label={label} placeholder={ph} value={values[k] ?? ''} aria-invalid={!!errors[k]} onChange={set(k)} />))}
+          {needsOwner &&
+            field(
+              'ownerId',
+              'Company owner',
+              <select className="gs-input s" aria-label="Company owner" value={values.ownerId ?? ''} onChange={set('ownerId')}>
+                {members.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>,
+            )}
         </div>
       )}
       {!ready && (
         <>
-          <span style={{ fontSize: 12.5, fontWeight: 600 }}>{person ? person.name : 'A contact'}</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-            {!person && field('fullName', 'Full name', <input className="form-input" aria-label="Contact name" value={values.fullName ?? ''} onChange={set('fullName')} />)}
-            {contactGaps.includes('role') && field('role', 'Job title', <input className="form-input" aria-label="Job title" placeholder="e.g. CEO" value={values.role ?? ''} onChange={set('role')} />)}
-            {contactGaps.includes('buyerRole') &&
-              field(
-                'buyerRole',
-                'Role in the decision',
-                <select className="form-input" aria-label="Role in the decision" value={values.buyerRole ?? ''} onChange={set('buyerRole')}>
-                  <option value="">Pick one</option>
-                  {BUYER_ROLES.map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>,
-              )}
-            {contactGaps.includes('ownerId') &&
-              field(
-                'ownerId',
-                'Owner',
-                <select className="form-input" aria-label="Contact owner" value={values.ownerId ?? ''} onChange={set('ownerId')}>
-                  {members.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>,
-              )}
+          <b className="nd-person">{person ? person.name : 'A contact'}</b>
+          <div className="td-dialog-row">
+            {!person && field('fullName', 'Full name', <input className="gs-input s" aria-label="Contact name" value={values.fullName ?? ''} aria-invalid={!!errors.fullName} onChange={set('fullName')} />)}
+            {field(
+              'buyerRole',
+              'Role in the decision',
+              <select className="gs-input s" aria-label="Role in the decision" value={values.buyerRole ?? ''} aria-invalid={!!errors.buyerRole} onChange={set('buyerRole')}>
+                <option value="">Pick one</option>
+                {/* Not involved wouldn't count: it isn't offered here. */}
+                {BUYER_ROLES.filter((r) => r !== NOT_INVOLVED).map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>,
+            )}
           </div>
         </>
       )}
       <span>
-        <button type="button" className="btn btn-secondary" data-testid="new-deal-complete-save" disabled={busy} onClick={() => void save()} style={{ padding: '8px 12px' }}>
+        <button type="button" className="gs-btn small" data-testid="new-deal-complete-save" disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save and continue'}
         </button>
       </span>

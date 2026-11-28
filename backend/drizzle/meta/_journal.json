@@ -925,6 +925,13 @@
       "when": 1794611135862,
       "tag": "0131_keep_workforce_for_rollback",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1795651689691,
+      "tag": "0132_company_contact_history",
+      "breakpoints": true
     }
   ]
 }

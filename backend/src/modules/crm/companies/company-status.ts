@@ -54,16 +54,24 @@ export interface Readiness {
 
 const filled = (v: string | null | undefined) => !!v && v.trim() !== '';
 
-/** The contact closest to qualifying, and what it still misses (job title, role in the decision, owner). */
+/** The one role in the decision that doesn't count (CD-534): the contact is known, but has no say. */
+export const NOT_INVOLVED = 'Not involved';
+
+/**
+ * Whether a contact "has a role in the decision" (CD-534): any role but "Not involved" (Decision
+ * maker, Signs off budget, Influencer, User, or an older value a contact still carries). No role
+ * doesn't count. The job title and the contact's owner are no longer part of the check.
+ */
+export const countsInDecision = (buyerRole: string | null | undefined): boolean => filled(buyerRole) && buyerRole!.trim() !== NOT_INVOLVED;
+
+/** Why no contact counts yet: none, or who has no role (or is not involved). */
 function contactBlocker(contacts: StatusContact[]): string | null {
-  const missing = (c: StatusContact) => [!filled(c.jobTitle) && 'job title', !filled(c.buyerRole) && 'role in the decision', !c.ownerUserId && 'owner'].filter((m): m is string => !!m);
-  if (contacts.some((c) => missing(c).length === 0)) return null;
-  const want = 'A contact with a job title, a role in the decision and an owner';
-  const best = [...contacts].sort((a, b) => missing(a).length - missing(b).length)[0];
-  if (!best) return want;
-  const gaps = missing(best);
-  const list = gaps.length > 1 ? `${gaps.slice(0, -1).join(', ')} or ${gaps[gaps.length - 1]}` : gaps[0];
-  return `${want}: ${best.fullName} has no ${list} yet.`;
+  if (contacts.some((c) => countsInDecision(c.buyerRole))) return null;
+  const want = 'A contact with a role in the decision';
+  if (contacts.length === 0) return want;
+  // The one without any role first: picking a role for them is the smallest step.
+  const named = contacts.find((c) => !filled(c.buyerRole)) ?? contacts[0]!;
+  return filled(named.buyerRole) ? `${want}: ${named.fullName} is not involved.` : `${want}: ${named.fullName} has no role yet.`;
 }
 
 /**

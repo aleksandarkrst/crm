@@ -2,7 +2,7 @@
 import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals, num } from './dealMath';
-import { readiness, STATUS_RANK } from './companyBoard';
+import { readiness, type ReadinessResult, STATUS_RANK } from './companyBoard';
 import { primaryPerson, uniquePeople } from './companyPeople';
 import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, CompanyStatus, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
@@ -209,7 +209,7 @@ export function companyContacts(s: State, companyId: string): Person[] {
 }
 
 /** What a lead still needs before it becomes an opportunity (companyBoard.ts: the API's 7 checks). */
-export function companyReadiness(s: State, companyId: string): { ready: number; total: number; blockers: string[]; missing: string[] } {
+export function companyReadiness(s: State, companyId: string): ReadinessResult {
   return readiness(s.extraCompanies.find((x) => x.id === companyId), companyContacts(s, companyId));
 }
 
@@ -292,8 +292,8 @@ export function companyPeople(s: State, companyId: string, leads: Lead[]): Perso
 /** What an opportunity is called on the Pipeline (CD-477): its own name, or its company's while it has none. */
 export const opportunityName = (l: Pick<Lead, 'title' | 'company'>): string => l.title?.trim() || l.company;
 
-/** Ownership labels (CD-357), by the API's value. */
-export const OWNERSHIP_LABELS: Record<string, string> = { private: 'Private', state: 'State' };
+/** Ownership labels (CD-357), by the API's value; state-owned reads "Public" (CD-534). */
+export const OWNERSHIP_LABELS: Record<string, string> = { private: 'Private', state: 'Public' };
 
 export interface CompanyRecord {
   /** Backend company id: companies are identified by id, never by name (names aren't unique). */

@@ -2535,12 +2535,13 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   workspace the default funnel is disabled ("CRM is off in this workspace"), and a notification
   whose module is off (`NOTIFICATION_MODULE`) keeps its switch, disabled. The avatar is not in
   the sidebar; Settings is back at its bottom (CD-223; on phones both are under "More").
-- **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
-  which opens the New deal dialog with this company or contact, and a menu with Delete for owners
+- **Contact pages** look like the deal page: a record header (name, owner, "+ Deal",
+  which opens the New deal dialog with this contact, and a menu with Delete for owners
   and admins), on the left Summary and Details with icons, Deals (open ones, won and lost with
-  their share and value), the company's contacts or the contact's company and documents; on the
+  their share and value), the contact's company and documents; on the
   right Focus (open tasks on their deals) and History (activity on their deals, and changes).
-  Companies and contacts can now be handed to another owner there.
+  Contacts can be handed to another owner there. The **company page** is the glass board
+  C-Company since CD-534 (see "Company status", "The company page").
 - The company's **Domain** and **Notes** and the contact's **LinkedIn** (CD-209) edit in place there
   like the other fields (saved after a pause, with If-Match). A domain such as `acme.com`, or a
   LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
@@ -2552,10 +2553,9 @@ A company's status is computed, never picked: `companies.status` (`lead`, `oppor
 `past_client`, `not_interested`), with `status_changed_at` and `status_set_manually`. The rules are
 plain functions in `crm/companies/company-status.ts` (unit tests in `test/company-status.spec.ts`):
 
-- **Lead** until 7 checks pass: name, PIB, matični broj, address (street, city and postal code count as
-  one), šifra delatnosti, a company owner, and a
-  contact with a job title, a role in the decision and an owner (`opportunityReadiness`, which also
-  words what is missing). Then **Opportunity**.
+- **Lead** until 7 checks pass: name, PIB, matični broj, address (street, city and postal code count
+  as one), šifra delatnosti, a company owner, and a contact with a role in the decision (any but
+  "Not involved"; `opportunityReadiness`, which also words what is missing). Then **Opportunity**.
 - **Client** once an opportunity is won or the company has a project that wasn't cancelled; **Past
   client** when nothing is open (no open opportunity or project) and a project was completed.
 - **Not interested** when it has opportunities and every one was lost.
@@ -2576,18 +2576,80 @@ in SQL.
 Every change writes an audit row `company.status_changed` `{ from, to, reason: automatic | manual }`
 (actor: whoever made the change behind it). Those rows are the status history:
 `GET /api/crm/companies/:id/status-history` (partial index `audit_logs_company_status_idx`); the
-company page merges them into its Activity ("Status: Opportunity · automatic").
+company page merges them into its History ("Status: Opportunity, automatic (was Lead)").
 `PATCH /api/crm/companies/:id/status` `{ status | null }` sets it back or hands it back to the
 automation (owners, admins and the company's owner; a move forward is a 409 with what is missing).
 `GET /api/crm/companies` takes `status=lead,opportunity` and `outcome=won|lost` (a won opportunity;
 opportunities, all lost).
 
-In the app the status is the first Summary row ("Lead · 3 of 7 ready", "Lead · set by hand",
-"Client"), a lead's missing items are in the warning box under the header (`companyReadiness` in
-`store/selectors.ts` mirrors the API's checks, so the list updates as fields are filled in), and the
-⋯ menu has "Set status back" and "Back to automatic". The status follows the API: live updates re-read
-it, also after this tab's own saves (`refreshCompanyStatus` in the store reads only the status
-fields back, so a field still being edited isn't overwritten).
+In the app the status is the header's tag ("Lead, automatic", "Not interested, set by hand") with
+a meta line ("5 of 7 ready, owner Ana"; "Ready for the Pipeline, owner Ana"), a lead's amber
+readiness banner names the seven checks as tags (`companyReadiness` in `store/selectors.ts` mirrors
+the API's checks through `store/companyBoard.ts`, so it updates as fields are filled in), and the
+⋯ menu has "Set status back" and, after a manual change, "Back to automatic". The status follows the
+API: a field save applies the status the saved row comes back with (so "New opportunity" opens the
+moment the last check is done, no reload), and live updates re-read it, also after this tab's other
+saves (`refreshCompanyStatus` in the store reads only the status fields back, so a field still
+being edited isn't overwritten; a lead that
+became an opportunity through this tab's save gets the toast "[name] is now an opportunity. You can
+add it to the Pipeline.").
+
+**The seven checks (CD-533, CD-534)**: name, PIB, matični broj, address (street, city and postal
+code count as one), šifra delatnosti, a company owner, and a contact with a role in the decision.
+A contact counts with any role but "Not involved" (`countsInDecision`; the older values Economic
+buyer, Champion, Gatekeeper and End user still count); no role doesn't. A job title or a contact
+owner is not part of the check. `BUYER_ROLES` offers Decision maker, Signs off budget, Influencer,
+User and Not involved, and keeps the four older values so existing contacts stay valid; a contact
+shows its old value until someone picks a new one (owner's decision, 26 Nov: no mapping).
+
+**The company page (CD-534, boards C-Company and C-Company-Client, 28 Nov)**, `screens/Company.tsx`:
+breadcrumb, a 52 px initials tile, the name, the status tag and meta line ("N of 7 ready, owner X"
+on a lead, "Ready for the Pipeline" on an opportunity, "Client since 2 Sep 2025" on a client),
+"New opportunity" (dimmed on a lead, with "Complete the company first" and a toast naming the
+missing checks) and the ⋯ menu (Set status back, Back to automatic, Delete company, which is
+disabled with a tooltip while the company has opportunities or projects; the API also refuses
+meetings, projects and visit plans with a 409). A lead's readiness banner lists the seven checks.
+Five KPIs follow (Open value and Lifetime value, always a figure in the workspace currency, "€0"
+included; Open tasks with the late count in red; Next meeting; Last activity from
+`GET /crm/companies` `lastActivity`), then seven tabs with counts, Details
+first (`store/companyTabs.ts` holds the pure parts, unit-tested in `test/companyTabs.test.ts`):
+
+- *Details*: the Company information card saves as you type (`TextRow`: PIB 9 digits, MB 8,
+  postal code 5, activity code 4; a wrong value turns red with the message under it and isn't sent;
+  a field a lead needs says "Needed for Opportunity" with an amber outline while empty), with
+  Industry and Ownership (Private / Public, stored as `private` / `state`) as dropdowns; HQ, Team
+  size, Domain, Notes and the custom fields stay on it (owner's decision, 26 Nov). Beside it the
+  Sales card (owner and source dropdowns, each change with a toast; the status tag; "Created
+  12 Oct 2026, by X" from the company's `createdAt` and its history's `created` row) and the
+  Address card (Street, City, Postal code, "Open in Maps" in its header).
+- *Contacts*: the company's people with a 190 px role dropdown, a "Missing role" tag and a ⋯ menu:
+  "Edit contact" opens `components/CompanyContactDialog.tsx` ("New contact at [company]" /
+  "Edit [name]": name, job title, email, phone, the role as pills), "Remove from [company]" asks
+  first and then clears the contact's company and its links to the company's opportunities
+  (`removeContactFromCompany`); the contact stays in Contacts. "+" in the header adds one.
+- *Opportunities*: "Win rate 67%, 2 won, 1 lost" and "+" (dimmed on a lead) in the header; the
+  opportunities in Open, Won and Lost groups, each with its count and sum, a row with the stage
+  or "Won 14 Mar 2026" / "Lost 20 Jun 2026", "Closes 18 Dec" or "Reason: Price", the owner and
+  the value (grey when lost). A lead without any says "Leads cannot have opportunities yet".
+- *Meetings*: planned and held meetings with the company, newest first (`useMeetingList` with
+  `companyId`), a date block, "Planned" / "Held" tags; "Show all" in the header opens the Calendar's
+  table filtered to the company (as the old card did); "+" opens the meeting dialog with the company.
+- *Tasks*: "N open, M late"; the to-dos of the company's opportunities, open ones first, ticked
+  here; "+" opens an inline row that adds the to-do on the company's open opportunity (its current
+  stage, due today). Without an opportunity the "+" is off with a toast: to-dos belong to
+  opportunities (company-level to-dos are a follow-up).
+- *Projects*: the company's projects with "In progress" / "Complete" tags, or "A project starts
+  here when an opportunity with X is won."
+- *History*: one list of the company's field changes, its contacts coming, going and changing
+  role, its status changes and the activity on its opportunities, newest first as sentences
+  (`store/companyHistory.ts`, unit-tested), four rows then "Show more" / "Show less". The contact
+  lines come from `drizzle/0132_company_contact_history.sql`: a trigger on `contacts` writes rows
+  on the company (`field` `contact` with `{ id, name }` added or removed, `contactRole` with the
+  old and new role), so every write path is covered.
+
+Deleting a company deletes its contacts with it (off other deals' primary contact and upcoming
+meetings first), as the dialog says. Pure words and checks are in `store/companyPage.ts`; e2e in
+`record-pages.test.mjs` and `company-status.test.mjs` (each opens the tab it checks).
 
 **Companies Kanban (CD-359), switched off for now** (owner, 25 Oct: a drag that can't move a card
 felt odd): the page is the table; the toggle and `CompaniesBoard` are commented out in
@@ -2628,9 +2690,12 @@ company, and "+ New contact" opens a stacked glass sheet whose contact is create
   blockers. The CSV import makes the same rule a row error: no company, a company the file would
   create (a lead), a lead, or an incomplete Not interested company (only those the file names are
   read).
-- The New opportunity dialog lists every company with its status (none when it isn't loaded);
-  blocked ones are disabled. One passed in (from its contact's page) shows what it misses, with a form for just those fields (the
-  identity fields and the closest contact's details, or a new contact): "Save and continue", and
+- The New opportunity dialog (a glass sheet since CD-534: the kit of `screens/settings/parts.tsx`,
+  with the sale type and the target customer type as cards) lists every company with its status
+  (none when it isn't loaded); blocked ones are marked "Not eligible". One passed in (from its
+  contact's page) shows what it misses, with a form for just those fields (the
+  identity fields, the company owner when it has none, and a role in the decision for the contact closest to counting
+  ("Not involved" isn't offered there), or a new contact; CD-534): "Save and continue", and
   once it is an opportunity the dialog goes on. "Open the company instead" leaves for its page (not
   from a meeting form). "+ New company" closes it and opens the New company dialog. A company
   page's "+ Opportunity" is disabled while it is blocked. Sample companies always get a PIB

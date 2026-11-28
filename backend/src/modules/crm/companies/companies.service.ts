@@ -1,12 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
+import { activities, companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetingParticipants, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
@@ -196,7 +196,9 @@ export class CompaniesService {
   /**
    * A company with deals or meetings can't be deleted (409): they would lose their customer, so
    * they have to be deleted or moved first. The same goes for a company in a visit plan (CD-134).
-   * Its contacts are kept and no longer belong to a company.
+   * Its contacts go with it (CD-534, as the Delete dialog says): off the deals of other companies
+   * they are the primary contact of and off upcoming meetings, as deleting one contact does
+   * (ContactsService.remove), then deleted. Their history rows stay (record_changes is append-only).
    */
   remove(ctx: TenantContext, id: string) {
     return this.database
@@ -225,9 +227,18 @@ export class CompaniesService {
           const what = planned.n === 1 ? '1 visit plan' : `${planned.n} visit plans`;
           throw new ConflictException(`${company.name} is in ${what}. Remove it from the plans first.`);
         }
-        const detached = await tx.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id)).returning({ id: contacts.id });
+        const own = (await tx.select({ id: contacts.id }).from(contacts).where(eq(contacts.companyId, id))).map((c) => c.id);
+        if (own.length > 0) {
+          await tx.update(deals).set({ primaryContactId: null }).where(inArray(deals.primaryContactId, own));
+          const upcoming = tx
+            .select({ id: meetings.id })
+            .from(meetings)
+            .where(and(eq(meetings.status, 'planned'), gt(meetings.startsAt, new Date())));
+          await tx.delete(meetingParticipants).where(and(inArray(meetingParticipants.contactId, own), inArray(meetingParticipants.meetingId, upcoming)));
+          await tx.delete(contacts).where(inArray(contacts.id, own));
+        }
         await tx.delete(companies).where(eq(companies.id, id));
-        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id, data: { detachedContacts: detached.length } });
+        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id, data: { deletedContacts: own } });
       })
       .catch(mapDbError);
   }

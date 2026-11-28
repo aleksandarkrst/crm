@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
+import { type ApiCompany, type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, hasLiveProposal, type PlaceholderReference, type UploadType } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -555,15 +555,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       queueRefresh(ALL_PARTS, logRequested.current);
     };
     /** The status of these companies from the API, leaving their other fields as they are here (CD-358). */
+    const applyStatusRows = (list: readonly ApiCompany[]) => {
+      const rows = new Map(list.map((r) => [r.id, r]));
+      set((x) => ({
+        extraCompanies: x.extraCompanies.map((c) => {
+          const r = c.id ? rows.get(c.id) : undefined;
+          return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt, lastActivity: r.lastActivity ?? c.lastActivity } : c;
+        }),
+      }));
+    };
+    /** The status (and last activity) a saved company came back with, nothing else of it. */
+    const applyStatus = (row: ApiCompany) => applyStatusRows([row]);
     const refreshCompanyStatus = async (ids: readonly string[]) => {
       try {
-        const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
-        set((x) => ({
-          extraCompanies: x.extraCompanies.map((c) => {
-            const r = c.id ? rows.get(c.id) : undefined;
-            return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt } : c;
-          }),
-        }));
+        applyStatusRows(await crmApi.companies(ids));
       } catch {
         // the next refresh catches up
       }
@@ -1411,7 +1416,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const field = key === 'size' ? 'teamSize' : key;
       // An empty name or PIB is never sent (the API refuses both); no ownership is null.
       const value = key === 'ownershipType' ? v || null : v;
-      if (!((key === 'name' || key === 'pib') && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: value }, ver('company', companyId)), `the company ${COMPANY_FIELD_LABELS[key] ?? key}`);
+      // The saved row carries the status the API computed from the change (CD-534): a lead whose
+      // last missing field was filled in is an opportunity at once, and "New opportunity" opens.
+      if (!((key === 'name' || key === 'pib') && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: value }, ver('company', companyId)).then(applyStatus), `the company ${COMPANY_FIELD_LABELS[key] ?? key}`);
       // Industry, HQ and team size are shown on its opportunities too; the identity stays on the company.
       const onDeals = key === 'name' || key === 'industry' || key === 'hq' || key === 'size' || key === 'source';
       set((x) => ({
@@ -1577,6 +1584,46 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (!p || !contactId) return;
       cancelSaves(contactId);
       await remove(() => crmApi.deleteContact(contactId), paths.contacts, p.name + ' deleted');
+    };
+    /**
+     * "Remove from [company]" on the company page (CD-534): the contact stays in Contacts with their
+     * history, no longer at this company nor on its opportunities (primary contact cleared, links dropped).
+     */
+    const removeContactFromCompany = async (personId: string, companyId: string) => {
+      const x = cur();
+      const p = personById(x, personId);
+      const contactId = p?.contactId;
+      const company = companyRecords(x).find((c) => c.id === companyId);
+      if (!p || !contactId || !company) return;
+      cancelSaves(contactId);
+      try {
+        for (const l of company.leads) {
+          if (l.contactId === contactId) await crmApi.updateDeal(l.id, { primaryContactId: null }, ver('deal', l.id));
+          else if ((x.links[l.id] ?? []).includes(p.id)) await crmApi.unlinkContact(l.id, contactId);
+        }
+        if (companyIdOfPerson(x, p) === companyId) await crmApi.updateContact(contactId, { companyId: null }, ver('contact', contactId));
+        await reload();
+        flash(`${p.name} removed from ${company.name}`);
+      } catch (err) {
+        flash('Not removed: ' + errText(err), 7000);
+        await reload();
+      }
+    };
+    /** "Edit contact" on the company page (CD-534): one save of the dialog's fields, then "Contact saved". */
+    const saveContactDetails = async (personId: string, details: { name: string; role: string; email: string; phone: string; buyerRole: string }) => {
+      const p = personById(cur(), personId);
+      const contactId = p?.contactId;
+      if (!p || !contactId || !details.name.trim()) return false;
+      cancelSaves(contactId);
+      try {
+        await crmApi.updateContact(contactId, { fullName: details.name.trim(), jobTitle: details.role.trim() || null, email: details.email.trim() || null, phone: details.phone.trim() || null, buyerRole: details.buyerRole || null }, ver('contact', contactId));
+        await reload();
+        flash('Contact saved');
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err), 7000);
+        return false;
+      }
     };
 
     // ------------------------------------------------------------ visit plans (CD-134; owners and admins edit)
@@ -1816,6 +1863,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       completeCompany,
       companyStatusHistory,
       deleteContact,
+      removeContactFromCompany,
+      saveContactDetails,
 
       // ---------------------------------------------------------- creating records
       /**
@@ -1865,9 +1914,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
+          // Named after the company it was added to (the company page, CD-534), else the opportunity.
+          const company = companyId ? companyRecords(cur()).find((x) => x.id === companyId)?.name : undefined;
           await reload();
           set({ contactOpen: false, contactCompanyId: null, contactDealId: '', newContact: EMPTY_CONTACT });
-          flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
+          flash(draft.name + ' added' + (company ? ' to ' + company : lead ? ' to ' + lead.company : ''));
           return c.id;
         } catch (err) {
           flash('Not saved: ' + errText(err));

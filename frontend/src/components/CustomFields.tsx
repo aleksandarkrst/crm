@@ -28,10 +28,11 @@ export function CustomFieldRows({ entity, recordId }: { entity: CustomFieldEntit
   );
 }
 
-/** The input for one field; `ghost` for record screens, form inputs for dialogs. */
-function CustomInput({ field: f, value, ghost, onChange }: { field: CustomFieldDef; value: CustomValue | undefined; ghost?: boolean; onChange: (v: CustomValue | null) => void }) {
+/** The input for one field; `ghost` for record screens, form inputs for dialogs (`glass` ones in a glass sheet, CD-534). */
+function CustomInput({ field: f, value, ghost, glass, onChange }: { field: CustomFieldDef; value: CustomValue | undefined; ghost?: boolean; glass?: boolean; onChange: (v: CustomValue | null) => void }) {
   const text = value === undefined || value === null ? '' : String(value);
   const data = { 'data-custom-field': f.label };
+  const cls = glass ? 'gs-input s' : 'form-input';
   if (f.type === 'checkbox')
     return (
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: ghost ? '6px 9px' : '4px 0', fontSize: 13.5, cursor: 'pointer' }}>
@@ -43,7 +44,7 @@ function CustomInput({ field: f, value, ghost, onChange }: { field: CustomFieldD
     const options = [{ value: '', label: '—' }, ...f.options.map((o) => ({ value: o.id, label: o.label }))];
     if (ghost) return <GhostSelect chevron {...data} value={text} onChange={(e) => onChange(e.target.value || null)} options={options} />;
     return (
-      <select className="form-input" {...data} value={text} onChange={(e) => onChange(e.target.value || null)}>
+      <select className={cls} {...data} value={text} onChange={(e) => onChange(e.target.value || null)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -57,7 +58,7 @@ function CustomInput({ field: f, value, ghost, onChange }: { field: CustomFieldD
   const input = ghost ? (
     <GhostInput type={type} {...data} value={text} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
   ) : (
-    <input className="form-input" type={type} {...data} value={text} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    <input className={cls} type={type} {...data} value={text} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
   );
   if (f.type !== 'url' || !ghost || !text) return input;
   const href = /^https?:\/\//i.test(text) ? text : 'https://' + text;
@@ -71,17 +72,17 @@ function CustomInput({ field: f, value, ghost, onChange }: { field: CustomFieldD
   );
 }
 
-/** Custom fields in a create dialog; the dialog keeps the values until it saves. */
-export function CustomFieldInputs({ entity, values, onChange }: { entity: CustomFieldEntity; values: CustomFieldPatch; onChange: (next: CustomFieldPatch) => void }) {
+/** Custom fields in a create dialog; the dialog keeps the values until it saves. `glass` in a glass sheet (CD-534). */
+export function CustomFieldInputs({ entity, values, onChange, glass }: { entity: CustomFieldEntity; values: CustomFieldPatch; onChange: (next: CustomFieldPatch) => void; glass?: boolean }) {
   const { s } = useStore();
   const fields = customFieldsOf(s, entity);
   if (fields.length === 0) return null;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+    <div className={glass ? 'td-dialog-row' : undefined} style={glass ? undefined : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
       {fields.map((f) => (
-        <label key={f.id} className="form-label">
-          {labelOf(f)}
-          <CustomInput field={f} value={values[f.id] ?? undefined} onChange={(v) => onChange({ ...values, [f.id]: v })} />
+        <label key={f.id} className={glass ? 'gs-label' : 'form-label'}>
+          {glass ? <span>{labelOf(f)}</span> : labelOf(f)}
+          <CustomInput field={f} value={values[f.id] ?? undefined} glass={glass} onChange={(v) => onChange({ ...values, [f.id]: v })} />
         </label>
       ))}
     </div>

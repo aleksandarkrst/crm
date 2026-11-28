@@ -30,9 +30,10 @@ describe('open and lifetime value', () => {
 
   step('the company: Open value is the open deal, Lifetime value the Won one', async () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=company-lifetime-value]');
-    assert.equal(await page.$eval('[data-testid=company-open-value]', (el) => el.textContent.trim()), '€2,500');
-    assert.equal(await page.$eval('[data-testid=company-lifetime-value]', (el) => el.textContent.trim()), '€1,200');
+    // The KPI row (CD-534, 28 Nov boards): the figure is the card's big number.
+    await page.waitForSelector('[data-testid=kpi-lifetime-value]');
+    assert.equal(await page.$eval('[data-testid=kpi-open-value] .cp-kpi-value', (el) => el.textContent.trim()), '€2,500');
+    assert.equal(await page.$eval('[data-testid=kpi-lifetime-value] .cp-kpi-value', (el) => el.textContent.trim()), '€1,200');
 
     await page.goto(`${BASE_URL}/companies`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => [...document.querySelectorAll('.cl-table th')].some((el) => el.textContent.trim() === 'Lifetime value'));
