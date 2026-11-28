@@ -1287,7 +1287,9 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   --gs-border: rgba(60, 60, 67, 0.16); --gs-outline: rgba(60, 60, 67, 0.14); --gs-divider: rgba(60, 60, 67, 0.08); --gs-divider-2: rgba(60, 60, 67, 0.06);
   --gs-chip: rgba(120, 120, 128, 0.12); --gs-chip-2: rgba(120, 120, 128, 0.22); --gs-bg: #EEF2F0;
   --gs-danger: #D70015; --gs-danger-dark: #B0001A; --gs-danger-soft: #FDE7EA; --gs-danger-field: #FFF7F8;
-  --gs-drop-faint: rgba(255, 255, 255, 0.35); --gs-amber-bg: #FDF1DE; --gs-amber: #9A5B00; --gs-amber-card: rgba(253, 241, 222, 0.85); --gs-amber-ink: #6E3D00; --gs-amber-line: rgba(154, 91, 0, 0.15); --gs-amber-outline: rgba(154, 91, 0, 0.45); --gs-check-bg: rgba(231, 242, 238, 0.9); --gs-blue-bg: #E5EEFD; --gs-blue: #1550B8; --gs-violet-bg: #EFE9FC; --gs-violet: #5B3CC4;
+  /* Opportunity group headers on the company page (board C-Company-Client): a fainter row tint than --gs-drop. */
+  --gs-drop-faint: rgba(255, 255, 255, 0.35);
+  --gs-amber-bg: #FDF1DE; --gs-amber: #9A5B00; --gs-amber-card: rgba(253, 241, 222, 0.85); --gs-amber-ink: #6E3D00; --gs-amber-line: rgba(154, 91, 0, 0.15); --gs-amber-outline: rgba(154, 91, 0, 0.45); --gs-check-bg: rgba(231, 242, 238, 0.9); --gs-blue-bg: #E5EEFD; --gs-blue: #1550B8; --gs-violet-bg: #EFE9FC; --gs-violet: #5B3CC4;
   --gs-glass: rgba(255, 255, 255, 0.58); --gs-glass-strong: rgba(255, 255, 255, 0.92); --gs-glass-line: rgba(255, 255, 255, 0.75);
   --gs-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(13, 36, 28, 0.07);
   --gs-pop-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 16px 40px rgba(13, 36, 28, 0.16);
@@ -2393,16 +2395,13 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cp-check { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--gs-field); color: var(--gs-amber-ink); }
 .cp-check.done { background: var(--gs-check-bg); color: var(--gs-green); }
 /* Two columns: the main cards, and a right column that moves under them below 900 px. */
-.cp-cols { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
-.cp-main { flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-.cp-side { flex: 1 1 300px; min-width: min(100%, 270px); display: flex; flex-direction: column; gap: 14px; }
 .cp-card { border-radius: 18px; min-width: 0; overflow: hidden; }
 .cp-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px 6px; }
 .cp-card-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .cp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-height: 52px; box-sizing: border-box; padding: 10px 18px; border-top: 1px solid var(--gs-divider); }
 .cp-row.top { align-items: flex-start; }
 .cp-card-head + .cp-row { border-top: 0; }
-.cp-label { flex: 0 0 170px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; font-weight: 500; }
+.cp-label { flex: 0 0 150px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; font-weight: 500; }
 .cp-hint { font-size: 11.5px; font-weight: 400; color: var(--gs-amber); }
 .cp-control { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .cp-control .gs-input, .cp-control .gs-dd { width: 100%; }
@@ -2424,15 +2423,6 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cp-role.missing .gs-ddb .v { color: var(--gs-amber); }
 .cp-role .gs-ddb { height: 32px; }
 /* The right column. */
-.cp-metrics { display: grid; grid-template-columns: 1fr 1fr; }
-.cp-metric { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; border-bottom: 1px solid var(--gs-divider-2); }
-.cp-metric:nth-child(odd) { border-right: 1px solid var(--gs-divider-2); }
-.cp-metric:nth-last-child(-n + 2) { border-bottom: 0; }
-.cp-metric b { font-size: 19px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.cp-kv { flex-wrap: nowrap; min-height: 48px; }
-.cp-kv:first-child { border-top: 0; }
-.cp-kv-label { flex: 1 1 auto; min-width: 90px; white-space: nowrap; }
-.cp-kv-value { font-size: 13.5px; }
 .cp-hist { align-items: flex-start; min-height: 46px; flex-wrap: nowrap; }
 .cp-hist .gs-face { margin-top: 2px; }
 .cp-hist-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
@@ -2442,15 +2432,9 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 /* The Set status back sheet. */
 .cp-ask { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--gs-chip); font-size: 13.5px; }
 .cp-radio { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-/* The older cards still on the page (opportunities, projects, meetings, focus) sit in the glass. */
-.cp .card { border-radius: 18px; border: 1px solid var(--gs-glass-line); background: var(--gs-glass); box-shadow: var(--gs-glass-shadow); }
 @media (max-width: 560px) {
-  .cp-label { flex-basis: 100%; }
+  .cp-label, .cp-label.narrow { flex-basis: 100%; }
   .cp-actions { flex-basis: 100%; justify-content: flex-end; }
-  .cp-metrics { grid-template-columns: 1fr; }
-  .cp-metric:nth-child(odd) { border-right: 0; }
-  .cp-metric:nth-last-child(-n + 2) { border-bottom: 1px solid var(--gs-divider-2); }
-  .cp-metric:last-child { border-bottom: 0; }
 }
 .cp-dialog-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 /* A menu item that is off with the reason under it (CD-534). */
@@ -2502,13 +2486,12 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cp-kpi-value { font-family: var(--gs-font-display); font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cp-kpi-sub.red { color: var(--gs-danger-dark); font-weight: 500; }
 .cp-kpi-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cp-tabs { display: inline-flex; align-self: flex-start; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 999px; background: var(--gs-chip); max-width: 100%; }
-.cp-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--gs-ink); cursor: pointer; white-space: nowrap; }
-.cp-tabs button.on { background: var(--white); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); font-weight: 600; }
+.cp-tabs { align-self: flex-start; gap: 2px; }
+.cp-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; font-size: 13.5px; }
+.cp-tabs button.on { font-weight: 600; }
 .cp-tab-n { font-size: 12px; font-weight: 500; color: var(--gs-muted); }
 .cp-dgrid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .cp-dcol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.cp-label { flex-basis: 150px; }
 .cp-label.narrow { flex-basis: 96px; }
 .cp-text { font-size: 13.5px; }
 .cp-empty-big { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 34px 18px 38px; text-align: center; border-top: 1px solid var(--gs-divider); }
@@ -2550,5 +2533,7 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 @media (max-width: 560px) {
   .cp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cp-who { width: auto; }
-  .cp-mrow, .cp-task { flex-wrap: wrap; }
+  .cp-mrow, .cp-task, .cp-task-add { flex-wrap: wrap; }
+  .cp-task-add .gs-input { flex-basis: 100%; }
+  .cp-kpi-value { font-size: 22px; line-height: 28px; }
 }

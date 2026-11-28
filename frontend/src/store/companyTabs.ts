@@ -78,8 +78,9 @@ export function winRateLine(won: number, lost: number): string {
   return `Win rate ${Math.round((100 * won) / (won + lost))}%, ${won} won, ${lost} lost`;
 }
 
-/** The Opportunities tab's empty state. */
+/** The Opportunities tab's empty state. A lead set back by hand with every check done is told how to let it move on. */
 export function opportunitiesEmpty(status: CompanyStatus, name: string, missing: number): { title: string; text: string } {
+  if (status === 'lead' && missing === 0) return { title: 'Leads cannot have opportunities yet', text: `Every check is done. Choose Back to automatic in the ⋯ menu and ${name} becomes an opportunity by itself.` };
   if (status === 'lead') return { title: 'Leads cannot have opportunities yet', text: `Complete the ${missing === 1 ? '1 missing item' : `${missing} missing items`} in the banner above. ${name} then becomes an opportunity by itself.` };
   return { title: 'No opportunities yet', text: `Add the first opportunity for ${name}.` };
 }

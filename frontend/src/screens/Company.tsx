@@ -32,8 +32,10 @@ function websiteHref(value: string): string {
   return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v) ? 'https://' + v : '';
 }
 
-/** "Show all" meetings start here: before any meeting a workspace can have. */
+/** Every meeting with the company: a range before and after any a workspace can have (a fixed key, so the list isn't re-read on every render). */
 const MEETINGS_FROM = '2000-01-01T00:00:00.000Z';
+const MEETINGS_TO = '2100-01-01T00:00:00.000Z';
+const MEETINGS_LIMIT = 50;
 const PROJECT_TAG: Record<ApiProject['status'], { label: string; tone: string }> = { open: { label: 'In progress', tone: 'blue' }, completed: { label: 'Complete', tone: '' }, cancelled: { label: 'Cancelled', tone: 'red' } };
 
 /**
@@ -83,8 +85,9 @@ export function Company() {
     seenStatus.current = { id, status: liveStatus };
   }, [id, liveStatus, current?.name, flash]);
   // Every meeting with the company, newest first (planned and held), for the Meetings tab and the Next meeting KPI.
-  const [meetingsQuery] = useState<MeetingQuery>(() => ({ companyId: id, from: MEETINGS_FROM, to: new Date(Date.now() + 5 * 366 * 86_400_000).toISOString(), status: ['planned', 'held'], sort: 'desc', limit: 50 }));
-  const { meetings } = useMeetingList(meetingsQuery);
+  // Keyed by the query's values (useMeetingList), so it follows the company id when the route moves to another company.
+  const meetingsQuery: MeetingQuery = { companyId: id, from: MEETINGS_FROM, to: MEETINGS_TO, status: ['planned', 'held'], sort: 'desc', limit: MEETINGS_LIMIT };
+  const { meetings, more: moreMeetings, loadMore: loadMoreMeetings } = useMeetingList(meetingsQuery);
   const tz = s.workspace.timezone;
   const today = todayIso(tz);
   // The history is read again after the page's own edits: a field, the owner or the source, or a contact's role in the decision.
@@ -173,7 +176,8 @@ export function Company() {
     { label: 'Next meeting', value: nextMeeting.value, sub: nextMeeting.sub, testId: 'kpi-next-meeting' },
     { label: 'Last activity', value: lastActivity.value, sub: lastActivity.sub, testId: 'kpi-last-activity' },
   ];
-  const counts: Partial<Record<CompanyTab, number>> = { contacts: people.length, opportunities: rec.leads.length, meetings: meetings.length, tasks: taskStats.open, projects: projectCount, history: historyList.length };
+  // Meetings and History are read a page at a time: their counts say "50+" until the rest is loaded.
+  const counts: Partial<Record<CompanyTab, string>> = { contacts: String(people.length), opportunities: String(rec.leads.length), meetings: meetings.length + (moreMeetings ? '+' : ''), tasks: String(taskStats.open), projects: String(projectCount), history: historyList.length + (changes.more ? '+' : '') };
 
   // The Opportunities tab.
   const groups = opportunityGroups(rec.leads, { stageName: (l) => stageOf(s, l).name, ownerName: (l) => memberName(s, l.ownerId, l.owner), valueNum: (l) => valueNum(l.value), tz, dayLabel: (iso) => isoLabel(iso).replace(/^0/, '') });
@@ -248,7 +252,7 @@ export function Company() {
           ))}
         </div>
 
-        <div className="cp-tabs" role="tablist" aria-label="Company">
+        <div className="gs-seg cp-tabs" role="tablist" aria-label="Company">
           {COMPANY_TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'on' : ''} data-testid={`tab-${t.key}`} onClick={() => setTab(t.key)}>
               {t.label}
@@ -453,6 +457,13 @@ export function Company() {
                 </Link>
               );
             })}
+            {moreMeetings && (
+              <div className="cp-row cp-more">
+                <button type="button" className="cp-link" data-testid="meetings-more" onClick={() => void loadMoreMeetings()}>
+                  Show more
+                </button>
+              </div>
+            )}
           </div>
         )}
 

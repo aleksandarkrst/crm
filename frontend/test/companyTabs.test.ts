@@ -37,6 +37,7 @@ describe('the Opportunities tab', () => {
     assert.equal(lifetimeLine(0, 0), 'Nothing won yet');
     assert.equal(lifetimeLine(2, 1), '2 won, 1 lost');
     assert.deepEqual(opportunitiesEmpty('lead', 'Tarkett', 3), { title: 'Leads cannot have opportunities yet', text: 'Complete the 3 missing items in the banner above. Tarkett then becomes an opportunity by itself.' });
+    assert.equal(opportunitiesEmpty('lead', 'Tarkett', 0).text, 'Every check is done. Choose Back to automatic in the ⋯ menu and Tarkett becomes an opportunity by itself.');
     assert.deepEqual(opportunitiesEmpty('opportunity', 'Tarkett', 0), { title: 'No opportunities yet', text: 'Add the first opportunity for Tarkett.' });
   });
 });
