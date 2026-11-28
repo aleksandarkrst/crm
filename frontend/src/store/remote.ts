@@ -258,6 +258,18 @@ export function rememberWorkspace(workspace: ApiWorkspace): ApiWorkspace {
 }
 
 /**
+ * The same for companies this tab saved or read the status of (CD-534): their rows as the API
+ * answered, so a refresh that re-reads only other lists (a colleague's contact) does not put back a
+ * company's fields and status as they were at the last load. A saved row lacks the list's owner
+ * name and last activity; those stay as they were.
+ */
+export function rememberCompanyRows(rows: readonly ApiCompany[]) {
+  if (rows.length === 0) return;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  lastLoad.update('companies', (list) => list.map((c) => (byId.has(c.id) ? { ...c, ...byId.get(c.id)! } : c)));
+}
+
+/**
  * The lists a live update can re-read row by row (CD-98): `fetch` gets the rows named by a change
  * hint (by id, or for lines and to-dos by deal), `key` says which hinted id a row belongs to, and
  * `order` sorts the merged list the way the API does where screens show it in list order.
@@ -326,7 +338,9 @@ export async function loadWorkspace(role: ApiRole, only?: ReadonlySet<Part>, cha
     async (before) => {
       const keys = (Object.keys(PARTS) as Part[]).filter((k) => !before || only!.has(k));
       const ids = keys.map((k) => (before && BY_ID[k] && changed[k] && changed[k].size <= MAX_IDS ? [...changed[k]] : null));
-      const fetched = await Promise.all(keys.map((k, i) => (ids[i] ? BY_ID[k]!.fetch(ids[i]) : PARTS[k](admin))));
+      // A hint that names no rows of a list (a project task is a `task` hint with no opportunity, CD-534 QA)
+      // reads none: the API refuses an empty `ids=` / `dealIds=` (400), which failed the whole refresh.
+      const fetched = await Promise.all(keys.map((k, i) => (ids[i] ? (ids[i].length ? BY_ID[k]!.fetch(ids[i]) : Promise.resolve([])) : PARTS[k](admin))));
       return { keys, ids, fetched };
     },
     ({ keys, ids, fetched }, prev) => {

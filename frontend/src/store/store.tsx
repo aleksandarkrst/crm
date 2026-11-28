@@ -7,7 +7,7 @@ import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
-import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, rememberProfile, rememberWorkspace, type WorkspaceData } from './remote';
+import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, rememberCompanyRows, rememberProfile, rememberWorkspace, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, initialState, SYSTEM_CHANNEL } from './seed';
 import {
   advanceBlockers,
@@ -556,6 +556,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
     /** The status of these companies from the API, leaving their other fields as they are here (CD-358). */
     const applyStatusRows = (list: readonly ApiCompany[]) => {
+      // The last load keeps the rows too: a refresh of other lists must not put back the old status (CD-534 QA).
+      rememberCompanyRows(list);
       const rows = new Map(list.map((r) => [r.id, r]));
       set((x) => ({
         extraCompanies: x.extraCompanies.map((c) => {
@@ -1555,7 +1557,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       try {
         // The API closes them in the same step, so the status is set by hand, not by the automation (CD-478).
         const row = await crmApi.setCompanyStatus(companyId, status, close ? { reason: close.reason } : undefined);
-        set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually, statusChangedAt: row.statusChangedAt } : c)) }));
+        applyStatus(row);
         const lostAt = new Date().toISOString();
         for (const id of close?.leadIds ?? []) {
           mapLead(id, (l) => ({ ...l, outcome: 'lost', lostReason: close!.reason, lostNote: 'Closed when the company was set to Not interested', lostAt }));
