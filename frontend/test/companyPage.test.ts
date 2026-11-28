@@ -9,7 +9,9 @@ describe('the header', () => {
     assert.equal(statusTagText('not_interested', true), 'Not interested, set by hand');
     assert.equal(metaLine('lead', { ready: 5, total: 7 }, 'Nikola Kostić'), '5 of 7 ready, owner Nikola Kostić');
     assert.equal(metaLine('opportunity', { ready: 7, total: 7 }, 'Nikola Kostić'), 'Ready for the Pipeline, owner Nikola Kostić');
-    assert.equal(metaLine('client', { ready: 7, total: 7 }, null), 'Ready for the Pipeline, no owner');
+    assert.equal(metaLine('client', { ready: 7, total: 7 }, null, '2 Sep 2025'), 'Client since 2 Sep 2025, no owner');
+    assert.equal(metaLine('past_client', { ready: 7, total: 7 }, 'Ana', '2 Sep 2025'), 'Past client since 2 Sep 2025, owner Ana');
+    assert.equal(metaLine('client', { ready: 7, total: 7 }, 'Ana'), 'Owner Ana');
     assert.equal(metaLine('not_interested', { ready: 7, total: 7 }, 'Ana'), 'Owner Ana');
     assert.equal(missingToast(['PIB', 'MB']), 'Complete the company first. Missing: PIB, MB.');
     assert.equal(readyLine({ ready: 3, total: 7 }, ['PIB', 'MB', 'Address', 'Activity code']), '3 of 7 ready. Missing: PIB, MB, Address, Activity code.');

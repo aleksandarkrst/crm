@@ -401,6 +401,8 @@ export interface ApiCompany {
   statusChangedAt: string | null;
   /** The latest activity with it (lists only, CD-533): a timeline channel (MT for a held meeting) and an ISO time. */
   lastActivity?: { channel: Channel; at: string } | null;
+  /** When the company was added (ISO), the Details tab's "Created" (CD-534). */
+  createdAt: string;
   /** The version: send it back as If-Match when changing the company (CD-20). */
   updatedAt: string;
 }

@@ -42,6 +42,12 @@ describe('company and contact pages', () => {
     await page.reload({ waitUntil: 'networkidle0' });
   });
 
+  /** Opens one of the company page's tabs (CD-534, 28 Nov boards): Details, Contacts, Opportunities, Meetings, Tasks, Projects, History. */
+  const openTab = async (key) => {
+    await click(page, `[data-testid=tab-${key}]`);
+    await page.waitForFunction((key) => document.querySelector(`[data-testid=tab-${key}]`)?.getAttribute('aria-selected') === 'true', {}, key);
+  };
+
   step('the company page: screen name in the header, the record below, its opportunities and contacts', async () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.textContent === 'Umbrella d.o.o.');
@@ -50,9 +56,16 @@ describe('company and contact pages', () => {
     assert.equal(await page.$eval('[data-testid=company-status]', (el) => el.textContent), 'Opportunity, automatic');
     assert.match(await page.$eval('[data-testid=company-meta]', (el) => el.textContent), /^Ready for the Pipeline, owner Rhea Records$/);
     assert.equal(await page.$('[data-testid=company-blockers]'), null, 'no readiness banner on an opportunity');
-    assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Open opportunities \(1\)[\s\S]*Umbrella rollout/);
+    // The KPI row and the tabs (28 Nov boards): the opportunities split into open, won and lost.
+    assert.match(await page.$eval('[data-testid=kpi-open-value]', (el) => el.innerText), /Open value[\s\S]*1 open opportunity/i);
+    assert.equal(await page.$eval('[data-testid=tab-details]', (el) => el.getAttribute('aria-selected')), 'true', 'Details is the first tab');
+    assert.match(await page.$eval('[data-testid=tab-contacts]', (el) => el.innerText), /^Contacts\s*1$/);
+    await openTab('opportunities');
+    assert.match(await page.$eval('[data-testid=opportunities-open]', (el) => el.innerText), /^Open\s+1[\s\S]*Umbrella rollout/);
+    assert.equal(await page.$('[data-testid=opportunities-won]'), null, 'nothing won yet');
+    await openTab('contacts');
     assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Alice Abernathy[\s\S]*COO, alice@umbrella.test/);
-    assert.equal(await page.$eval('[data-testid=company-opportunities]', (el) => el.textContent), '1 opportunity');
+    await openTab('details');
     assert.ok(!(await text(page)).includes('Delete company'), 'Delete is in the menu');
     assert.ok(await setByLabel(page, 'HQ', 'Beograd'), 'HQ field found');
     assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + company.id)).hq === 'Beograd'), 'HQ saved');
@@ -69,8 +82,9 @@ describe('company and contact pages', () => {
     await page.keyboard.press('Tab');
   };
 
-  /** Waits until the record's history (one list now: the Changes tab is gone) mentions `label`. */
+  /** Waits until the record's history mentions `label`; on a company it is the History tab. */
   const changesInclude = async (label) => {
+    if (await page.$('[data-testid=tab-history]')) await openTab('history');
     await page.waitForFunction((label) => document.querySelector('[data-testid="change-history"]')?.innerText.includes(label), { timeout: 10_000 }, label);
     return page.$eval('[data-testid="change-history"]', (el) => el.innerText);
   };
@@ -97,7 +111,7 @@ describe('company and contact pages', () => {
     assert.ok(changes.includes('umbrella.test') && changes.includes('Notes'), changes);
   });
 
-  step('"+ Opportunity" starts the New opportunity dialog with this company', async () => {
+  step('"New opportunity" starts the New opportunity dialog with this company', async () => {
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForSelector('::-p-text(Create & start funnel)');
     const picked = await page.$eval('[data-testid=new-deal-company]', (el) => el.value);
@@ -205,6 +219,7 @@ describe('company and contact pages', () => {
 
   step('"+ Contact" on a company without opportunities adds the contact to that company (CD-534)', async () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
+    await openTab('contacts');
     await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('No contacts yet'));
     await click(page, '[data-testid=company-add-contact]');
     await page.waitForSelector('[data-testid=company-contact-dialog]');
@@ -229,6 +244,7 @@ describe('company and contact pages', () => {
   });
 
   step('"Edit contact" changes the contact from the same dialog; "Remove from" unlinks them and keeps them in Contacts', async () => {
+    await openTab('contacts');
     await click(page, '[data-testid=contact-menu]');
     await click(page, '[data-testid=contact-edit]');
     await page.waitForSelector('[data-testid=company-contact-dialog]');

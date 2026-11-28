@@ -2600,32 +2600,52 @@ owner is not part of the check. `BUYER_ROLES` offers Decision maker, Signs off b
 User and Not involved, and keeps the four older values so existing contacts stay valid; a contact
 shows its old value until someone picks a new one (owner's decision, 26 Nov: no mapping).
 
-**The company page (CD-534, board C-Company)**, `screens/Company.tsx`: breadcrumb, a 52 px
-initials tile, the name, the status tag and meta line, "+ Opportunity" (dimmed on a lead, with
-"Complete the company first" and a toast naming the missing checks) and the ⋯ menu (Set status
-back, Back to automatic, Delete company, which is disabled with a tooltip while the company has
-opportunities; the API also refuses meetings, projects and visit plans with a 409). The Company
-information card saves as you type (`TextRow`: PIB 9 digits, MB 8, postal code 5, activity code 4;
-a wrong value turns red with the message under it and isn't sent; a field a lead needs says
-"Needed for Opportunity" with an amber outline while empty), with Industry and Ownership
-(Private / Public, stored as `private` / `state`) as dropdowns; HQ, Team size, Domain, Notes and
-the custom fields stay on it (owner's decision, 26 Nov). The Contacts card lists the company's
-people with a 190 px role dropdown, a "Missing role" tag and a ⋯ menu: "Edit contact" opens
-`components/CompanyContactDialog.tsx` ("New contact at [company]" / "Edit [name]": name, job
-title, email, phone, the role as pills), "Remove from [company]" asks first and then clears the
-contact's company and its links to the company's opportunities (`removeContactFromCompany`); the
-contact stays in Contacts. The Opportunities, Projects and Meetings cards stay under it, and Focus
-in the right column (owner's decision, 26 Nov). The right column has Metrics (open value, lifetime
-value, won opportunities, last activity from `GET /crm/companies` `lastActivity`), Details (owner
-and source dropdowns, each change with a toast; the Opportunities line links to the Pipeline) and
-one History list: the company's field changes, its contacts coming, going and changing role, its
-status changes and the activity on its opportunities, newest first as sentences
-(`store/companyHistory.ts`, unit-tested), four rows then "Show N more". The contact lines come from
-`drizzle/0132_company_contact_history.sql`: a trigger on `contacts` writes rows on the company
-(`field` `contact` with `{ id, name }` added or removed, `contactRole` with the old and new role),
-so every write path is covered. Deleting a company deletes its contacts with it (off other deals'
-primary contact and upcoming meetings first), as the dialog says. Pure words and checks are in
-`store/companyPage.ts`; e2e in `record-pages.test.mjs` and `company-status.test.mjs`.
+**The company page (CD-534, boards C-Company and C-Company-Client, 28 Nov)**, `screens/Company.tsx`:
+breadcrumb, a 52 px initials tile, the name, the status tag and meta line ("N of 7 ready, owner X"
+on a lead, "Ready for the Pipeline" on an opportunity, "Client since 2 Sep 2025" on a client),
+"New opportunity" (dimmed on a lead, with "Complete the company first" and a toast naming the
+missing checks) and the ⋯ menu (Set status back, Back to automatic, Delete company, which is
+disabled with a tooltip while the company has opportunities or projects; the API also refuses
+meetings, projects and visit plans with a 409). A lead's readiness banner lists the seven checks.
+Five KPIs follow (Open value, Lifetime value, Open tasks with the late count in red, Next meeting,
+Last activity from `GET /crm/companies` `lastActivity`), then seven tabs with counts, Details
+first (`store/companyTabs.ts` holds the pure parts, unit-tested in `test/companyTabs.test.ts`):
+
+- *Details*: the Company information card saves as you type (`TextRow`: PIB 9 digits, MB 8,
+  postal code 5, activity code 4; a wrong value turns red with the message under it and isn't sent;
+  a field a lead needs says "Needed for Opportunity" with an amber outline while empty), with
+  Industry and Ownership (Private / Public, stored as `private` / `state`) as dropdowns; HQ, Team
+  size, Domain, Notes and the custom fields stay on it (owner's decision, 26 Nov). Beside it the
+  Sales card (owner and source dropdowns, each change with a toast; the status tag; "Created
+  12 Oct 2026, by X" from the company's `createdAt` and its history's `created` row) and the
+  Address card (Street, City, Postal code, "Open in Maps" in its header).
+- *Contacts*: the company's people with a 190 px role dropdown, a "Missing role" tag and a ⋯ menu:
+  "Edit contact" opens `components/CompanyContactDialog.tsx` ("New contact at [company]" /
+  "Edit [name]": name, job title, email, phone, the role as pills), "Remove from [company]" asks
+  first and then clears the contact's company and its links to the company's opportunities
+  (`removeContactFromCompany`); the contact stays in Contacts. "+" in the header adds one.
+- *Opportunities*: "Win rate 67%, 2 won, 1 lost" and "+" (dimmed on a lead) in the header; the
+  opportunities in Open, Won and Lost groups, each with its count and sum, a row with the stage
+  or "Won 14 Mar 2026" / "Lost 20 Jun 2026", "Closes 18 Dec" or "Reason: Price", the owner and
+  the value (grey when lost). A lead without any says "Leads cannot have opportunities yet".
+- *Meetings*: planned and held meetings with the company, newest first (`useMeetingList` with
+  `companyId`), a date block, "Planned" / "Held" tags; "+" opens the meeting dialog with the company.
+- *Tasks*: "N open, M late"; the to-dos of the company's opportunities, open ones first, ticked
+  here; "+" opens an inline row that adds the to-do on the company's open opportunity (its current
+  stage, due today). Without an opportunity the "+" is off with a toast: to-dos belong to
+  opportunities (company-level to-dos are a follow-up).
+- *Projects*: the company's projects with "In progress" / "Complete" tags, or "A project starts
+  here when an opportunity with X is won."
+- *History*: one list of the company's field changes, its contacts coming, going and changing
+  role, its status changes and the activity on its opportunities, newest first as sentences
+  (`store/companyHistory.ts`, unit-tested), four rows then "Show more" / "Show less". The contact
+  lines come from `drizzle/0132_company_contact_history.sql`: a trigger on `contacts` writes rows
+  on the company (`field` `contact` with `{ id, name }` added or removed, `contactRole` with the
+  old and new role), so every write path is covered.
+
+Deleting a company deletes its contacts with it (off other deals' primary contact and upcoming
+meetings first), as the dialog says. Pure words and checks are in `store/companyPage.ts`; e2e in
+`record-pages.test.mjs` and `company-status.test.mjs` (each opens the tab it checks).
 
 **Companies Kanban (CD-359), switched off for now** (owner, 25 Oct: a drag that can't move a card
 felt odd): the page is the table; the toggle and `CompaniesBoard` are commented out in

@@ -200,6 +200,8 @@ export interface CompanyExtra {
   statusChangedAt?: string | null;
   /** Its latest activity (CD-533): a timeline channel and an ISO time; null when nothing happened yet. */
   lastActivity?: { channel: ChannelCode; at: string } | null;
+  /** When it was added (ISO), for the company page's "Created" (CD-534). */
+  createdAt?: string;
 }
 
 /** How an opportunity is sold (CD-360). */

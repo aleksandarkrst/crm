@@ -13,12 +13,14 @@ export const statusTagText = (status: CompanyStatus, manual: boolean): string =>
 
 /**
  * The line under the name: "N of 7 ready, owner Ana" for a lead, "Ready for the Pipeline, owner Ana"
- * for an opportunity (and a client or past client, who can take one too); "owner Ana" otherwise.
+ * for an opportunity, "Client since 2 Sep 2025, owner Ana" for a client (`since`: when the status
+ * last changed), "Past client since …"; "Owner Ana" otherwise.
  */
-export function metaLine(status: CompanyStatus, ready: { ready: number; total: number }, owner: string | null): string {
+export function metaLine(status: CompanyStatus, ready: { ready: number; total: number }, owner: string | null, since?: string): string {
   const who = owner ? `owner ${owner}` : 'no owner';
   if (status === 'lead') return `${ready.ready} of ${ready.total} ready, ${who}`;
-  if (status === 'opportunity' || status === 'client' || status === 'past_client') return `Ready for the Pipeline, ${who}`;
+  if (status === 'opportunity') return `Ready for the Pipeline, ${who}`;
+  if ((status === 'client' || status === 'past_client') && since) return `${STATUS_TAG_LABELS[status]} since ${since}, ${who}`;
   return who.charAt(0).toUpperCase() + who.slice(1);
 }
 

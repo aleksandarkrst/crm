@@ -12,6 +12,11 @@ describe('company status', () => {
   let contactId;
   const statusText = () => page.$eval('[data-testid=company-status]', (el) => el.innerText);
   const metaText = () => page.$eval('[data-testid=company-meta]', (el) => el.innerText);
+  /** Opens one of the company page's tabs (CD-534, 28 Nov boards). */
+  const openTab = async (key) => {
+    await click(page, `[data-testid=tab-${key}]`);
+    await page.waitForFunction((key) => document.querySelector(`[data-testid=tab-${key}]`)?.getAttribute('aria-selected') === 'true', {}, key);
+  };
 
   step('sets up a lead with its identity and a contact without a role in the decision', async () => {
     page = await browser.person('stella');
@@ -34,14 +39,18 @@ describe('company status', () => {
     assert.match(banner, /6 of 7 ready\. Missing: A contact with a role in the decision\./);
     const checks = await page.$$eval('[data-testid=readiness-check]', (els) => els.map((el) => [el.textContent, el.dataset.done]));
     assert.deepEqual(checks, [['Name', 'true'], ['PIB', 'true'], ['MB', 'true'], ['Address', 'true'], ['Activity code', 'true'], ['Owner', 'true'], ['A contact with a role in the decision', 'false']]);
-    // "+ Opportunity" is dimmed and says what is missing instead of opening the dialog.
+    // "New opportunity" is dimmed and says what is missing instead of opening the dialog.
     assert.ok((await text(page)).includes('Complete the company first'));
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForFunction(() => document.body.innerText.includes('Complete the company first. Missing: A contact with a role in the decision.'));
     assert.equal(await page.$('[data-testid=new-deal-company]'), null, 'the New opportunity dialog did not open');
+    // The Opportunities tab says why a lead has none.
+    await openTab('opportunities');
+    assert.match(await page.$eval('[data-testid=opportunities-empty]', (el) => el.innerText), /Leads cannot have opportunities yet\s+Complete the 1 missing item in the banner above\. Vega Logistika then becomes an opportunity by itself\./);
   });
 
   step('"Not involved" does not count; a role in the decision does, and the page says so with a toast (CD-534)', async () => {
+    await openTab('contacts');
     await click(page, '[data-testid=contact-role]');
     await click(page, '[role=option]::-p-text(Not involved)');
     await new Promise((r) => setTimeout(r, 1500));
@@ -55,6 +64,8 @@ describe('company status', () => {
     await toast;
     await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
     assert.equal(await page.$('[data-testid=company-blockers]'), null);
+    // The status change is a line of the company's History tab.
+    await openTab('history');
     await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity, automatic (was Lead)'));
     // The role change is a line of the company's History too.
     await page.waitForFunction(() => document.body.innerText.includes("changed Nikola Ilić's role in the decision from Not involved to Signs off budget"));
