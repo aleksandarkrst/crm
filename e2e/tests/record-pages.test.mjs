@@ -314,7 +314,7 @@ describe('company and contact pages', () => {
   step('the owner deletes an empty company from the menu', async () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
-    await clickButton(page, 'Delete company');
+    await click(page, '[data-testid=delete-company]');
     assert.equal(await confirmCompanyGlass(page, 'delete-company-confirm'), `Delete ${empty.name}?`);
     await page.waitForFunction(() => location.pathname === '/companies');
     assert.ok(await eventually(async () => !(await api(page, '/crm/companies')).some((c) => c.id === empty.id)), 'company deleted');
@@ -324,7 +324,10 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     const item = await page.waitForSelector('[data-testid=delete-company]');
-    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, text: el.innerText })), { disabled: true, text: 'Delete company\nUmbrella d.o.o. has an opportunity: delete them or move them to another company first' });
+    // The items that open a dialog end with an ellipsis, as on the C-Company board (CD-534 staging QA, case 3).
+    const labels = await page.$$eval('[role=menu] [role=menuitem]', (els) => els.map((el) => (el.querySelector('.gs-opt-text > span') ?? el).textContent));
+    assert.deepEqual(labels, ['Set status back…', 'Delete company…']);
+    assert.deepEqual(await item.evaluate((el) => ({ disabled: el.disabled, text: el.innerText })), { disabled: true, text: 'Delete company…\nUmbrella d.o.o. has an opportunity: delete them or move them to another company first' });
     await page.keyboard.press('Escape');
   });
 

@@ -1095,7 +1095,12 @@ increasing per row, and the same moment as the history rows of that change.
   returns only rows of the workspace that still exist). They replace their old copies in place
   (a row that didn't come back was deleted), and deals and products are sorted as the API sorts
   them. A hint without ids (over 50 rows changed), more than 200 ids, funnels and the checklist
-  are read whole, as is everything after a reconnect or on focus. Like the reload after a failed save, it waits until this tab's own edits are saved
+  are read whole, as is everything after a reconnect or on focus. A hint that names no rows of a
+  list (a project task is a `task` hint with no deal) reads none of it: the API refuses an empty
+  `ids=` or `dealIds=` (CD-534). Lists this tab saved stay as saved in the last load
+  (`store/lastLoad.ts`: `remember` for a whole list, the workspace and the profile, CD-519;
+  `update` for rows, the companies whose row a save or a status read came back with, CD-534), so a
+  refresh of other lists does not put back what was there at the last load. Like the reload after a failed save, it waits until this tab's own edits are saved
   (debounced typing is not sent early) and discards its result if an edit started while it loaded,
   so it never overwrites what someone is typing. An edit based on an older version is caught by
   the API (409 above).
@@ -2586,9 +2591,11 @@ In the app the status is the header's tag ("Lead, automatic", "Not interested, s
 a meta line ("5 of 7 ready, owner Ana"; "Ready for the Pipeline, owner Ana"), a lead's amber
 readiness banner names the seven checks as tags (`companyReadiness` in `store/selectors.ts` mirrors
 the API's checks through `store/companyBoard.ts`, so it updates as fields are filled in), and the
-⋯ menu has "Set status back" and, after a manual change, "Back to automatic". The status follows the
-API: a field save applies the status the saved row comes back with (so "New opportunity" opens the
-moment the last check is done, no reload), and live updates re-read it, also after this tab's other
+⋯ menu has "Set status back…" and, after a manual change, "Back to automatic". The status follows the
+API: a field save applies the status the saved row comes back with, both ways (so "New opportunity"
+opens the moment the last check is done, and a cleared check makes it a lead with its banner at once,
+no reload; the row is kept in the last load, so a colleague's change elsewhere doesn't put the old
+status back), and live updates re-read it, also after this tab's other
 saves (`refreshCompanyStatus` in the store reads only the status fields back, so a field still
 being edited isn't overwritten; a lead that
 became an opportunity through this tab's save gets the toast "[name] is now an opportunity. You can
@@ -2606,7 +2613,7 @@ shows its old value until someone picks a new one (owner's decision, 26 Nov: no 
 breadcrumb, a 52 px initials tile, the name, the status tag and meta line ("N of 7 ready, owner X"
 on a lead, "Ready for the Pipeline" on an opportunity, "Client since 2 Sep 2025" on a client),
 "New opportunity" (dimmed on a lead, with "Complete the company first" and a toast naming the
-missing checks) and the ⋯ menu (Set status back, Back to automatic, Delete company, which is
+missing checks) and the ⋯ menu (Set status back…, Back to automatic, Delete company…, which is
 disabled with a tooltip while the company has opportunities or projects; the API also refuses
 meetings, projects and visit plans with a 409). A lead's readiness banner lists the seven checks.
 Five KPIs follow (Open value and Lifetime value, always a figure in the workspace currency, "€0"

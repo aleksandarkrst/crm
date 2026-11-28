@@ -157,10 +157,11 @@ export function Company() {
         ? 'Checking its projects'
         : null;
   const ownContacts = people.filter((p) => p.companyId === rec.id);
+  // Items that open a dialog end with an ellipsis, as on the board (CD-534 QA case 3).
   const menu = [
-    ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setDialog({ kind: 'status' as const }), testId: 'status-set-back' }] : []),
+    ...(canSetStatus && lower.length ? [{ label: 'Set status back…', onClick: () => setDialog({ kind: 'status' as const }), testId: 'status-set-back' }] : []),
     ...(canSetStatus && manual ? [{ label: 'Back to automatic', onClick: () => void store.setCompanyStatus(rec.id, null), testId: 'status-back-auto' }] : []),
-    ...(store.canDelete ? [{ label: 'Delete company', danger: true, disabled: !!deleteBlock, hint: deleteBlock ?? undefined, onClick: () => setDialog({ kind: 'delete' as const }), testId: 'delete-company' }] : []),
+    ...(store.canDelete ? [{ label: 'Delete company…', danger: true, disabled: !!deleteBlock, hint: deleteBlock ?? undefined, onClick: () => setDialog({ kind: 'delete' as const }), testId: 'delete-company' }] : []),
   ];
 
   // The KPI row.
