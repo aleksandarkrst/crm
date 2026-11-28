@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../../components/icons';
+import { MENU_GAP, type MenuPlacement, menuSide } from './menuPlace';
 
 /**
  * The building blocks of Workspace settings (CD-524 spec, section 4; design G-Settings): sections,
@@ -65,11 +66,14 @@ function useDismiss(open: boolean, close: () => void) {
 }
 
 /**
- * A menu floating over everything (portalled, fixed): under its button, right-aligned, or above it
- * when there's no room below. Cards and tables can't clip it, and it follows scrolling.
+ * A menu floating over everything (portalled, fixed), right-aligned with its button: under it, or above it when
+ * there's no room below; `placement="above"` opens it above, or under when it doesn't fit above (`menuSide`).
+ * Cards and tables can't clip it, and it follows scrolling.
  */
-function FloatMenu({ anchor, menu, children, role, label, id, minWidth }: { anchor: React.RefObject<HTMLDivElement | null>; menu: React.RefObject<HTMLDivElement | null>; children: ReactNode; role: string; label?: string; id?: string; minWidth?: number }) {
+function FloatMenu({ anchor, menu, children, role, label, id, minWidth, placement = 'below' }: { anchor: React.RefObject<HTMLDivElement | null>; menu: React.RefObject<HTMLDivElement | null>; children: ReactNode; role: string; label?: string; id?: string; minWidth?: number; placement?: MenuPlacement }) {
   const [box, setBox] = useState<DOMRect | null>(() => anchor.current?.getBoundingClientRect() ?? null);
+  // An upward menu is measured before it is painted, so a short one still opens above a button near the top.
+  const [height, setHeight] = useState<number | undefined>(undefined);
   useEffect(() => {
     const place = () => setBox(anchor.current?.getBoundingClientRect() ?? null);
     place();
@@ -80,9 +84,19 @@ function FloatMenu({ anchor, menu, children, role, label, id, minWidth }: { anch
       window.removeEventListener('resize', place);
     };
   }, [anchor]);
+  useLayoutEffect(() => {
+    const measure = () => setHeight(menu.current?.offsetHeight);
+    if (placement === 'above') measure();
+  }, [menu, placement, box]);
   if (!box) return null;
-  const below = window.innerHeight - box.bottom > 280 || box.top < 280;
-  const style: React.CSSProperties = { right: Math.max(8, window.innerWidth - box.right), minWidth: Math.max(minWidth ?? 0, box.width), ...(below ? { top: box.bottom + 6 } : { bottom: window.innerHeight - box.top + 6 }) };
+  const side = menuSide(box, window.innerHeight, placement, height);
+  const style: React.CSSProperties = {
+    right: Math.max(8, window.innerWidth - box.right),
+    minWidth: Math.max(minWidth ?? 0, box.width),
+    ...(side === 'below' ? { top: box.bottom + MENU_GAP } : { bottom: window.innerHeight - box.top + MENU_GAP }),
+    // It grows out of its button (board C-Company: transform-origin bottom right).
+    ...(placement === 'above' && side === 'above' ? { transformOrigin: 'bottom right' } : {}),
+  };
   return createPortal(
     <div className="gs-tokens">
       <div ref={menu} className="gs-menu gs-float" role={role} aria-label={label} id={id} style={style}>
@@ -480,8 +494,12 @@ export function Table({ cols, children, empty, minWidth, testId }: { cols: { lab
  */
 export type MenuItem = { label: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string; testId?: string };
 
-/** The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). `buttonClass` restyles the button (a record header's 32 px pill). */
-export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain' }: { label: string; items: MenuItem[]; testId?: string; buttonClass?: string }) {
+/**
+ * The ⋯ button of a row and its menu (32 px items; destructive ones are red and last). `buttonClass` restyles the button
+ * (a record header's 32 px pill); `placement="above"` opens the menu above the button (the company page's contact rows,
+ * CD-534), under it only when it doesn't fit above.
+ */
+export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain', placement }: { label: string; items: MenuItem[]; testId?: string; buttonClass?: string; placement?: MenuPlacement }) {
   const [open, setOpen] = useState(false);
   const { ref, menu } = useDismiss(open, () => setOpen(false));
   if (!items.length) return null;
@@ -495,7 +513,7 @@ export function RowMenu({ label, items, testId, buttonClass = 'gs-x plain' }: { 
         </svg>
       </button>
       {open && (
-        <FloatMenu anchor={ref} menu={menu} role="menu" label={label} minWidth={190}>
+        <FloatMenu anchor={ref} menu={menu} role="menu" label={label} minWidth={190} placement={placement}>
           {items.map((it) => (
             <button
               key={it.label}

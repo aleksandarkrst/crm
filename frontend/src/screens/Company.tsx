@@ -360,9 +360,10 @@ export function Company() {
                     {p.initials || initialsOf(p.name)}
                   </span>
                   <span className="cp-contact-text">
-                    <button type="button" className="cp-contact-name" onClick={() => store.openContact(p.contactId || p.id)}>
+                    {/* A real link (board C-Company; CD-534 staging QA case 12): it opens in a new tab too. */}
+                    <Link to={paths.contact(p.contactId || p.id)} className="cp-contact-name" data-testid="company-contact-name">
                       {p.name}
-                    </button>
+                    </Link>
                     <span className="cp-sub">{contactLine(p.role, p.email)}</span>
                   </span>
                   <span className={'cp-role' + (hasRole ? '' : ' missing')}>
@@ -376,6 +377,7 @@ export function Company() {
                   <RowMenu
                     label={`Actions for ${p.name}`}
                     testId="contact-menu"
+                    placement="above"
                     items={[
                       { label: 'Edit contact', onClick: () => setDialog({ kind: 'contact', draft: { id: p.id, name: p.name, role: p.role === '—' ? '' : p.role, email: p.email === '—' ? '' : p.email, phone: p.phone === '—' ? '' : p.phone, buyerRole: p.buyerRole ?? '' } }), testId: 'contact-edit' },
                       { label: `Remove from ${rec.name}`, danger: true, onClick: () => setDialog({ kind: 'remove', person: p }), testId: 'contact-remove' },
