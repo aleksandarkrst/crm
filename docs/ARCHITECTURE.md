@@ -2629,8 +2629,10 @@ first (`store/companyTabs.ts` holds the pure parts, unit-tested in `test/company
   Sales card (owner and source dropdowns, each change with a toast; the status tag; "Created
   12 Oct 2026, by X" from the company's `createdAt` and its history's `created` row) and the
   Address card (Street, City, Postal code, "Open in Maps" in its header).
-- *Contacts*: the company's people with a 190 px role dropdown, a "Missing role" tag and a ⋯ menu:
-  "Edit contact" opens `components/CompanyContactDialog.tsx` ("New contact at [company]" /
+- *Contacts*: the company's people, each name a link to the contact page (an `<a>`, so it opens in
+  a new tab too), with a 190 px role dropdown, a "Missing role" tag and a ⋯ menu that opens above
+  its button (`RowMenu placement="above"`; under it only when it doesn't fit above, `menuSide` in
+  `screens/settings/menuPlace.ts`; staging QA case 12): "Edit contact" opens `components/CompanyContactDialog.tsx` ("New contact at [company]" /
   "Edit [name]": name, job title, email, phone, the role as pills), "Remove from [company]" asks
   first and then clears the contact's company and its links to the company's opportunities
   (`removeContactFromCompany`); the contact stays in Contacts. "+" in the header adds one.
