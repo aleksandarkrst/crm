@@ -60,7 +60,7 @@ describe('company identity', () => {
     await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
     await page.waitForFunction(() => /Vega Logistika d\.o\.o\. created as a lead/.test(document.querySelector('.toast')?.textContent ?? ''));
     await page.waitForSelector('[data-testid=company-identity]');
-    assert.equal(await page.$eval('[data-testid=company-identity] input[aria-label="Company ID (PIB)"]', (el) => el.value), pib);
+    assert.equal(await page.$eval('[data-testid=company-identity] input[aria-label="PIB"]', (el) => el.value), pib);
     const made = (await api(page, '/crm/companies')).find((c) => c.name === 'Vega Logistika d.o.o.');
     assert.deepEqual([made.mb, made.activityCode, made.ownershipType], ['20000007', '4941', 'private']);
     const contacts = await api(page, '/crm/contacts');
@@ -127,10 +127,15 @@ describe('company identity', () => {
     // The company page he moved to: a lead missing only the address, with him under Contacts.
     await page.waitForFunction(() => /^\/companies\/[0-9a-f-]+$/.test(location.pathname));
     await page.waitForSelector('[data-testid=company-status]');
-    assert.match(await page.$eval('[data-testid=company-status]', (el) => el.innerText), /Lead · 6 of 7 ready/);
-    assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /Address/);
-    assert.doesNotMatch(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /A contact with/);
-    assert.match(await text(page), /Contacts \(1\)[\s\S]*Marko Petrović/);
+    // The Company page's header and tabs (CD-534): the status tag, the meta line, the banner and the Contacts tab.
+    assert.equal(await page.$eval('[data-testid=company-status]', (el) => el.innerText), 'Lead, automatic');
+    assert.match(await page.$eval('[data-testid=company-meta]', (el) => el.innerText), /^6 of 7 ready/);
+    // Only the address is missing: the banner's tags show the contact check as done.
+    assert.equal((await page.$eval('[data-testid=company-blockers]', (el) => el.innerText)).split('\n')[0], '6 of 7 ready. Missing: Address.');
+    const checks = await page.$$eval('[data-testid=readiness-check]', (els) => els.map((el) => [el.textContent, el.dataset.done]));
+    assert.deepEqual(checks.at(-1), ['A contact with a role in the decision', 'true']);
+    await click(page, '[data-testid=tab-contacts]');
+    assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Marko Petrović/);
     // The list: Brightline has the contact, Vega none; both are leads six of seven ready (Vega now has an address but no contact).
     const rows = await listRows();
     assert.equal(rows['Brightline Studio'].cells[5], '1');
