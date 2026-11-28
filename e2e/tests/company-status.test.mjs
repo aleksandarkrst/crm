@@ -107,6 +107,62 @@ describe('company status', () => {
     await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
   });
 
+  // CD-534 staging QA (case 7): an opportunity with no opportunities of its own goes back to Lead the
+  // moment a check is emptied on the Details tab, and the banner names it, without a reload. It stays
+  // a lead when a colleague's change elsewhere makes the page re-read other lists (on staging it went
+  // back to "Opportunity, automatic": the last load still had the company as it was). A change that
+  // names no opportunity (a project's task) asks the API for nothing (it asked for `dealIds=`, a 400).
+  step('clearing MB on the Details tab makes it a lead at once, and a change by a colleague elsewhere keeps it one', async () => {
+    const refused = [];
+    let lastResponse = Date.now();
+    const onResponse = (r) => {
+      if (r.url().includes('/api/')) lastResponse = Date.now();
+      if (r.url().includes('/api/') && r.status() >= 400) refused.push(`${r.request().method()} ${new URL(r.url()).pathname}${new URL(r.url()).search} ${r.status()}`);
+    };
+    page.on('response', onResponse);
+    // The page's API calls have gone quiet (the live stream stays open, so not waitForNetworkIdle).
+    const quiet = () => eventually(() => Date.now() - lastResponse > 800, { timeout: 10_000, interval: 100 });
+    const isLead = async () => {
+      assert.equal(await statusText(), 'Lead, automatic');
+      assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /6 of 7 ready\. Missing: MB\./);
+    };
+    try {
+      assert.equal(await statusText(), 'Opportunity, automatic');
+      await openTab('details');
+      await setValue(page, '[data-testid=company-field-mb]', '');
+      await page.waitForFunction(() => /^Lead, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+      await isLead();
+      assert.equal((await api(page, `/crm/companies/${companyId}`)).status, 'lead', 'the API agrees');
+      // A colleague adds a contact at another company (calls from the test carry no tab id, so the
+      // page hears them as someone else's): the page re-reads the contacts, the company stays a lead.
+      const other = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Colleague Co', pib: testPib() }) });
+      const contactsRead = page.waitForResponse((r) => r.url().includes('/api/crm/contacts?ids='));
+      await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: other.id, fullName: 'Colleague Contact' }) });
+      await contactsRead;
+      await quiet();
+      await isLead();
+      // ...and adds a task to a project: the hint names no opportunity, so no to-dos are read.
+      const [type] = await api(page, '/project-types');
+      const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Colleague project', projectTypeId: type.id, companyId: other.id }) });
+      await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Colleague task' }) });
+      await new Promise((r) => setTimeout(r, 300)); // the hint is debounced 300 ms before anything is read
+      await quiet();
+      await isLead();
+      // MB filled in again: an opportunity at once, and still one after the next change elsewhere.
+      await setValue(page, '[data-testid=company-field-mb]', '20084693');
+      await page.waitForFunction(() => /^Opportunity, automatic$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+      assert.equal(await page.$('[data-testid=company-blockers]'), null, 'no banner once it is an opportunity');
+      const contactsAgain = page.waitForResponse((r) => r.url().includes('/api/crm/contacts?ids='));
+      await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: other.id, fullName: 'Second Colleague Contact' }) });
+      await contactsAgain;
+      await quiet();
+      assert.equal(await statusText(), 'Opportunity, automatic');
+      assert.deepEqual(refused, [], 'no request was refused');
+    } finally {
+      page.off('response', onResponse);
+    }
+  });
+
   step('a lead is marked not interested with the board\'s dialog, and comes back with "Back to automatic"', async () => {
     const lead = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Quiet Lead', pib: testPib() }) });
     await page.goto(`${BASE_URL}/companies/${lead.id}`, { waitUntil: 'networkidle0' });

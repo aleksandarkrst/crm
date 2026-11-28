@@ -9,11 +9,20 @@
  * saved during the fetch is kept over the one the load read, which may predate the save. The
  * caller may still throw the load's result away (an edit started meanwhile); what is stored here
  * then already has the save, so the retry builds on it.
+ *
+ * `update` is the same for a few rows of a list (CD-534): a saved company's row as the API returned
+ * it, with its new status, so a refresh that re-reads only other lists (a colleague's contact) does
+ * not put back the company as it was at the last load. A load fetching meanwhile gets the change
+ * again on top of what it read; one that started after it takes what it read.
  */
 export function lastLoadStore<R extends object>() {
   let raw: R | null = null;
   let seq = 0;
   const savedAt = new Map<keyof R, number>();
+  /** Row changes made while a load was fetching, to apply again on top of what that load read. */
+  const edits: { at: number; key: keyof R; change: (value: never) => unknown }[] = [];
+  /** Where each load still fetching started (`seq` then). */
+  const running: number[] = [];
   return {
     /** The last load's lists with this tab's saves on top; null before the first load. */
     current: (): R | null => raw,
@@ -22,6 +31,12 @@ export function lastLoadStore<R extends object>() {
       if (raw) raw = { ...raw, [key]: value };
       savedAt.set(key, ++seq);
     },
+    /** A save of some rows of one list: `change` makes the list with them (no-op before the first load). */
+    update<K extends keyof R>(key: K, change: (value: R[K]) => R[K]) {
+      if (raw) raw = { ...raw, [key]: change(raw[key]) };
+      const at = ++seq;
+      if (running.length) edits.push({ at, key, change: change as (value: never) => unknown });
+    },
     /**
      * One load. `fetch` gets the last load's lists (null for a full load, or before the first one)
      * and reads what it needs; `build` makes the new lists from what was fetched and `prev`, the
@@ -29,12 +44,27 @@ export function lastLoadStore<R extends object>() {
      */
     async load<F>(partial: boolean, fetch: (before: R | null) => Promise<F>, build: (fetched: F, prev: R | null) => R): Promise<R> {
       const since = seq;
-      const before = partial ? raw : null;
-      const fetched = await fetch(before);
-      const next = { ...build(fetched, before ? (raw ?? before) : null) };
-      if (raw) for (const [key, at] of savedAt) if (at > since) next[key] = raw[key];
-      raw = next;
-      return next;
+      running.push(since);
+      try {
+        const before = partial ? raw : null;
+        const fetched = await fetch(before);
+        const next = { ...build(fetched, before ? (raw ?? before) : null) };
+        const kept = new Set<keyof R>();
+        if (raw)
+          for (const [key, at] of savedAt)
+            if (at > since) {
+              next[key] = raw[key];
+              kept.add(key);
+            }
+        // A list kept whole above already has these; any other gets them again over what was read.
+        for (const e of edits) if (e.at > since && !kept.has(e.key)) next[e.key] = e.change(next[e.key] as never) as R[keyof R];
+        raw = next;
+        return next;
+      } finally {
+        running.splice(running.indexOf(since), 1);
+        const oldest = running.length ? Math.min(...running) : Infinity;
+        for (let i = edits.length - 1; i >= 0; i--) if (edits[i]!.at <= oldest) edits.splice(i, 1);
+      }
     },
   };
 }
