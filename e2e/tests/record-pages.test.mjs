@@ -164,6 +164,38 @@ describe('company and contact pages', () => {
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'More actions');
   });
 
+  step('a contact row: the name is a link to the contact, its ⋯ menu opens above the button (CD-534 staging QA case 12)', async () => {
+    await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.textContent === 'Umbrella d.o.o.');
+    await openTab('contacts');
+    // Board C-Company: an <a> to the contact page, so it opens in a new tab too.
+    const name = await page.waitForSelector('[data-testid=company-contact] a[data-testid=company-contact-name]');
+    assert.deepEqual(await name.evaluate((a) => ({ text: a.textContent, href: a.getAttribute('href'), weight: getComputedStyle(a).fontWeight, color: getComputedStyle(a).color })), {
+      text: 'Alice Abernathy',
+      href: `/contacts/${contact.id}`,
+      weight: '600',
+      color: 'rgb(29, 29, 31)',
+    });
+    // The ⋯ menu grows upwards out of its button (the top row too: there is room above it).
+    await click(page, '[data-testid=contact-menu]');
+    await page.waitForSelector('[data-testid=contact-edit]');
+    const boxes = await page.evaluate(() => {
+      const button = document.querySelector('[data-testid=contact-menu]').getBoundingClientRect();
+      const menu = document.querySelector('[data-testid=contact-edit]').closest('[role=menu]').getBoundingClientRect();
+      return { buttonTop: button.top, buttonRight: button.right, menuTop: menu.top, menuBottom: menu.bottom, menuRight: menu.right };
+    });
+    assert.ok(boxes.menuBottom <= boxes.buttonTop && boxes.menuTop >= 0, `the menu opens above its button: ${JSON.stringify(boxes)}`);
+    assert.ok(Math.abs(boxes.menuRight - boxes.buttonRight) <= 1, `right-aligned with the button: ${JSON.stringify(boxes)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=contact-edit]'));
+    // A plain click stays in the app (no page load) and opens the contact.
+    await page.evaluate(() => (window.__noReload = true));
+    await click(page, '[data-testid=company-contact-name]');
+    await page.waitForFunction((id) => location.pathname === `/contacts/${id}`, {}, contact.id);
+    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Alice Abernathy');
+    assert.equal(await page.evaluate(() => window.__noReload), true, 'navigated inside the app');
+  });
+
   step('the contact page: header, summary, company and opportunities', async () => {
     await page.goto(`${BASE_URL}/contacts/${contact.id}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Alice Abernathy');

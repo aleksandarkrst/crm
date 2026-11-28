@@ -2417,8 +2417,8 @@ a.td-row:hover { background: var(--gs-tile-hover); color: var(--gs-ink); }
 .cp-face-sm { width: 22px; height: 22px; font-size: 9.5px; }
 .cp-face-lg { width: 36px; height: 36px; font-size: 12.5px; }
 .cp-contact-text { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.cp-contact-name { padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--gs-ink); text-align: left; cursor: pointer; }
-.cp-contact-name:hover { color: var(--gs-green); }
+.gs a.cp-contact-name, .cp-contact-name { padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--gs-ink); text-align: left; text-decoration: none; cursor: pointer; }
+.gs a.cp-contact-name:hover, .cp-contact-name:hover { color: var(--gs-green); }
 .cp-role.missing .gs-ddb { box-shadow: inset 0 0 0 1.5px var(--gs-amber-outline); }
 .cp-role.missing .gs-ddb .v { color: var(--gs-amber); }
 .cp-role .gs-ddb { height: 32px; }
